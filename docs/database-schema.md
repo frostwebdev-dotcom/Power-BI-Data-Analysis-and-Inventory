@@ -550,6 +550,13 @@ header row after normalisation — trimmed, whitespace collapsed, case-folded
 operator pins it from the validate endpoint's reported signature. A file
 whose signature differs is reported before any row is mapped (AC-6.4).
 
+`import_files.storage_uri` is `<scheme>://<key>` with the key relative to
+the backend — today `local://<organization_id>/<yyyy>/<mm>/<sha256>.<ext>`
+under `STORAGE_RAW_DIR` (`backend/app/imports/storage.py`). The key is the
+content hash, so the same bytes always map to the same object and a
+second upload finds it rather than writing it again. A cloud backend mints
+a different scheme with the same key; no column changes.
+
 **Two idempotency guarantees:**
 
 1. `uq_import_files_organization_id_sha256` — identical bytes are stored once,

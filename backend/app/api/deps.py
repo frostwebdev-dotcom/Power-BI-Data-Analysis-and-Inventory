@@ -19,6 +19,7 @@ from app.core.config import Settings
 from app.core.errors import AuthenticationError
 from app.core.security import Principal, RoleCode, build_authentication_backend
 from app.db.session import get_db
+from app.imports.storage import StorageBackend
 
 # auto_error=False so a missing header reaches our own handler and produces the
 # standard error envelope, rather than FastAPI's bare {"detail": ...}.
@@ -35,6 +36,12 @@ def get_app_settings(request: Request) -> Settings:
     """
     settings: Settings = request.app.state.settings
     return settings
+
+
+def get_storage(request: Request) -> StorageBackend:
+    """The storage backend this application was built with (ADR 0004)."""
+    storage: StorageBackend = request.app.state.storage
+    return storage
 
 
 def get_current_principal(

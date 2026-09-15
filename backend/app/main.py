@@ -14,6 +14,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware
+from app.imports.storage import build_storage_backend
 
 
 @asynccontextmanager
@@ -78,6 +79,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Published so route dependencies read the settings this app was built
     # with, rather than the process-wide cache (see api/deps.get_app_settings).
     app.state.settings = settings
+    # Retained-file storage (ADR 0004). Built once here so every route uses the
+    # backend this app was configured with; nothing is created on disk until
+    # the first upload.
+    app.state.storage = build_storage_backend(settings)
 
     # Centralised error handling: one envelope for every failure, and no
     # stack trace ever reaches a client in production (app/core/errors.py).

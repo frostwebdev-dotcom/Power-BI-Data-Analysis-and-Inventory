@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-15 (phase 4 — versioned import profiles)
+Last updated: 2026-09-15 (phase 5 part 1 — file upload with raw retention)
 
 ---
 
@@ -11,18 +11,18 @@ Last updated: 2026-09-15 (phase 4 — versioned import profiles)
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, and versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013). No file import yet. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), and file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004). Uploaded files are queued as `PENDING` jobs; nothing yet parses them into rows. |
 | Database schema | 25 tables, 22 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
 | Migrations | 4 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **947 passed** (`pytest`: 648 unit + 299 integration). `grep -c "def test_"` over `tests/` finds 705 functions (439 unit, 266 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Backend tests | **995 passed** (`pytest`: 662 unit + 333 integration). `grep -c "def test_"` over `tests/` finds 743 functions (453 unit, 290 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
 | Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 8 (see §7); B1 partially answered, B2 narrowed, B7 partially answered by ADR 0011, B8 new |
 
 The schema, the audit writer, the security foundation, and a read-only Nineyard
-diagnostic exist and are verified. The validate endpoint reads the first rows of a
-vendor file for preview; nothing yet imports one, synchronises Nineyard
-data, or matches a vendor row to a product.
+diagnostic exist and are verified. A vendor file can be uploaded, retained byte for
+byte and queued; nothing yet parses a queued file into rows, synchronises
+Nineyard data, or matches a vendor row to a product.
 
 ---
 
@@ -39,7 +39,7 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
 | 3 | Nineyard integration + sync | 🟨 Diagnostic only | **Exists:** read-only client (`app/integrations/nineyard/client.py`, `errors.py`, `sanitize.py`), probe (`app/integrations/nineyard/probe.py`), and CLI (`app/cli/nineyard_probe.py`), tested by `tests/unit/test_nineyard_client.py`, `test_nineyard_probe.py`, `test_nineyard_cli.py` (mocked; no live calls). The public OpenAPI spec has been analysed ([nineyard-field-mapping.md](nineyard-field-mapping.md)). **Does not exist:** any sync service — nothing writes Nineyard data to `products`, `product_identifiers`, `marketplace_listings`, `nineyard_sync_runs`, or `nineyard_item_payloads`. The probe has not been run against the live API. See [nineyard-integration.md](nineyard-integration.md) and B1. |
 | 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
-| 5 | File ingestion + raw retention | ⬜ Not started | `import_files` exists; no `StorageBackend` yet |
+| 5 | File ingestion + raw retention | 🟨 Upload and retention done; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.3, 5.4, 5.6 and the encoding half of 5.8 covered by 48 tests. **Not built:** the worker claim loop that moves a job from `PENDING` through parsing (AC-5.1, 5.2, 5.7). |
 | 6 | Parsing + validation + reporting | ⬜ Not started | Needs sample files (B4) |
 | 7 | Matching engine | 🟨 Normaliser and listing resolver exist | `app/matching/normalize.py` (AC-7.6) is built and shared; the priority-chain resolver for *listings* is in `amazon_listings.py`. The vendor-row engine and `match_attempt` recording are unwritten. |
 | 8 | Exception workflow | ⬜ Not started | `product_mapping_exceptions` exists; `Principal` now supplies actor identity, so no longer blocked by B2 |
@@ -151,6 +151,77 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 5 part 1 — file upload with raw retention (2026-09-15, ADR 0004)
+
+The retention half of AC-5. The order of operations is the deliverable:
+refuse → store → record, so a file that reaches the database is already
+on disk exactly as sent.
+
+* **`app/imports/storage.py`** — `StorageBackend` protocol (`put`, `open`,
+  `exists`) and `LocalStorageBackend`. URIs are `<scheme>://<key>` with the
+  key *relative to the backend* — `local://<organization_id>/<yyyy>/<mm>/
+  <sha256>.<ext>` — so the root can move and an S3/Azure backend is a new
+  scheme, not a schema change. The key is content-addressed: the same bytes
+  land at the same key, a second `put` verifies and returns, and an object
+  that does not hash to its key is refused rather than overwritten. Writes
+  go to a temporary sibling, are fsynced, and are hard-linked into place
+  (falling back to a guarded rename on filesystems without links); a key
+  cannot escape the root. Nothing is created on disk until the first put.
+  Chosen in `build_storage_backend`, the one place B5's answer will land.
+* **`app/services/imports.py`** — `receive_upload`: extension (`.csv`,
+  `.xlsx` → 415), size (413) and emptiness (422) are checked before anything
+  touches disk; the vendor and an optional *active* profile are resolved;
+  the SHA-256 is looked up. Known bytes with a live job (anything but
+  FAILED/CANCELLED, exactly what `uq_import_jobs_active_import_file`
+  permits) → the existing job, `duplicate: true`, HTTP 200, no audit row.
+  Known bytes whose jobs all failed or were cancelled → a new `PENDING` job
+  on the *same* file row (stored once). Known bytes received for a different
+  vendor → 409. New bytes → `storage.put` first, then one transaction
+  writing `import_files` (with `detected_encoding` for CSV, AC-5.8), the
+  `PENDING` job with the profile id and version denormalised, and audit
+  rows `import_file.received` and `import_job.created`. The raw download
+  re-hashes the bytes on the way out and refuses a mismatch.
+* **`app/api/v1/routes/imports.py`** — `POST /imports` (multipart:
+  `file`, `vendor_id`, optional `profile_id`; `DATA_OPERATOR`; the body is
+  read in 1 MB chunks and abandoned the moment it passes the limit),
+  `GET /imports` (newest first, filter by vendor and status, paged),
+  `GET /imports/{id}`, `GET /imports/{id}/raw` (every role; streams the
+  bytes under the original filename with an RFC 6266 UTF-8 name, the
+  right media type, and `X-Content-SHA256`).
+* **Settings** — `import_max_upload_mb` (default 50, in `.env.example`).
+  The backend is built once in `create_app` and published on `app.state`
+  next to the settings.
+
+**A note on `receive_upload`'s signature.** The brief lists
+`organization_id` and `uploaded_by` as separate parameters; both come from
+the caller's `Principal`, so the function takes the principal. Same
+information, one fewer way to pass a user from the wrong organization.
+
+**Tests.** `tests/unit/test_storage.py` (14): the key layout, `.bin` for
+foreign extensions, URI parsing, relative URIs, same bytes stored once,
+**an existing object is never overwritten** (tampered bytes stay tampered
+and the put fails), organisations do not share keys, binary round trip,
+missing object, another backend's scheme refused, root escape refused.
+`tests/integration/test_import_upload_api.py` (34): 401/403/tenant;
+**CSV round trip byte-identical** — SHA-256 of the upload == recorded ==
+on disk under `<org>/<yyyy>/<mm>/<sha>.csv` == downloaded, BOM and CRLF
+intact; XLSX likewise; cp1252 detected; non-ASCII filename survives; two
+audit rows naming the uploader; duplicate returns the existing job with no
+new row, file, object or audit entry; FAILED and CANCELLED each allow the
+same bytes again without a second copy on disk, RUNNING/COMPLETED/
+COMPLETED_WITH_ERRORS do not; same bytes for another vendor → 409; four
+bad extensions → 415 with nothing on disk; one byte over the limit → 413
+with nothing on disk, exactly the limit accepted; empty → 422; missing or
+unknown vendor; inactive profile → 409; another vendor's profile → 404;
+profile id and version pinned on the job; list filters and paging.
+
+**Observed once, not reproduced.** In one of four full-suite runs the
+pre-existing `test_migrations.py::test_upgrade_then_downgrade_then_upgrade_succeeds`
+errored at setup while dropping its scratch database; the three other runs
+and the `tasks.ps1 check` run below passed. It is not caused by this
+change (the test touches a separate `_roundtrip` database) and is noted
+here so it is not forgotten if it recurs.
 
 ### Phase 4 — versioned import profiles (2026-09-15, ADR 0013)
 
@@ -546,10 +617,10 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 132 files unchanged |
+| Backend format | `ruff format .` | ✅ 139 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 127 source files |
-| Backend tests | `pytest` | ✅ `947 passed in 23.81s` — `tests/unit`: `648 passed`; `tests/integration`: `299 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 134 source files |
+| Backend tests | `pytest` | ✅ `995 passed in 28.16s` — `tests/unit`: `662 passed`; `tests/integration`: `333 passed` |
 | Migration apply | `alembic upgrade head` | ✅ Both revisions applied to PostgreSQL 16.15 |
 | Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0` and `44c932e601b0` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
@@ -753,7 +824,13 @@ fixtures.
 
 ### B5 — Raw file storage destination and retention *(blocks phase 5 deployment)*
 Local disk, S3, Azure Blob, or other? Any retention, deletion, or compliance
-requirement? `import_files.storage_uri` is a plain string, so any backend fits.
+requirement? The local backend is built and in use; its URIs are
+`local://<organization_id>/<yyyy>/<mm>/<sha256>.<ext>`, relative to the
+configured root, so an S3 or Azure backend is a new scheme in
+`build_storage_backend` and no change to `import_files`. Until B5 is
+answered the Railway deployment retains files on the container's disk,
+which does not survive a redeploy — **uploads to the deployed instance are
+not durable yet.**
 
 ### B6 — Repository naming and stakeholder expectations
 The repository is named `Power-BI-Data-Analysis-and-Inventory`, but Power BI is
@@ -808,9 +885,11 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phase 4 (import profiles) followed on 2026-09-15 (ADR 0013). Phase 5 (file
-ingestion with raw retention) is next and needs B5 for its deployed storage
-destination; the readers and mapper it will call already exist.
+Phase 4 (import profiles) followed on 2026-09-15 (ADR 0013), and the upload
+and retention half of phase 5 the same day. Next is the other half: a worker
+that claims a `PENDING` job, reads the retained file through the profile's
+readers and mapper, and writes `import_job_rows` (AC-5.1, 5.2, 5.7). B5 still
+decides where deployed files live.
 
 ---
 

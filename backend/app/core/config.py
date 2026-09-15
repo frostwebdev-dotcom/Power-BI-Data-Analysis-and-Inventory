@@ -179,6 +179,8 @@ class Settings(BaseSettings):
     storage_raw_dir: str = "/storage/raw"
     storage_processed_dir: str = "/storage/processed"
     storage_rejected_dir: str = "/storage/rejected"
+    #: Uploads larger than this are refused with 413 before anything is stored.
+    import_max_upload_mb: int = Field(default=50, ge=1, le=1024)
 
     @property
     def is_production(self) -> bool:

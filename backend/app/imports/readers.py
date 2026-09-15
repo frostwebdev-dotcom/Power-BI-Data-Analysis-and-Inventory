@@ -72,6 +72,15 @@ def _decode(content: bytes, encoding: str | None) -> tuple[str, str]:
     raise UnreadableFile(f"the file is not decodable as {', '.join(str(c) for c in candidates)}")
 
 
+def detect_encoding(content: bytes, declared: str | None = None) -> str | None:
+    """The encoding a CSV upload decodes as, for ``import_files.detected_encoding``
+    (AC-5.8). ``None`` when nothing in the fallback list decodes it."""
+    try:
+        return _decode(content, declared)[1]
+    except UnreadableFile:
+        return None
+
+
 def _read_csv(content: bytes, options: ReadOptions, *, max_rows: int) -> ParsedTable:
     text, encoding = _decode(content, options.encoding)
     delimiter = options.delimiter or _sniff_delimiter(text)
