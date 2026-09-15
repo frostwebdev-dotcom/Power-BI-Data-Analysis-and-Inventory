@@ -1155,3 +1155,76 @@ def test_a_resolved_listing_exception_frees_the_queue_slot(db_session: Session) 
     factories.make_mapping_exception(
         db_session, organization, None, marketplace_listing_id=listing.id
     )
+
+
+# --- Vendor contacts and minimum order requirements (44c932e601b0) -----------------------
+
+
+def test_a_contact_email_is_unique_per_vendor_case_insensitively(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    vendor = factories.make_vendor(db_session, organization)
+    factories.make_vendor_contact(db_session, organization, vendor, email="ann@acme.test")
+
+    with pytest.raises(IntegrityError):
+        factories.make_vendor_contact(db_session, organization, vendor, email="Ann@ACME.test")
+
+
+def test_the_same_contact_email_may_exist_at_another_vendor(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    for _ in range(2):
+        vendor = factories.make_vendor(db_session, organization)
+        factories.make_vendor_contact(db_session, organization, vendor, email="shared@rep.test")
+
+
+def test_only_one_active_primary_contact_per_vendor(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    vendor = factories.make_vendor(db_session, organization)
+    factories.make_vendor_contact(db_session, organization, vendor, is_primary=True)
+
+    with pytest.raises(IntegrityError):
+        factories.make_vendor_contact(db_session, organization, vendor, is_primary=True)
+
+
+def test_an_inactive_primary_does_not_block_a_new_one(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    vendor = factories.make_vendor(db_session, organization)
+    factories.make_vendor_contact(
+        db_session, organization, vendor, is_primary=True, is_active=False
+    )
+
+    factories.make_vendor_contact(db_session, organization, vendor, is_primary=True)
+
+
+def test_a_contact_email_must_look_like_an_address(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    vendor = factories.make_vendor(db_session, organization)
+
+    with pytest.raises(IntegrityError):
+        factories.make_vendor_contact(db_session, organization, vendor, email="not-an-address")
+
+
+def test_a_contact_name_cannot_be_blank(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    vendor = factories.make_vendor(db_session, organization)
+
+    with pytest.raises(IntegrityError):
+        factories.make_vendor_contact(db_session, organization, vendor, name="  ")
+
+
+@pytest.mark.parametrize("field", ["minimum_order_quantity", "minimum_order_value"])
+def test_minimum_order_requirements_cannot_be_negative(db_session: Session, field: str) -> None:
+    organization = factories.make_organization(db_session)
+
+    with pytest.raises(IntegrityError):
+        factories.make_vendor(db_session, organization, **{field: -1})
+
+
+def test_minimum_order_requirements_may_be_absent(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+
+    vendor = factories.make_vendor(db_session, organization)
+    db_session.refresh(vendor)
+
+    assert vendor.minimum_order_quantity is None
+    assert vendor.minimum_order_value is None
+    assert vendor.purchasing_terms == {}

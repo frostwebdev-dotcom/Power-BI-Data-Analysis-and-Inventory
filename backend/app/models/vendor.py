@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
@@ -18,8 +19,10 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     SmallInteger,
     String,
+    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -64,9 +67,22 @@ class Vendor(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base)
     contact_email: Mapped[str | None] = mapped_column(nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(nullable=True)
     notes: Mapped[str | None] = mapped_column(nullable=True)
+    # Minimum order requirements, as the vendor states them. Either may be
+    # absent; neither is ever negative. Milestone 1 records them and makes no
+    # purchasing decision with them (milestone-1-scope.md §1).
+    minimum_order_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    minimum_order_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Free-form purchasing terms — payment terms, freight, cut-off times —
+    # kept as the operator entered them. No key is interpreted yet.
+    purchasing_terms: Mapped[dict[str, Any]] = mapped_column(
+        nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     organization: Mapped[Organization] = relationship(back_populates="vendors")
+    contacts: Mapped[list[VendorContact]] = relationship(
+        back_populates="vendor", order_by="VendorContact.created_at"
+    )
     vendor_products: Mapped[list[VendorProduct]] = relationship(
         back_populates="vendor", cascade="all, delete-orphan"
     )
@@ -94,6 +110,57 @@ class Vendor(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base)
             "default_lead_time_days is null or default_lead_time_days >= 0",
             name="lead_time_not_negative",
         ),
+        CheckConstraint(
+            "minimum_order_quantity is null or minimum_order_quantity >= 0",
+            name="minimum_order_quantity_not_negative",
+        ),
+        CheckConstraint(
+            "minimum_order_value is null or minimum_order_value >= 0",
+            name="minimum_order_value_not_negative",
+        ),
+    )
+
+
+class VendorContact(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base):
+    """A person at a vendor — the "email address(es)" the brief asks for.
+
+    ``RESTRICT`` on the vendor: contacts are deactivated with their vendor,
+    never dropped by a cascade nobody reviewed. Email is unique per vendor
+    case-insensitively (a functional index on ``lower(email)``), and at most
+    one *active* contact is the primary one.
+    """
+
+    __tablename__ = "vendor_contacts"
+
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(nullable=False)
+    email: Mapped[str] = mapped_column(nullable=False)
+    # Free text: "Sales rep", "Accounts receivable" — the vendor's vocabulary.
+    role: Mapped[str | None] = mapped_column(nullable=True)
+    phone: Mapped[str | None] = mapped_column(nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+
+    vendor: Mapped[Vendor] = relationship(back_populates="contacts")
+
+    __table_args__ = (
+        Index(
+            "uq_vendor_contacts_vendor_id_lower_email",
+            "vendor_id",
+            func.lower(text("email")),
+            unique=True,
+        ),
+        Index(
+            "uq_vendor_contacts_primary",
+            "vendor_id",
+            unique=True,
+            postgresql_where=text("is_primary and is_active"),
+        ),
+        Index("ix_vendor_contacts_vendor_id", "vendor_id"),
+        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
+        CheckConstraint("position('@' in email) > 1", name="email_looks_like_an_address"),
     )
 
 

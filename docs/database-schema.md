@@ -1,11 +1,12 @@
 # Database Schema — Milestone 1
 
 Status: **Implemented.** Migrations `506fd0ecc33a` (initial schema),
-`3767ee979011` (Amazon ingestion, ADR 0011) and `3de5c4e5def0` (listing
-mapping context) applied and verified against PostgreSQL 16.
+`3767ee979011` (Amazon ingestion, ADR 0011), `3de5c4e5def0` (listing
+mapping context) and `44c932e601b0` (vendor contacts, minimum order,
+purchasing terms) applied and verified against PostgreSQL 16.
 Last updated: 2026-09-15
 
-24 tables, 22 native enum types, 130 indexes, 78 check constraints, 81 foreign
+25 tables, 22 native enum types, 135 indexes, 82 check constraints, 83 foreign
 keys, and one append-only trigger. The authoritative definition is
 [backend/app/models/](../backend/app/models/); this document explains the shape
 and the reasoning.
@@ -42,6 +43,7 @@ erDiagram
     ORGANIZATIONS ||--o{ ROLES : "defines"
     ORGANIZATIONS ||--o{ PRODUCTS : "owns"
     ORGANIZATIONS ||--o{ VENDORS : "buys from"
+    VENDORS ||--o{ VENDOR_CONTACTS : "reached through"
 
     USERS ||--o{ USER_ROLES : "granted"
     ROLES ||--o{ USER_ROLES : "assigned via"
@@ -166,6 +168,21 @@ erDiagram
         enum status
         char currency
         text timezone
+        integer minimum_order_quantity "null = not stated"
+        numeric minimum_order_value
+        jsonb purchasing_terms "free-form"
+        boolean is_active "deactivated, never deleted"
+    }
+
+    VENDOR_CONTACTS {
+        uuid id PK
+        uuid organization_id FK
+        uuid vendor_id FK
+        text name
+        text email UK "unique per vendor, case-insensitive"
+        text role
+        boolean is_primary "one active primary per vendor"
+        boolean is_active
     }
 
     VENDOR_PRODUCTS {
@@ -466,6 +483,27 @@ making an `APPROVED` row without a product and an approver impossible. A mapping
 is superseded by an explicit status change, recorded in `audit_events` — never
 recomputed by an automated run.
 
+### 3.3a Vendors and contacts (phase 2, AC-4)
+
+| From | To | Delete | Notes |
+|---|---|---|---|
+| `vendor_contacts` | `vendors` | RESTRICT | Contacts are deactivated with their vendor, never cascaded away. |
+
+`vendors` carries the minimum order requirements the brief asks for —
+`minimum_order_quantity` and `minimum_order_value`, both nullable ("not
+stated") and never negative by check — and `purchasing_terms`, a free-form
+JSONB for payment terms, freight and cut-off times, kept as the operator
+entered them. Milestone 1 records these and makes no purchasing decision
+with them.
+
+`vendor_contacts` is the "email address(es)" per vendor.
+`uq_vendor_contacts_vendor_id_lower_email` is a functional unique index on
+`(vendor_id, lower(email))`, so the same person cannot be entered twice with
+different capitalisation; `uq_vendor_contacts_primary` is partial on
+`is_primary and is_active`, so at most one *active* contact is the primary
+one and a retired primary does not block the next. Vendors and contacts are
+retired with `is_active = false`; the API exposes no delete (AC-4.3).
+
 ### 3.4 Ingestion
 
 | From | To | Delete | Notes |
@@ -661,6 +699,15 @@ one-step downgrade test:
 The downgrade deletes the rows the old schema cannot hold (listings without
 a product, exceptions without a vendor, unlinked `AMAZON_SKU` identifiers)
 before re-tightening `NOT NULL`, deliberately and in the migration text.
+
+### `44c932e601b0` — vendor contacts, minimum order and purchasing terms
+
+Adds `minimum_order_quantity`, `minimum_order_value` and `purchasing_terms`
+to `vendors` and creates `vendor_contacts`. Autogenerate produced the table,
+its indexes (including the `lower(email)` expression index, rendered as a
+literal column and compared correctly by `alembic check`) and the new
+columns; the two `>= 0` checks on `vendors` are hand-written, as check
+constraints always are here. One-step round trip verified.
 
 ### `3767ee979011` — Amazon sync runs, order lines and inventory snapshots
 

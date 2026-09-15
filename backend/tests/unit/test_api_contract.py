@@ -64,7 +64,24 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/health",
         "/api/v1/auth/me",
         "/api/v1/auth/dev-token",
+        "/api/v1/vendors",
+        "/api/v1/vendors/{vendor_id}",
+        "/api/v1/vendors/{vendor_id}/deactivate",
+        "/api/v1/vendors/{vendor_id}/contacts",
+        "/api/v1/vendors/{vendor_id}/contacts/{contact_id}",
+        "/api/v1/vendors/{vendor_id}/contacts/{contact_id}/deactivate",
     }
+
+
+def test_every_vendor_route_documents_403(client: TestClient) -> None:
+    """The OpenAPI document must tell a client every vendor route needs a role."""
+    paths = client.get("/api/v1/openapi.json").json()["paths"]
+
+    for path, operations in paths.items():
+        if not path.startswith("/api/v1/vendors"):
+            continue
+        for method, operation in operations.items():
+            assert "403" in operation["responses"], f"{method.upper()} {path} lacks 403"
 
 
 def test_both_required_health_endpoints_exist(app: FastAPI) -> None:

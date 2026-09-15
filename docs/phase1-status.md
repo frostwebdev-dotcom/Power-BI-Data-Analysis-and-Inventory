@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-15 (Amazon scheduler and amazon_poc CLI — POC step 7)
+Last updated: 2026-09-15 (phase 2 — vendor database API)
 
 ---
 
@@ -12,9 +12,9 @@ Last updated: 2026-09-15 (Amazon scheduler and amazon_poc CLI — POC step 7)
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
 | Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, and the `amazon_poc` CLI. No vendor CRUD or file import yet. |
-| Database schema | 24 tables, 22 enum types, 130 indexes, 78 check constraints, 81 foreign keys, 1 append-only trigger |
-| Migrations | 3 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **740 passed** (`pytest`: 532 unit + 208 integration). `git grep -c "def test_"` finds 557 functions (356 unit, 201 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Database schema | 25 tables, 22 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
+| Migrations | 4 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`), applied and reversed against PostgreSQL 16.15 |
+| Backend tests | **831 passed** (`pytest`: 578 unit + 253 integration). `git grep -c "def test_"` finds 618 functions (379 unit, 239 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
 | Quality gates | 8 of 8 passing locally **and in GitHub Actions** (§4), 2026-09-14 |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 8 (see §7); B1 partially answered, B2 narrowed, B7 partially answered by ADR 0011, B8 new |
@@ -35,7 +35,7 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 0 | Scaffolding | ✅ Complete | Backend, frontend, infra, quality gates, GitHub Actions CI (2026-09-14) |
 | 1 | DB foundation + audit | ✅ Complete | Schema, migration, transactional audit writer, transaction utilities, config/security foundation |
 | A | Amazon SP-API read-only ingestion ([ADR 0011](decisions/0011-amazon-sp-api-proof-of-concept-in-milestone-1.md)) | 🟨 Complete against fakes | Precedes phase 2 by client request (§10). **Exists:** settings, redaction, the read-only client, the tables, the three ingestions, listings→product mapping, the velocity service, scheduled jobs with stale-run recovery, and the `amazon_poc` CLI ([amazon-integration.md](amazon-integration.md)). **Does not exist:** the read-only velocity HTTP endpoint named in the ADR. **Not yet done:** a single run against the real seller account (B8) — the one thing the client asked to see. |
-| 2 | Vendor database | ⬜ Not started | Tables exist; no API or CRUD. `require_roles(DATA_OPERATOR)` is ready to guard it. |
+| 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
 | 3 | Nineyard integration + sync | 🟨 Diagnostic only | **Exists:** read-only client (`app/integrations/nineyard/client.py`, `errors.py`, `sanitize.py`), probe (`app/integrations/nineyard/probe.py`), and CLI (`app/cli/nineyard_probe.py`), tested by `tests/unit/test_nineyard_client.py`, `test_nineyard_probe.py`, `test_nineyard_cli.py` (mocked; no live calls). The public OpenAPI spec has been analysed ([nineyard-field-mapping.md](nineyard-field-mapping.md)). **Does not exist:** any sync service — nothing writes Nineyard data to `products`, `product_identifiers`, `marketplace_listings`, `nineyard_sync_runs`, or `nineyard_item_payloads`. The probe has not been run against the live API. See [nineyard-integration.md](nineyard-integration.md) and B1. |
 | 4 | Import profiles | ⬜ Not started | `vendor_import_profiles` exists; shape of the JSONB rules still depends on B3/B4 |
 | 5 | File ingestion + raw retention | ⬜ Not started | `import_files` exists; no `StorageBackend` yet |
@@ -150,6 +150,54 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 2 — the vendor database API (2026-09-15)
+
+The first real API, and the pattern every later one copies: **schema →
+repository → service → route**, each layer doing one thing.
+
+* **Migration `44c932e601b0`** — `vendors` gains `minimum_order_quantity`,
+  `minimum_order_value` (both nullable, `>= 0` by check) and free-form
+  `purchasing_terms` JSONB; new `vendor_contacts` (RESTRICT to its vendor,
+  email unique per vendor case-insensitively via a `lower(email)` index, one
+  active primary per vendor by partial index). The two checks are
+  hand-written; `alembic check` clean; one-step round trip tested
+  ([database-schema.md §3.3a](database-schema.md)).
+* **`app/schemas/vendors.py`** — code normalised to an upper-case
+  identifier, currency to ISO-4217, emails to a lower-case address shape;
+  `VendorUpdate` has no `code` field at all (the business key is not
+  editable). 42 unit tests.
+* **`app/repositories/vendors.py`** — `VendorRepository(ScopedRepository)`
+  (ADR 0012): paginated list with status filter and name/code search
+  (`ILIKE` over the trigram index), get, add, `has_active_import_profiles`,
+  and the contact reads. No delete exists.
+* **`app/services/vendors.py`** — create / update / deactivate and
+  contact add / update / deactivate, each in one `transaction()` with
+  `audit.record_change` before it closes; a second primary contact demotes
+  the previous one in the same transaction, audited. Typed refusals:
+  `vendor_code_taken` (409, with the unique index as the backstop against a
+  race), `vendor_has_active_import_profiles` (409),
+  `vendor_already_inactive` (409), `vendor_contact_email_taken` (409),
+  `vendor_not_found` / `vendor_contact_not_found` (404).
+* **`app/api/v1/routes/vendors.py`** — the ten routes above, all documented
+  with 403 in OpenAPI (contract test).
+
+**Two findings during the build.** (1) The repository's count query built
+through `TenantScope` added `vendors` to `FROM` a second time — a cartesian
+product SQLAlchemy warns about, which is an error here. The count is now a
+plain `select(count())` over the already-scoped subquery. (2) The role model
+is flat: gating reads on `VIEWER` alone meant a `DATA_OPERATOR` could create
+a vendor and then get 403 fetching it. Reads now accept every role; a test
+logs in as each role and reads.
+
+**35 route tests**: 401 on every route unauthenticated, 403 by role for
+each of the four roles, duplicate code → 409 with a typed body and no second
+row, the same code allowed in another organization, field-level 422s,
+another tenant's vendor → 404, search / status filter / pagination / bad
+query parameters, deactivation refused with active profiles and allowed
+once they are retired, contacts end to end, and one test that performs
+every mutation in sequence and asserts exactly one `vendor*` audit row per
+mutation, each naming the acting user with `before` / `after` state.
 
 ### Amazon scheduler, run recovery and CLI (2026-09-15, POC step 7)
 
@@ -424,12 +472,12 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 116 files unchanged |
+| Backend format | `ruff format .` | ✅ 123 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 112 source files |
-| Backend tests | `pytest` | ✅ `740 passed in 10.28s` — `tests/unit`: `532 passed`; `tests/integration`: `208 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 118 source files |
+| Backend tests | `pytest` | ✅ `831 passed in 19.95s` — `tests/unit`: `578 passed`; `tests/integration`: `253 passed` |
 | Migration apply | `alembic upgrade head` | ✅ Both revisions applied to PostgreSQL 16.15 |
-| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011` and `3de5c4e5def0` each re-apply cleanly |
+| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0` and `44c932e601b0` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
 | Frontend lint | `npm run lint` | ✅ Clean |
 | Frontend types | `npm run typecheck` | ✅ Clean |

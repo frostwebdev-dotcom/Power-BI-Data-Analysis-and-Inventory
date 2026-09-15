@@ -36,6 +36,7 @@ from app.models import (
     Role,
     User,
     Vendor,
+    VendorContact,
     VendorImportProfile,
     VendorInventorySnapshot,
     VendorProduct,
@@ -420,3 +421,18 @@ def make_amazon_inventory_snapshot(
     session.add(snapshot)
     session.flush()
     return snapshot
+
+
+def make_vendor_contact(
+    session: Session, organization: Organization, vendor: Vendor, **kwargs: Any
+) -> VendorContact:
+    contact = VendorContact(
+        organization_id=organization.id,
+        vendor_id=vendor.id,
+        name=kwargs.pop("name", "Test Contact"),
+        email=kwargs.pop("email", f"{unique('contact')}@example.test"),
+        **kwargs,
+    )
+    session.add(contact)
+    session.flush()
+    return contact

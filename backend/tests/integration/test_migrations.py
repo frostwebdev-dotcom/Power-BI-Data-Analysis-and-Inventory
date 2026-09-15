@@ -76,10 +76,10 @@ def test_upgrade_then_downgrade_then_upgrade_succeeds(scratch_database_url: URL)
     run_migrations(scratch_database_url)
     after_first_upgrade = _counts(scratch_database_url)
 
-    # 24 business tables plus alembic_version; 22 enum types (21 from the
+    # 25 business tables plus alembic_version; 22 enum types (21 from the
     # initial schema, amazon_sync_job_type from 3767ee979011 — sync_status and
     # trigger_type are shared, not duplicated).
-    assert after_first_upgrade["tables"] == 25
+    assert after_first_upgrade["tables"] == 26
     assert after_first_upgrade["enums"] == 22
     assert after_first_upgrade["triggers"] == 1
 
@@ -164,6 +164,9 @@ def test_the_migration_creates_the_expected_index_coverage(
         # Listing mapping (3de5c4e5def0)
         "ix_marketplace_listings_organization_id_mapping_status",
         "uq_product_mapping_exceptions_pending_listing",
+        # Vendor contacts (44c932e601b0)
+        "uq_vendor_contacts_vendor_id_lower_email",
+        "uq_vendor_contacts_primary",
     }
 
     assert required <= indexes, f"missing indexes: {sorted(required - indexes)}"

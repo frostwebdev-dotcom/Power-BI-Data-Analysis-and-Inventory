@@ -32,6 +32,7 @@ from app.models import (
     ProductIdentifier,
     ProductMappingException,
     User,
+    Vendor,
     VendorInventorySnapshot,
 )
 from app.models.enums import ActorType, IdentifierType, SourceSystem
@@ -390,3 +391,14 @@ def test_deleting_a_listing_removes_its_queue_items(db_session: Session) -> None
         )
     ).all()
     assert remaining == []
+
+
+def test_a_vendor_with_contacts_cannot_be_deleted(db_session: Session) -> None:
+    """Contacts are deactivated with their vendor, never cascaded away (RESTRICT)."""
+    organization = factories.make_organization(db_session)
+    vendor = factories.make_vendor(db_session, organization)
+    factories.make_vendor_contact(db_session, organization, vendor)
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(delete(Vendor).where(Vendor.id == vendor.id))
+        db_session.flush()
