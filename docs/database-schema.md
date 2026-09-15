@@ -206,10 +206,13 @@ erDiagram
         text name
         integer version "one active per vendor+name"
         enum file_format
-        jsonb column_map
+        jsonb column_map "ADR 0013 shapes"
         jsonb normalization_rules
         jsonb availability_rules
-        text header_signature
+        jsonb quantity_semantics
+        jsonb price_semantics
+        jsonb pack_size_handling
+        text header_signature "sha256 of normalised header row"
     }
 
     IMPORT_FILES {
@@ -513,6 +516,39 @@ retired with `is_active = false`; the API exposes no delete (AC-4.3).
 | `import_jobs` | `vendor_import_profiles` | RESTRICT | The profile version used stays interpretable. |
 | `import_job_rows` | `import_jobs` | CASCADE | Staged rows belong to the job. |
 | `import_job_rows.product_id` | `products` | SET NULL | |
+
+**Import profiles (phase 4, AC-6, ADR 0013).** `vendor_import_profiles` is
+versioned per `(organization_id, vendor_id, name)`:
+`uq_vendor_import_profiles_vendor_id_name_version` makes each version
+number unique within the line and `uq_vendor_import_profiles_active_name`,
+partial on `is_active`, allows at most one active version. Editing never
+updates a row — the service inserts version *n+1* and sets `is_active =
+false` on *n* in one transaction, so `import_jobs.vendor_import_profile_id`
+keeps pointing at the exact rules a job ran under. There is no delete.
+
+The six JSONB columns each have a fixed shape, validated on every write
+and re-validated on read (`backend/app/imports/profile_rules.py`; the JSON
+Schema is served at `GET /api/v1/import-profiles/rule-schemas`):
+
+| Column | Stored value |
+|---|---|
+| `column_map` | `{"columns": [{"target": ..., "source": ..., "required": bool}]}` — `target` is one of `vendor_sku`, `upc`, `description`, `quantity_available`, `unit_cost`, `pack_size`, `unit_of_measure`, `ignore`; `source` is a header text or a 0-based index. `quantity_available` and one of `upc`/`vendor_sku` are always present. |
+| `normalization_rules` | `{"trim", "upc_strip_non_digits", "upc_pad_to_12", "decimal_separator", "thousands_separator", "currency_symbols_to_strip"}` |
+| `availability_rules` | `{"available_when": "quantity_gt_zero" \| "status_column", "status_column", "available_values", "unavailable_values"}` |
+| `quantity_semantics` | `{"unit": "each" \| "case", "case_pack_from": "pack_size_column" \| "fixed", "fixed_pack_size"}` |
+| `price_semantics` | `{"currency": ISO 4217, "includes_tax": bool, "per": "each" \| "case"}` |
+| `pack_size_handling` | `{"mode": "store_as_stated"}` — the only mode today |
+
+The columns default to `'{}'::jsonb` at the database level for rows written
+outside the service; the service always writes every key, so a stored row
+carries its full rule set and never depends on application defaults
+changing underneath it.
+
+`header_signature` is the SHA-256 (64 lowercase hex characters) of the
+header row after normalisation — trimmed, whitespace collapsed, case-folded
+— joined with the unit separator (`U+001F`). It is nullable: a profile is created unpinned and the
+operator pins it from the validate endpoint's reported signature. A file
+whose signature differs is reported before any row is mapped (AC-6.4).
 
 **Two idempotency guarantees:**
 

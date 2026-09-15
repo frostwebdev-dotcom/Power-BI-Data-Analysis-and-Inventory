@@ -27,6 +27,10 @@ dependencies = [
     # In-process scheduler for the Amazon ingestion jobs (ADR 0011). 3.x on
     # purpose: 4.x is a rewrite with a different API and no stable release.
     "apscheduler>=3.10,<4",
+    # Vendor file ingestion (phase 4+): XLSX reading and multipart uploads.
+    # No pandas, ever — every cell is read as str (ADR 0008, risk R2).
+    "openpyxl>=3.1",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +39,7 @@ dev = [
     "pytest-cov>=6.0",
     "ruff>=0.8",
     "mypy>=1.13",
+    "types-openpyxl>=3.1",
 ]
 
 [tool.setuptools.packages.find]

@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-15 (phase 2 — vendor database API)
+Last updated: 2026-09-15 (phase 4 — versioned import profiles)
 
 ---
 
@@ -11,17 +11,18 @@ Last updated: 2026-09-15 (phase 2 — vendor database API)
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, and the `amazon_poc` CLI. No vendor CRUD or file import yet. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, and versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013). No file import yet. |
 | Database schema | 25 tables, 22 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
 | Migrations | 4 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **831 passed** (`pytest`: 578 unit + 253 integration). `git grep -c "def test_"` finds 618 functions (379 unit, 239 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
-| Quality gates | 8 of 8 passing locally **and in GitHub Actions** (§4), 2026-09-14 |
+| Backend tests | **947 passed** (`pytest`: 648 unit + 299 integration). `grep -c "def test_"` over `tests/` finds 705 functions (439 unit, 266 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 8 (see §7); B1 partially answered, B2 narrowed, B7 partially answered by ADR 0011, B8 new |
 
 The schema, the audit writer, the security foundation, and a read-only Nineyard
-diagnostic exist and are verified. Nothing yet reads a vendor file, synchronises
-Nineyard data, or matches a product.
+diagnostic exist and are verified. The validate endpoint reads the first rows of a
+vendor file for preview; nothing yet imports one, synchronises Nineyard
+data, or matches a vendor row to a product.
 
 ---
 
@@ -31,13 +32,13 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 
 | # | Phase | Status | Notes |
 |---|---|---|---|
-| — | Planning and documentation | ✅ Complete | Scope, architecture, criteria, 10 ADRs |
+| — | Planning and documentation | ✅ Complete | Scope, architecture, criteria, 13 ADRs |
 | 0 | Scaffolding | ✅ Complete | Backend, frontend, infra, quality gates, GitHub Actions CI (2026-09-14) |
 | 1 | DB foundation + audit | ✅ Complete | Schema, migration, transactional audit writer, transaction utilities, config/security foundation |
 | A | Amazon SP-API read-only ingestion ([ADR 0011](decisions/0011-amazon-sp-api-proof-of-concept-in-milestone-1.md)) | 🟨 Complete against fakes | Precedes phase 2 by client request (§10). **Exists:** settings, redaction, the read-only client, the tables, the three ingestions, listings→product mapping, the velocity service, scheduled jobs with stale-run recovery, and the `amazon_poc` CLI ([amazon-integration.md](amazon-integration.md)). **Does not exist:** the read-only velocity HTTP endpoint named in the ADR. **Not yet done:** a single run against the real seller account (B8) — the one thing the client asked to see. |
 | 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
 | 3 | Nineyard integration + sync | 🟨 Diagnostic only | **Exists:** read-only client (`app/integrations/nineyard/client.py`, `errors.py`, `sanitize.py`), probe (`app/integrations/nineyard/probe.py`), and CLI (`app/cli/nineyard_probe.py`), tested by `tests/unit/test_nineyard_client.py`, `test_nineyard_probe.py`, `test_nineyard_cli.py` (mocked; no live calls). The public OpenAPI spec has been analysed ([nineyard-field-mapping.md](nineyard-field-mapping.md)). **Does not exist:** any sync service — nothing writes Nineyard data to `products`, `product_identifiers`, `marketplace_listings`, `nineyard_sync_runs`, or `nineyard_item_payloads`. The probe has not been run against the live API. See [nineyard-integration.md](nineyard-integration.md) and B1. |
-| 4 | Import profiles | ⬜ Not started | `vendor_import_profiles` exists; shape of the JSONB rules still depends on B3/B4 |
+| 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
 | 5 | File ingestion + raw retention | ⬜ Not started | `import_files` exists; no `StorageBackend` yet |
 | 6 | Parsing + validation + reporting | ⬜ Not started | Needs sample files (B4) |
 | 7 | Matching engine | 🟨 Normaliser and listing resolver exist | `app/matching/normalize.py` (AC-7.6) is built and shared; the priority-chain resolver for *listings* is in `amazon_listings.py`. The vendor-row engine and `match_attempt` recording are unwritten. |
@@ -150,6 +151,79 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 4 — versioned import profiles (2026-09-15, ADR 0013)
+
+The rule shapes the schema left open are now closed. Same layering as
+phase 2, plus a small pure-Python import package that the real import
+(phase 5/6) will reuse unchanged.
+
+* **`app/imports/profile_rules.py`** — one Pydantic model per JSONB column,
+  `extra="forbid"`, with the validators the brief lists: `column_map`
+  needs `quantity_available` and one of `upc`/`vendor_sku`, no duplicate
+  target or source; `normalization_rules` separators must differ;
+  `availability_rules` in `status_column` mode needs the column and a
+  value list, and the two lists cannot overlap; `quantity_semantics` in
+  `fixed` mode needs a positive `fixed_pack_size`; `price_semantics`
+  currency is ISO 4217; `pack_size_handling` has the single mode
+  `store_as_stated`. `ProfileRules` adds the cross-rule checks (case
+  quantities from a column need a `pack_size` mapping; price per case
+  needs `unit_cost`). `rule_json_schemas()` exports the six schemas.
+  `compute_header_signature()` is SHA-256 of the normalised header row.
+* **`app/imports/readers.py`** — CSV (encoding fallback `utf-8-sig` →
+  `cp1252` → `latin-1`, delimiter sniffed unless the profile names one,
+  `skip_rows` / `header_row_index`) and XLSX via openpyxl in read-only
+  mode, sheet by name or index. Every cell comes out as text; an
+  integer-valued numeric cell is rendered without `.0`, so a UPC typed as a
+  number keeps its digits (risk R2). Readers stop after `max_rows`.
+* **`app/imports/mapping.py`** — resolves each mapped source against the
+  header row (case- and whitespace-insensitive), checks the signature, and
+  maps each row: UPC through the shared normaliser with the profile's
+  strip/pad flags, quantity as an integer, cost as a decimal after currency
+  and thousands stripping, availability by quantity or by a status column
+  looked up by header text — unrecognised status → `UNKNOWN`. Per-row
+  issues, never exceptions.
+* **`app/services/import_profiles.py`** — `create_profile` (version =
+  latest + 1 for the vendor+name line, so a re-created profile continues
+  its history), `update_profile` (refuses an inactive version; merges the
+  set fields over version n, re-validates the whole, retires n and inserts
+  n+1 in one `transaction()` with `import_profile.superseded` and
+  `import_profile.version_created` audit rows), `deactivate_profile`,
+  `preview_file` (25 MB cap, first 20 rows, stores nothing). Typed
+  refusals: `import_profile_name_taken` (409), `import_profile_not_active`
+  (409), `import_profile_not_found` (404), `sample_file_unreadable` /
+  `sample_file_too_large` / `import_profile_invalid` (422).
+* **`app/api/v1/routes/import_profiles.py`** — reads for every role,
+  writes for `DATA_OPERATOR`. The draft-validate route takes the profile as
+  a JSON form field beside the file, since multipart carries no validated
+  JSON body part; its validation errors come back in the same
+  `{location, message, type}` shape as body errors, with no input echoed.
+* **Dependencies** — `openpyxl` and `python-multipart` (runtime),
+  `types-openpyxl` (dev). No migration: the columns already existed.
+
+**Two decisions made while building, both recorded in the ADR.** (1) The
+status column is located by header text in the file, not through the
+column map, so an operator does not have to map "Status" to `ignore` just
+to read it. (2) A `source` of `true` would have coerced to column 1 under
+lax int parsing; a before-validator now refuses booleans.
+
+**Tests.** `tests/unit/test_profile_rules.py` (70): every validator above
+with its negative case, the schema export, the signature's sensitivity to
+rename / reorder / add and insensitivity to case / spacing, the readers
+(BOM, cp1252 fallback, sniffed and declared delimiters, skip rows, header
+row index, truncation, padding, sheet selection, garbage input, numeric
+UPC cell) and the mapper. `tests/integration/test_import_profile_api.py`
+(46): 401 on every route, 403 by role, another tenant's vendor → 404,
+eleven boundary rejections with no row written, version 1 with defaults
+and one audit row, **PATCH creates v2 and retires v1 with two audit rows**,
+inactive → 409, empty PATCH → no version, a cross-rule-breaking PATCH
+refused whole, list active vs `include_inactive`, deactivate; the validate
+routes with the brief's two layouts built in-test — `UPC | Description |
+Quantity | Cost` as CSV (leading zero restored, `$` stripped, bad check
+digit and non-numeric quantity reported per row) and `Vendor SKU | UPC |
+Qty Available | Wholesale Price` as XLSX (numeric UPC cell read as digits,
+named sheet) — plus signature mismatch, unpinned draft, 20-row cap,
+unreadable workbook, wrong sheet, and three invalid drafts.
 
 ### Phase 2 — the vendor database API (2026-09-15)
 
@@ -457,7 +531,7 @@ be work thrown away ([security.md §8](security.md) lists this honestly).
 
 ## 4. Quality gate results
 
-Run on 2026-09-14 via `.	asks.ps1 check`. Windows 11, Python 3.12.10, Node 24.19.0, PostgreSQL 16.15.
+Run on 2026-09-15 via `.\tasks.ps1 check`. Windows 11, Python 3.12.10, Node 24.19.0, PostgreSQL 16.15.
 The same gates run in GitHub Actions on every push
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml), described in
 [deployment.md](deployment.md#continuous-integration)). First run, all three
@@ -472,10 +546,10 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 123 files unchanged |
+| Backend format | `ruff format .` | ✅ 132 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 118 source files |
-| Backend tests | `pytest` | ✅ `831 passed in 19.95s` — `tests/unit`: `578 passed`; `tests/integration`: `253 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 127 source files |
+| Backend tests | `pytest` | ✅ `947 passed in 23.81s` — `tests/unit`: `648 passed`; `tests/integration`: `299 passed` |
 | Migration apply | `alembic upgrade head` | ✅ Both revisions applied to PostgreSQL 16.15 |
 | Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0` and `44c932e601b0` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
@@ -662,17 +736,20 @@ Two decisions remain, both about Entra ID rather than about whether to use it:
 Confirmation that Entra ID is in fact the target would also be useful — see
 assumption A21. Phase 10 needs a sign-in flow, which needs both answers.
 
-### B3 — Pack size and unit-of-measure policy *(now shapes a built table)*
-`vendor_import_profiles.pack_size_handling` is JSONB and currently empty.
-Normalize vendor quantities to the catalog unit at import, or store as stated
-and defer conversion? Recommendation unchanged: store as stated plus pack size,
-and defer — Milestone 1 makes no purchasing decisions.
+### B3 — Pack size and unit-of-measure policy *(decided for Milestone 1 by ADR 0013)*
+`pack_size_handling` now has exactly one mode, `store_as_stated`: quantities
+are kept as the vendor states them, with `pack_size` and `unit_of_measure`
+alongside, and no conversion is made. A `normalize_to_each` mode is the
+obvious later addition; it needs a rounding and pricing policy from the
+client first and would arrive as an additive shape change with its own ADR.
 
 ### B4 — Representative vendor files *(blocks realistic phases 6 and 7)*
 3–5 real vendor files (CSV and XLSX, anonymized), ideally one known-messy
-example, plus typical and maximum row counts and file cadence. These determine
-the concrete shape of `column_map`, `normalization_rules`, and
-`availability_rules`.
+example, plus typical and maximum row counts and file cadence. The rule
+shapes are now fixed (ADR 0013) and were exercised against the two layouts
+the brief names, built in-test; real files would confirm the defaults
+(currency symbols, separators, status vocabularies) and give phase 6 its
+fixtures.
 
 ### B5 — Raw file storage destination and retention *(blocks phase 5 deployment)*
 Local disk, S3, Azure Blob, or other? Any retention, deletion, or compliance
@@ -731,8 +808,9 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phase 4 (import profiles) follows, though its JSONB rule shapes still want real
-vendor files (B4).
+Phase 4 (import profiles) followed on 2026-09-15 (ADR 0013). Phase 5 (file
+ingestion with raw retention) is next and needs B5 for its deployed storage
+destination; the readers and mapper it will call already exist.
 
 ---
 

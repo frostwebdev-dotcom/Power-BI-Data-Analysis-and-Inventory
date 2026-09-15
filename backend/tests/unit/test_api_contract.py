@@ -70,6 +70,12 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/vendors/{vendor_id}/contacts",
         "/api/v1/vendors/{vendor_id}/contacts/{contact_id}",
         "/api/v1/vendors/{vendor_id}/contacts/{contact_id}/deactivate",
+        "/api/v1/vendors/{vendor_id}/import-profiles",
+        "/api/v1/vendors/{vendor_id}/import-profiles/validate",
+        "/api/v1/vendors/{vendor_id}/import-profiles/{profile_id}",
+        "/api/v1/vendors/{vendor_id}/import-profiles/{profile_id}/deactivate",
+        "/api/v1/vendors/{vendor_id}/import-profiles/{profile_id}/validate",
+        "/api/v1/import-profiles/rule-schemas",
     }
 
 
@@ -78,7 +84,7 @@ def test_every_vendor_route_documents_403(client: TestClient) -> None:
     paths = client.get("/api/v1/openapi.json").json()["paths"]
 
     for path, operations in paths.items():
-        if not path.startswith("/api/v1/vendors"):
+        if not path.startswith(("/api/v1/vendors", "/api/v1/import-profiles")):
             continue
         for method, operation in operations.items():
             assert "403" in operation["responses"], f"{method.upper()} {path} lacks 403"

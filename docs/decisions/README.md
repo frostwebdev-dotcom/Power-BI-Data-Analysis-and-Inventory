@@ -29,5 +29,6 @@ otherwise be tempted to "fix" without knowing why it is the way it is.
 | [0010](0010-identifier-model-and-mapping-placement.md) | Identifier model, and where approved mappings live | Accepted |
 | [0011](0011-amazon-sp-api-proof-of-concept-in-milestone-1.md) | Admit a read-only Amazon SP-API ingestion into Milestone 1 | Accepted |
 | [0012](0012-tenant-scoping-enforced-in-repository-layer.md) | Enforce tenant scoping in the repository layer until row-level security | Accepted |
+| [0013](0013-import-profile-rule-shapes.md) | Import-profile rule columns have fixed, validated shapes | Accepted |
 
 Statuses: `Proposed` · `Accepted` · `Superseded by NNNN` · `Deprecated`
