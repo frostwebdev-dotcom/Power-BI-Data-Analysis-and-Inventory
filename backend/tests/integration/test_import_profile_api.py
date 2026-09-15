@@ -564,7 +564,7 @@ class TestValidate:
         assert response.status_code == 200, response.text
         body = response.json()
         assert body["file_name"] == "weekly.csv"
-        assert body["encoding"] == "utf-8-sig" and body["sheet"] is None
+        assert body["encoding"] == "utf-8" and body["sheet"] is None
         assert body["headers"] == CSV_HEADERS
         assert body["signature_matches"] is True and body["header_ok"] is True
         assert body["issues"] == [] and body["truncated"] is False
@@ -572,17 +572,18 @@ class TestValidate:
 
         rows = body["rows"]
         assert len(rows) == 4
-        assert rows[0]["values"]["upc_normalized"] == "00012345678905"
+        assert rows[0]["values"]["upc"] == "00012345678905"
         assert rows[0]["values"]["quantity"] == 24
-        assert rows[0]["values"]["unit_cost_parsed"] == "3.50"  # "$" stripped by default
+        assert rows[0]["values"]["unit_cost"] == "3.50"  # "$" stripped by default
         assert rows[0]["values"]["availability"] == "AVAILABLE" and rows[0]["issues"] == []
-        assert rows[1]["values"]["upc_normalized"] == "00012345678905"  # leading zero restored
+        assert rows[1]["values"]["upc"] == "00012345678905"  # leading zero restored
         assert rows[1]["values"]["availability"] == "OUT_OF_STOCK"
         assert rows[2]["values"]["upc_valid_checksum"] is False
-        assert any("check digit" in i for i in rows[2]["issues"])
+        assert [i["code"] for i in rows[2]["issues"]] == ["UPC_INVALID"]
         assert rows[3]["values"]["quantity"] is None
         assert rows[3]["values"]["availability"] == "UNKNOWN"
-        assert any("not a whole number" in i for i in rows[3]["issues"])
+        assert [i["code"] for i in rows[3]["issues"]] == ["IDENTIFIER_MISSING", "QUANTITY_INVALID"]
+        assert rows[3]["status"] == "ERROR" and rows[0]["status"] == "OK"
         # Nothing was stored.
         assert len(db_session.execute(select(VendorImportProfile)).scalars().all()) == 1
 
@@ -607,14 +608,14 @@ class TestValidate:
         rows = body["rows"]
         assert [r["values"]["vendor_sku"] for r in rows] == ["ACM-001", "ACM-002", "ACM-003"]
         # The numeric cell 12345678905 is read as digits, not 1.23457E+10.
-        assert rows[0]["values"]["upc"] == "12345678905"
-        assert rows[0]["values"]["upc_normalized"] == "00012345678905"
+        assert rows[0]["raw"]["upc"] == "12345678905"
+        assert rows[0]["values"]["upc"] == "00012345678905"
         assert rows[0]["values"]["quantity"] == 100
-        assert rows[0]["values"]["unit_cost_parsed"] == "12.5"
-        assert rows[1]["values"]["upc_normalized"] == "00036000291452"
+        assert rows[0]["values"]["unit_cost"] == "12.5"
+        assert rows[1]["values"]["upc"] == "00036000291452"
         assert rows[1]["values"]["availability"] == "OUT_OF_STOCK"
-        assert rows[2]["values"]["upc"] == "" and rows[2]["values"]["upc_normalized"] is None
-        assert rows[2]["values"]["unit_cost_parsed"] == "0.99"
+        assert rows[2]["raw"]["upc"] == "" and rows[2]["values"]["upc"] is None
+        assert rows[2]["values"]["unit_cost"] == "0.99"
         assert db_session.execute(select(VendorImportProfile)).scalars().all() == []
 
     def test_a_file_with_different_columns_fails_the_signature(

@@ -79,6 +79,8 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/imports",
         "/api/v1/imports/{job_id}",
         "/api/v1/imports/{job_id}/raw",
+        "/api/v1/imports/{job_id}/report",
+        "/api/v1/imports/{job_id}/rows",
     }
 
 

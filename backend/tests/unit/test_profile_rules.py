@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import csv
 import io
+from decimal import Decimal
 from typing import Any, ClassVar
 
 import pytest
 from pydantic import ValidationError
 
+from app.imports.extract import IssueCode
 from app.imports.mapping import map_table
 from app.imports.profile_rules import (
     RULE_MODELS,
@@ -26,7 +28,7 @@ from app.imports.profile_rules import (
     rule_json_schemas,
 )
 from app.imports.readers import ReadOptions, UnreadableFile, cell_text, read_table
-from app.models.enums import FileFormat
+from app.models.enums import AvailabilityStatus, FileFormat, ImportRowStatus
 
 
 def columns(*mappings: tuple[str, str | int]) -> ColumnMap:
@@ -314,7 +316,7 @@ class TestReaders:
 
         assert table.headers == ["UPC", "Quantity"]
         assert table.rows == [["012345678905", "7"]]
-        assert table.encoding == "utf-8-sig"
+        assert table.encoding == "utf-8"  # no BOM; with one it is utf-8-sig
 
     def test_csv_utf8_bom_and_cp1252_fallback(self) -> None:
         bom = b"\xef\xbb\xbf" + csv_bytes([["UPC", "Qty"], ["1", "2"]])
@@ -404,6 +406,9 @@ class TestReaders:
 
 
 class TestMapper:
+    """map_table runs the sample through app.imports.extract; rows come back
+    as ExtractedRow with typed values and coded issues."""
+
     HEADERS: ClassVar[list[str]] = ["UPC", "Description", "Quantity", "Cost"]
 
     def rules(self) -> ProfileRules:
@@ -421,25 +426,45 @@ class TestMapper:
 
         assert preview.header_ok and preview.issues == []
         [row] = preview.rows
-        assert row.values["upc"] == "012345678905"
-        assert row.values["upc_normalized"] == "00012345678905"
-        assert row.values["upc_valid_checksum"] is True
-        assert row.values["quantity"] == 7
-        assert row.values["unit_cost_parsed"] == "19.99"
-        assert row.values["availability"] == "AVAILABLE"
-        assert row.issues == []
+        assert row.raw_upc == "012345678905"
+        assert row.normalized_upc == "00012345678905"
+        assert row.has_valid_checksum is True
+        assert row.quantity == 7
+        assert row.unit_cost == Decimal("19.99") and row.currency == "USD"
+        assert row.availability_status is AvailabilityStatus.AVAILABLE
+        assert row.issues == [] and row.status is ImportRowStatus.OK
+        assert row.raw == {
+            "upc": "012345678905",
+            "description": "Widget",
+            "quantity_available": "7",
+            "unit_cost": "$19.99",
+        }
 
     def test_thousands_separator_needs_the_rule(self) -> None:
         rules = self.rules()
         preview = map_table(rules, self.HEADERS, [["012345678905", "W", "1", "$1,299.50"]])
-        assert "unit_cost is not a number" in preview.rows[0].issues[0]
+        [issue] = preview.rows[0].issues
+        assert issue.code is IssueCode.PRICE_INVALID and issue.field == "unit_cost"
+        assert preview.rows[0].status is ImportRowStatus.WARNING
+        assert preview.rows[0].unit_cost is None
 
         rules = ProfileRules(
             column_map=rules.column_map,
             normalization_rules=NormalizationRules(thousands_separator=","),
         )
         preview = map_table(rules, self.HEADERS, [["012345678905", "W", "1", "$1,299.50"]])
-        assert preview.rows[0].values["unit_cost_parsed"] == "1299.50"
+        assert preview.rows[0].unit_cost == Decimal("1299.50")
+
+    def test_decimal_comma_and_space_grouping(self) -> None:
+        rules = ProfileRules(
+            column_map=self.rules().column_map,
+            normalization_rules=NormalizationRules(
+                decimal_separator=",", thousands_separator=".", currency_symbols_to_strip=["€"]
+            ),
+        )
+        preview = map_table(rules, self.HEADERS, [["012345678905", "W", "1.250", "€1.299,50"]])
+        assert preview.rows[0].quantity == 1250
+        assert preview.rows[0].unit_cost == Decimal("1299.50")
 
     def test_header_matching_is_case_and_space_insensitive(self) -> None:
         preview = map_table(
@@ -454,8 +479,10 @@ class TestMapper:
 
         assert not preview.header_ok
         assert any("required column for quantity_available" in i for i in preview.issues)
-        assert preview.rows[0].values["quantity"] is None
-        assert "quantity_available is blank" in preview.rows[0].issues
+        assert preview.rows[0].quantity is None
+        [issue] = preview.rows[0].issues
+        assert issue.code is IssueCode.QUANTITY_INVALID and "blank" in issue.message
+        assert preview.rows[0].status is ImportRowStatus.ERROR
 
     def test_signature_mismatch_is_reported(self) -> None:
         expected = compute_header_signature(["UPC", "Quantity"])
@@ -464,13 +491,36 @@ class TestMapper:
         assert any("header signature does not match" in i for i in preview.issues)
         assert map_table(self.rules(), self.HEADERS, []).signature_matches is None
 
-    def test_bad_values_become_row_issues(self) -> None:
+    def test_bad_values_become_coded_issues(self) -> None:
         preview = map_table(self.rules(), self.HEADERS, [["012345678906", "x", "two", "abc"]])
-        issues = preview.rows[0].issues
-        assert any("check digit" in i for i in issues)
-        assert any("not a whole number" in i for i in issues)
-        assert any("unit_cost is not a number" in i for i in issues)
-        assert preview.rows[0].values["availability"] == "UNKNOWN"
+        [row] = preview.rows
+        codes = [i.code for i in row.issues]
+        assert codes == [IssueCode.UPC_INVALID, IssueCode.QUANTITY_INVALID, IssueCode.PRICE_INVALID]
+        assert row.has_valid_checksum is False and row.normalized_upc == "00012345678906"
+        assert row.status is ImportRowStatus.ERROR
+        assert (
+            row.primary_issue is not None and row.primary_issue.code is IssueCode.QUANTITY_INVALID
+        )
+        assert row.availability_status is AvailabilityStatus.UNKNOWN
+
+    def test_negative_quantity_is_an_error(self) -> None:
+        [row] = map_table(self.rules(), self.HEADERS, [["012345678905", "x", "-3", ""]]).rows
+        assert [i.code for i in row.issues] == [IssueCode.QUANTITY_NEGATIVE]
+        assert row.quantity is None and row.status is ImportRowStatus.ERROR
+
+    def test_a_row_with_no_identifier_is_an_error(self) -> None:
+        [row] = map_table(self.rules(), self.HEADERS, [["", "Mystery", "3", "1"]]).rows
+        assert [i.code for i in row.issues] == [IssueCode.IDENTIFIER_MISSING]
+        assert row.status is ImportRowStatus.ERROR
+
+    def test_a_bad_upc_still_imports_on_the_vendor_sku(self) -> None:
+        rules = ProfileRules(
+            column_map=columns(("vendor_sku", "SKU"), ("upc", "UPC"), ("quantity_available", "Qty"))
+        )
+        [row] = map_table(rules, ["SKU", "UPC", "Qty"], [[" acm 001 ", "12345", "2"]]).rows
+        assert row.vendor_sku == "acm 001" and row.normalized_vendor_sku == "ACM 001"
+        assert [i.code for i in row.issues] == [IssueCode.UPC_INVALID]
+        assert row.status is ImportRowStatus.WARNING
 
     def test_status_column_availability(self) -> None:
         """The status column is read by header text; it need not be in the map."""
@@ -483,17 +533,22 @@ class TestMapper:
                 unavailable_values=["Discontinued"],
             ),
         )
-        rows = [["1", "5", "in stock"], ["2", "5", "Discontinued"], ["3", "5", "Backorder"]]
+        rows = [
+            ["012345678905", "5", "in stock"],
+            ["036000291452", "5", "Discontinued"],
+            ["012345678905", "5", "Backorder"],
+        ]
         preview = map_table(rules, ["UPC", "Qty", "Status"], rows)
-        assert [r.values["availability"] for r in preview.rows] == [
-            "AVAILABLE",
-            "OUT_OF_STOCK",
-            "UNKNOWN",
+        assert [r.availability_status for r in preview.rows] == [
+            AvailabilityStatus.AVAILABLE,
+            AvailabilityStatus.OUT_OF_STOCK,
+            AvailabilityStatus.UNKNOWN,
         ]
         assert preview.issues == []
+        assert [i.code for i in preview.rows[2].issues] == [IssueCode.AVAILABILITY_UNKNOWN]
 
-        missing = map_table(rules, ["UPC", "Qty"], [["1", "5"]])
-        assert missing.rows[0].values["availability"] == "UNKNOWN"
+        missing = map_table(rules, ["UPC", "Qty"], [["012345678905", "5"]])
+        assert missing.rows[0].availability_status is AvailabilityStatus.UNKNOWN
         assert any("status column not found" in i for i in missing.issues)
 
     def test_upc_flags(self) -> None:
@@ -504,15 +559,35 @@ class TestMapper:
         preview = map_table(
             rules, ["UPC", "Quantity"], [["0-12345-67890-5", "1"], ["12345678905", "1"]]
         )
-        assert "stripping is disabled" in preview.rows[0].issues[0]
-        assert "padding is disabled" in preview.rows[1].issues[0]
+        assert "stripping is disabled" in preview.rows[0].issues[0].message
+        assert "padding is disabled" in preview.rows[1].issues[0].message
+
+    def test_fixed_case_pack_is_recorded(self) -> None:
+        rules = ProfileRules(
+            column_map=MINIMAL,
+            quantity_semantics=QuantitySemantics(
+                unit="case", case_pack_from="fixed", fixed_pack_size=12
+            ),
+        )
+        [row] = map_table(rules, ["UPC", "Quantity"], [["012345678905", "4"]]).rows
+        assert row.quantity == 4 and row.pack_size == 12  # stored as stated (B3)
 
     def test_index_sources(self) -> None:
         rules = ProfileRules(column_map=columns(("vendor_sku", 0), ("quantity_available", 1)))
         preview = map_table(rules, ["A", "B"], [["SKU-1", "3"]])
-        assert preview.rows[0].values == {
-            "vendor_sku": "SKU-1",
-            "quantity_available": "3",
-            "quantity": 3,
-            "availability": "AVAILABLE",
-        }
+        assert preview.rows[0].raw == {"vendor_sku": "SKU-1", "quantity_available": "3"}
+        assert preview.rows[0].quantity == 3
+
+    def test_as_json_shape(self) -> None:
+        body = map_table(self.rules(), self.HEADERS, [["012345678906", "x", "7", "1"]]).as_json()
+        [row] = body["rows"]
+        assert row["row_number"] == 1 and row["status"] == "WARNING"
+        assert row["values"]["upc"] == "00012345678906"
+        assert row["issues"] == [
+            {
+                "code": "UPC_INVALID",
+                "severity": "WARNING",
+                "field": "upc",
+                "message": "'012345678906': check digit does not verify",
+            }
+        ]

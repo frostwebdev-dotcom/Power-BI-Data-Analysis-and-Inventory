@@ -2,8 +2,9 @@
 
 Status: **Implemented.** Migrations `506fd0ecc33a` (initial schema),
 `3767ee979011` (Amazon ingestion, ADR 0011), `3de5c4e5def0` (listing
-mapping context) and `44c932e601b0` (vendor contacts, minimum order,
-purchasing terms) applied and verified against PostgreSQL 16.
+mapping context), `44c932e601b0` (vendor contacts, minimum order,
+purchasing terms) and `fadb756b1b85` (import job stage) applied and
+verified against PostgreSQL 16.
 Last updated: 2026-09-15
 
 25 tables, 22 native enum types, 135 indexes, 82 check constraints, 83 foreign
@@ -233,6 +234,7 @@ erDiagram
         uuid import_file_id FK "one live job per file"
         uuid vendor_import_profile_id FK
         enum status
+        enum current_stage "null unless RUNNING (fadb756b1b85)"
         integer total_rows
         integer matched_rows
         integer exception_rows
@@ -550,6 +552,17 @@ header row after normalisation — trimmed, whitespace collapsed, case-folded
 operator pins it from the validate endpoint's reported signature. A file
 whose signature differs is reported before any row is mapped (AC-6.4).
 
+**Parsing (phase 6).** `import_jobs.current_stage` (`fadb756b1b85`) shows
+progress within RUNNING. `import_job_rows` is written in chunks of 1,000
+by `process_import_job`: `raw_data` holds the mapped cells as strings,
+`normalized_data` the derived values plus an `issues` list of
+`{code, severity, field, message}` (and `superseded_by_row` on an earlier
+occurrence of a repeated vendor SKU); `status` is the worst severity,
+`error_code` / `error_message` the issue that decided it. Blank source
+rows are stored as `SKIPPED` with their row number so counters reconcile:
+OK + WARNING + ERROR + SKIPPED = `import_jobs.total_rows`. The issue
+breakdown for the report lives under `import_jobs.error_details.parsing`.
+
 `import_files.storage_uri` is `<scheme>://<key>` with the key relative to
 the backend — today `local://<organization_id>/<yyyy>/<mm>/<sha256>.<ext>`
 under `STORAGE_RAW_DIR` (`backend/app/imports/storage.py`). The key is the
@@ -742,6 +755,16 @@ one-step downgrade test:
 The downgrade deletes the rows the old schema cannot hold (listings without
 a product, exceptions without a vendor, unlinked `AMAZON_SKU` identifiers)
 before re-tightening `NOT NULL`, deliberately and in the migration text.
+
+### `fadb756b1b85` — import job current stage
+
+Adds `import_jobs.current_stage`, a nullable `import_job_stage` enum
+(`PARSING`, `MATCHING`, `SNAPSHOTTING`). `import_job_status` deliberately
+has no per-stage members; this column says where a RUNNING job is and is
+null otherwise. Autogenerate rendered the column with a bare `sa.Enum`,
+which does not create the PostgreSQL type on `add_column`, so the type is
+created and dropped by hand; it is the only thing the downgrade drops.
+One-step round trip verified.
 
 ### `44c932e601b0` — vendor contacts, minimum order and purchasing terms
 

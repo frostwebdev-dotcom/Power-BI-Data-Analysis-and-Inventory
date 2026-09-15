@@ -76,11 +76,12 @@ def test_upgrade_then_downgrade_then_upgrade_succeeds(scratch_database_url: URL)
     run_migrations(scratch_database_url)
     after_first_upgrade = _counts(scratch_database_url)
 
-    # 25 business tables plus alembic_version; 22 enum types (21 from the
+    # 25 business tables plus alembic_version; 23 enum types (21 from the
     # initial schema, amazon_sync_job_type from 3767ee979011 — sync_status and
-    # trigger_type are shared, not duplicated).
+    # trigger_type are shared, not duplicated — and import_job_stage from
+    # fadb756b1b85).
     assert after_first_upgrade["tables"] == 26
-    assert after_first_upgrade["enums"] == 22
+    assert after_first_upgrade["enums"] == 23
     assert after_first_upgrade["triggers"] == 1
 
     downgrade_migrations(scratch_database_url)
@@ -250,6 +251,42 @@ def test_the_listing_mapping_revision_reverses_and_reapplies(scratch_database_ur
     assert "ck_product_mapping_exceptions_has_a_subject" not in checks
     assert "ck_product_identifiers_context_matches_identifier_type" in checks  # restored form
     assert "mapping_method" not in listing_columns and "raw" not in listing_columns
+
+    run_migrations(scratch_database_url)
+    check_migrations(scratch_database_url)
+
+
+def test_the_import_stage_revision_reverses_and_reapplies(scratch_database_url: URL) -> None:
+    """fadb756b1b85 creates the import_job_stage enum by hand; the downgrade
+    must drop the column and only that enum."""
+    run_migrations(scratch_database_url)
+    downgrade_migrations(scratch_database_url, "44c932e601b0")
+
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as connection:
+            enums = set(
+                connection.execute(text("select typname from pg_type where typtype = 'e'"))
+                .scalars()
+                .all()
+            )
+            job_columns = set(
+                connection.execute(
+                    text(
+                        "select column_name from information_schema.columns"
+                        " where table_name = 'import_jobs'"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+
+    assert "import_job_stage" not in enums
+    assert "import_job_status" in enums
+    assert len(enums) == 22
+    assert "current_stage" not in job_columns
 
     run_migrations(scratch_database_url)
     check_migrations(scratch_database_url)

@@ -135,6 +135,20 @@ class ImportJobStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class ImportJobStage(StrEnum):
+    """Where a RUNNING import is (phase 6).
+
+    ``ImportJobStatus`` deliberately has no per-stage members; this column
+    says which stage a running job is in, and is null once it is not running.
+    A job whose stage is MATCHING with nothing matched is waiting for the
+    matcher, not stuck: parsing sets it on completion.
+    """
+
+    PARSING = "PARSING"
+    MATCHING = "MATCHING"
+    SNAPSHOTTING = "SNAPSHOTTING"
+
+
 class ImportRowStatus(StrEnum):
     """Validation outcome for one source row."""
 

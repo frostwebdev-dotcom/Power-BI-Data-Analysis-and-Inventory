@@ -181,6 +181,9 @@ class Settings(BaseSettings):
     storage_rejected_dir: str = "/storage/rejected"
     #: Uploads larger than this are refused with 413 before anything is stored.
     import_max_upload_mb: int = Field(default=50, ge=1, le=1024)
+    #: Parse an upload inside the upload request when it names a profile.
+    #: Off, the job stays PENDING for a scheduled runner (phase 6 interim).
+    import_process_on_upload: bool = True
 
     @property
     def is_production(self) -> bool:

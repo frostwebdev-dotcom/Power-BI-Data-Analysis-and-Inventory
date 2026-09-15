@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-15 (phase 5 part 1 — file upload with raw retention)
+Last updated: 2026-09-15 (phase 6 — parsing, row validation and the import report)
 
 ---
 
@@ -11,18 +11,18 @@ Last updated: 2026-09-15 (phase 5 part 1 — file upload with raw retention)
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), and file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004). Uploaded files are queued as `PENDING` jobs; nothing yet parses them into rows. |
-| Database schema | 25 tables, 22 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
-| Migrations | 4 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **995 passed** (`pytest`: 662 unit + 333 integration). `grep -c "def test_"` over `tests/` finds 743 functions (453 unit, 290 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), and profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report. Parsed jobs wait at stage MATCHING; nothing yet matches a row to a product. |
+| Database schema | 25 tables, 23 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
+| Migrations | 5 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`), applied and reversed against PostgreSQL 16.15 |
+| Backend tests | **1033 passed** (`pytest`: 681 unit + 352 integration). `grep -c "def test_"` over `tests/` finds 776 functions (468 unit, 308 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
 | Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 8 (see §7); B1 partially answered, B2 narrowed, B7 partially answered by ADR 0011, B8 new |
 
 The schema, the audit writer, the security foundation, and a read-only Nineyard
 diagnostic exist and are verified. A vendor file can be uploaded, retained byte for
-byte and queued; nothing yet parses a queued file into rows, synchronises
-Nineyard data, or matches a vendor row to a product.
+byte, parsed through its profile into validated rows, and reported on;
+nothing yet matches a vendor row to a product or synchronises Nineyard data.
 
 ---
 
@@ -39,8 +39,8 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
 | 3 | Nineyard integration + sync | 🟨 Diagnostic only | **Exists:** read-only client (`app/integrations/nineyard/client.py`, `errors.py`, `sanitize.py`), probe (`app/integrations/nineyard/probe.py`), and CLI (`app/cli/nineyard_probe.py`), tested by `tests/unit/test_nineyard_client.py`, `test_nineyard_probe.py`, `test_nineyard_cli.py` (mocked; no live calls). The public OpenAPI spec has been analysed ([nineyard-field-mapping.md](nineyard-field-mapping.md)). **Does not exist:** any sync service — nothing writes Nineyard data to `products`, `product_identifiers`, `marketplace_listings`, `nineyard_sync_runs`, or `nineyard_item_payloads`. The probe has not been run against the live API. See [nineyard-integration.md](nineyard-integration.md) and B1. |
 | 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
-| 5 | File ingestion + raw retention | 🟨 Upload and retention done; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.3, 5.4, 5.6 and the encoding half of 5.8 covered by 48 tests. **Not built:** the worker claim loop that moves a job from `PENDING` through parsing (AC-5.1, 5.2, 5.7). |
-| 6 | Parsing + validation + reporting | ⬜ Not started | Needs sample files (B4) |
+| 5 | File ingestion + raw retention | 🟨 Upload, retention and parsing done; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
+| 6 | Parsing + validation + reporting | ✅ Complete (to the matching boundary) | Streaming CSV/XLSX readers with the file's own row numbers; `app/imports/extract.py` applies the profile and raises coded issues (`UPC_INVALID`, `QUANTITY_INVALID`, `QUANTITY_NEGATIVE`, `PRICE_INVALID`, `IDENTIFIER_MISSING`, `AVAILABILITY_UNKNOWN`, `DUPLICATE_IN_FILE`); `process_import_job` writes `import_job_rows` in 1,000-row transactions, fails the job before any row on a missing column or signature mismatch, reconciles counters from the rows, and leaves the job RUNNING at stage MATCHING; `GET /imports/{id}/report` and `GET /imports/{id}/rows`. AC-9.1, 9.2, 9.4, 9.5 covered by 31 tests including 20,000-row CSV and XLSX runs. **Not built:** the immutable `import_report` row (AC-9.3) and the matched-by-rule counts it needs — after phase 7. |
 | 7 | Matching engine | 🟨 Normaliser and listing resolver exist | `app/matching/normalize.py` (AC-7.6) is built and shared; the priority-chain resolver for *listings* is in `amazon_listings.py`. The vendor-row engine and `match_attempt` recording are unwritten. |
 | 8 | Exception workflow | ⬜ Not started | `product_mapping_exceptions` exists; `Principal` now supplies actor identity, so no longer blocked by B2 |
 | 9 | Inventory, availability, watchlist | ⬜ Not started | All four tables exist; no diffing logic |
@@ -151,6 +151,105 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 6 — parsing, row validation and the import report (2026-09-15)
+
+One pipeline for preview and import. Prompt 17's `mapping.py` and the new
+runner both call `app/imports/extract.py`, so what the validate endpoint
+shows an operator is exactly what the import does.
+
+* **`app/imports/readers.py`** — now streams: `open_rows()` yields one
+  `SourceRow(row_number, cells, is_blank)` at a time; `read_table()` is the
+  20-row wrapper the preview uses. Row numbers are the file's own — the
+  physical line a CSV record starts on (a quoted record spanning lines is
+  numbered by its first line), the sheet row for XLSX — so an error listing
+  points at the retained file (AC-5.1). Blank rows are yielded flagged, so
+  the import records them as SKIPPED with their number instead of losing
+  them. Encoding: the profile's, strictly, if named; else BOM → UTF-8 →
+  cp1252 → **charset-normalizer** (new dependency) → latin-1. Not
+  charset-normalizer first: on a short Western sample it answers `cp1250`,
+  and a wrong label on `detected_encoding` is worse than none.
+* **`app/imports/extract.py`** — `plan_columns()` resolves the map against
+  the header (by text or index) and locates the status column by header
+  text; `extract_row()` produces an `ExtractedRow` — normalised vendor SKU
+  (trimmed, whitespace collapsed, upper-cased), canonical UPC with
+  `has_valid_checksum` via `app/matching/normalize.py`, description,
+  integer quantity, decimal cost with the profile's currency, availability,
+  pack size (fixed case pack recorded, never converted — B3) — and a list
+  of `Issue(code, severity, field, message)` (AC-9.1). Status is the worst
+  severity; `primary_issue` becomes the row's `error_code`. Codes and
+  severities: `UPC_INVALID` W (imports on the SKU), `QUANTITY_INVALID` E,
+  `QUANTITY_NEGATIVE` E, `PRICE_INVALID` W (null cost), `PACK_SIZE_INVALID`
+  W, `IDENTIFIER_MISSING` E (neither SKU nor UPC — nothing could ever match
+  it), `AVAILABILITY_UNKNOWN` W (status-column value not in either list →
+  UNKNOWN, never available), `DUPLICATE_IN_FILE` W (set by the runner).
+* **Migration `fadb756b1b85`** — `import_jobs.current_stage`, a nullable
+  `import_job_stage` enum (PARSING, MATCHING, SNAPSHOTTING). Autogenerate
+  rendered a bare `sa.Enum`, which does not create the type on
+  `add_column`; hand-written to create and drop it. One-step round trip
+  tested; enum count in the round-trip test is now 23.
+* **`app/services/import_processing.py`** — `process_import_job`: PENDING
+  → RUNNING/PARSING (audited, `import_job.started`); bytes re-hashed
+  against `import_files.sha256`; the profile is required (a job uploaded
+  without one stays PENDING and fails with `PROFILE_MISSING` if run);
+  header checked **before any row is written** — a missing required column
+  fails with `REQUIRED_COLUMN_MISSING` naming the columns, a pinned
+  signature that differs fails with `HEADER_SIGNATURE_MISMATCH` carrying
+  expected and observed headers (AC-6.4, AC-9.2). Rows stream through
+  `extract_row` and are inserted with Core bulk inserts in chunks of 1,000,
+  each chunk its own `transaction()`, counters updated per chunk so
+  progress is visible. Repeated vendor SKUs: the *last* occurrence counts;
+  earlier ones are marked `DUPLICATE_IN_FILE` in one bulk update afterwards
+  (an ERROR row stays ERROR), with `superseded_by_row` written into the
+  row's own JSON. Counters are then reconciled from the rows (AC-9.4) and
+  the issue breakdown stored under `error_details.parsing`; the job stays
+  RUNNING and moves to stage MATCHING, audited `import_job.parsed`. Any
+  exception fails the job (`INTERNAL_ERROR`, audited, traceback in the
+  log) rather than leaving it RUNNING forever.
+* **Report** — `GET /imports/{id}/report`: counters (total, processed, ok,
+  warning, error, skipped, matched, exception), `by_error_code` (rows by
+  deciding issue), `issues_by_code` (every issue raised), and the sentence
+  the brief asks for, e.g. *"6 rows imported, 5 rejected, 3 with invalid
+  quantities, 1 with negative quantities, 2 with invalid UPCs, 1 with
+  invalid prices, 1 without a UPC or vendor SKU, 1 with unrecognised
+  availability, 1 superseded by a later duplicate vendor SKU, 1 empty rows
+  skipped. Import is still running (matching)."* `GET /imports/{id}/rows`
+  pages the rows in file order with `status` and `error_code` filters
+  (AC-9.5).
+* **Hook** — `IMPORT_PROCESS_ON_UPLOAD` (default true): an upload that
+  names a profile is parsed inside the request and the response carries
+  the parsed (or FAILED) job. The `JobRunner` can take this over.
+
+**Two defects found by the tests.** (1) psycopg could not type the bound
+parameters inside `jsonb_build_object(...)` in the duplicate-marking
+update (`IndeterminateDatatype`); the crash path did what it should — the
+job went FAILED with `INTERNAL_ERROR` and an audit row — and explicit
+casts fixed the statement. (2) The Prompt 17 preview returned issues as
+free-text strings; it now returns the same coded issues the import stores.
+
+**Where memory goes.** The 20,000-row tests run the parser under
+`tracemalloc`: peak traced memory 9.7 MB (CSV) and 8.3 MB (XLSX), asserted
+under 48 MB. XLSX is read in openpyxl read-only mode row by row. CSV is
+decoded to text in one piece before the `csv` reader streams it — bounded
+by `IMPORT_MAX_UPLOAD_MB`, and honest to say so.
+
+**Tests.** `tests/unit/test_readers.py` (13): row numbering incl. quoted
+multi-line records and `skip_rows`, blank rows flagged, laziness, wide
+rows, the encoding order, strict declared encoding, the charset-normalizer
+fallback. `tests/unit/test_profile_rules.py` TestMapper (rewritten, 15):
+every code above from the extractor, decimal-comma and space grouping,
+fixed case pack. `tests/integration/test_import_processing.py` (18): the
+brief's two layouts as CSV **and** XLSX (numeric UPC cell restored, sheet
+row numbers), latin-1 CSV, a strictly-declared wrong encoding, `;` with
+decimal commas and `€`, missing required column → FAILED before any row
+with the columns named, signature mismatch → FAILED with expected vs
+observed, unpinned profile accepts drift, no profile → PENDING then
+`PROFILE_MISSING`, not-PENDING refused, unreadable workbook, tampered
+retained file → `FILE_INTEGRITY`, **the every-problem file** with exact
+per-row status and code for all 12 rows and exact counters, breakdowns and
+summary sentence, row filters and paging, viewer access and tenancy, and
+20,000 rows as CSV and as XLSX (20 chunks, 40 blank, 20 bad, every row
+number unique, memory bounded).
 
 ### Phase 5 part 1 — file upload with raw retention (2026-09-15, ADR 0004)
 
@@ -617,12 +716,12 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 139 files unchanged |
+| Backend format | `ruff format .` | ✅ 144 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 134 source files |
-| Backend tests | `pytest` | ✅ `995 passed in 28.16s` — `tests/unit`: `662 passed`; `tests/integration`: `333 passed` |
-| Migration apply | `alembic upgrade head` | ✅ Both revisions applied to PostgreSQL 16.15 |
-| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0` and `44c932e601b0` each re-apply cleanly |
+| Backend types | `mypy` (strict) | ✅ No issues in 138 source files |
+| Backend tests | `pytest` | ✅ `1033 passed in 37.82s` — `tests/unit`: `681 passed`; `tests/integration`: `352 passed` |
+| Migration apply | `alembic upgrade head` | ✅ All five revisions applied to PostgreSQL 16.15 |
+| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0` and `fadb756b1b85` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
 | Frontend lint | `npm run lint` | ✅ Clean |
 | Frontend types | `npm run typecheck` | ✅ Clean |
@@ -885,11 +984,13 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phase 4 (import profiles) followed on 2026-09-15 (ADR 0013), and the upload
-and retention half of phase 5 the same day. Next is the other half: a worker
-that claims a `PENDING` job, reads the retained file through the profile's
-readers and mapper, and writes `import_job_rows` (AC-5.1, 5.2, 5.7). B5 still
-decides where deployed files live.
+Phase 4 (import profiles), the upload half of phase 5 and phase 6 (parsing,
+validation, report) all landed on 2026-09-15. Parsed jobs now sit RUNNING at
+stage MATCHING. Next is phase 7: the vendor-row matching engine over the
+priority chain, recording `match_result` / `matched_by` / `match_priority` on
+each row and feeding the exception queue; after it, the worker claim loop
+(AC-5.7) and the immutable `import_report` (AC-9.3). B5 still decides where
+deployed files live.
 
 ---
 

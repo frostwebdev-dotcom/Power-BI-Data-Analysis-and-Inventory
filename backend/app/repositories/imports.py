@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.models.enums import ImportJobStatus
-from app.models.ingestion import ImportFile, ImportJob
+from app.models.enums import ImportJobStatus, ImportRowStatus
+from app.models.ingestion import ImportFile, ImportJob, ImportJobRow
 from app.repositories.scoping import ScopedRepository
 
 MAX_PAGE_SIZE = 200
@@ -18,6 +18,14 @@ MAX_PAGE_SIZE = 200
 #: Statuses the partial unique index ``uq_import_jobs_active_import_file``
 #: excludes: a file with only these jobs may be imported again.
 RETRYABLE_STATUSES = frozenset({ImportJobStatus.FAILED, ImportJobStatus.CANCELLED})
+
+
+@dataclass(frozen=True, slots=True)
+class ImportRowPage:
+    items: Sequence[ImportJobRow]
+    page: int
+    page_size: int
+    total: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,3 +104,52 @@ class ImportRepository(ScopedRepository):
         self.session.add(job)
         self.session.flush()
         return job
+
+    # --- rows and report ---------------------------------------------------------------
+
+    def list_rows(
+        self,
+        job_id: uuid.UUID,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        status: ImportRowStatus | None = None,
+        error_code: str | None = None,
+    ) -> ImportRowPage:
+        """In file order, so a listing reads like the file (AC-9.5)."""
+        page = max(page, 1)
+        page_size = max(1, min(page_size, MAX_PAGE_SIZE))
+        statement = self.select(ImportJobRow).where(ImportJobRow.import_job_id == job_id)
+        if status is not None:
+            statement = statement.where(ImportJobRow.status == status)
+        if error_code is not None:
+            statement = statement.where(ImportJobRow.error_code == error_code)
+        total = self.session.execute(
+            select(func.count()).select_from(statement.subquery())
+        ).scalar_one()
+        items = (
+            self.session.execute(
+                statement.order_by(ImportJobRow.row_number)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+            .scalars()
+            .all()
+        )
+        return ImportRowPage(items=items, page=page, page_size=page_size, total=total)
+
+    def rows_by_status(self, job_id: uuid.UUID) -> dict[ImportRowStatus, int]:
+        rows = self.session.execute(
+            self.select(ImportJobRow, ImportJobRow.status, func.count())
+            .where(ImportJobRow.import_job_id == job_id)
+            .group_by(ImportJobRow.status)
+        ).all()
+        return {status: int(count) for status, count in rows}
+
+    def rows_by_error_code(self, job_id: uuid.UUID) -> dict[str, int]:
+        rows = self.session.execute(
+            self.select(ImportJobRow, ImportJobRow.error_code, func.count())
+            .where(ImportJobRow.import_job_id == job_id, ImportJobRow.error_code.is_not(None))
+            .group_by(ImportJobRow.error_code)
+        ).all()
+        return {str(code): int(count) for code, count in rows}

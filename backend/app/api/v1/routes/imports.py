@@ -21,9 +21,18 @@ from app.core.config import Settings
 from app.core.security import Principal, RoleCode
 from app.db.session import get_db
 from app.imports.storage import StorageBackend
-from app.models.enums import ImportJobStatus
-from app.schemas.imports import ImportJobListResponse, ImportJobResponse, ImportUploadResponse
+from app.models.enums import ImportJobStatus, ImportRowStatus
+from app.schemas.imports import (
+    ImportCounters,
+    ImportJobListResponse,
+    ImportJobResponse,
+    ImportReportResponse,
+    ImportRowListResponse,
+    ImportRowResponse,
+    ImportUploadResponse,
+)
 from app.services import imports as service
+from app.services.import_processing import process_import_job
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -85,11 +94,22 @@ async def upload_file(
         declared_mime=file.content_type,
         max_bytes=max_bytes,
     )
+    job = outcome.job
     if outcome.duplicate:
         # Nothing was created: 200, not 201, with the existing job.
         response.status_code = status.HTTP_200_OK
+    elif settings.import_process_on_upload and job.vendor_import_profile_id is not None:
+        # Interim (phase 6): parse inside the request. Without a profile the
+        # job waits as PENDING; a scheduled runner takes this over later.
+        job = process_import_job(
+            session,
+            storage,
+            organization_id=principal.organization_id,
+            job_id=job.id,
+            actor=principal,
+        )
     return ImportUploadResponse(
-        job=ImportJobResponse.model_validate(outcome.job), duplicate=outcome.duplicate
+        job=ImportJobResponse.model_validate(job), duplicate=outcome.duplicate
     )
 
 
@@ -151,6 +171,66 @@ def get_import(
     session: Session = Depends(get_db),
 ) -> ImportJobResponse:
     return ImportJobResponse.model_validate(service.get_job(session, principal, job_id))
+
+
+@router.get(
+    "/{job_id}/report",
+    response_model=ImportReportResponse,
+    summary="Counters, breakdown by issue code, and a one-sentence summary",
+    responses={**_FORBIDDEN, **_NOT_FOUND},
+)
+def get_report(
+    job_id: uuid.UUID,
+    principal: Principal = _read,
+    session: Session = Depends(get_db),
+) -> ImportReportResponse:
+    report = service.build_report(session, principal, job_id)
+    job = report.job
+    return ImportReportResponse(
+        job_id=job.id,
+        status=job.status,
+        current_stage=job.current_stage,
+        counters=ImportCounters(**report.counters),
+        by_error_code=report.by_error_code,
+        issues_by_code=report.issues_by_code,
+        summary=report.summary,
+        error_message=job.error_message,
+        error_details=job.error_details,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+    )
+
+
+@router.get(
+    "/{job_id}/rows",
+    response_model=ImportRowListResponse,
+    summary="The staged rows of an import, in file order",
+    responses={**_FORBIDDEN, **_NOT_FOUND},
+)
+def list_rows(
+    job_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    status_filter: ImportRowStatus | None = Query(None, alias="status"),
+    error_code: str | None = Query(None, max_length=64),
+    principal: Principal = _read,
+    session: Session = Depends(get_db),
+) -> ImportRowListResponse:
+    result = service.list_rows(
+        session,
+        principal,
+        job_id,
+        page=page,
+        page_size=page_size,
+        status=status_filter,
+        error_code=error_code,
+    )
+    return ImportRowListResponse(
+        items=[ImportRowResponse.model_validate(r) for r in result.items],
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+    )
 
 
 @router.get(

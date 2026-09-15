@@ -31,6 +31,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.models.enums import (
     AvailabilityStatus,
+    ImportJobStage,
     ImportJobStatus,
     ImportRowStatus,
     MatchMethod,
@@ -109,6 +110,11 @@ class ImportJob(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Ba
         pg_enum(ImportJobStatus, "import_job_status"),
         nullable=False,
         server_default=ImportJobStatus.PENDING.value,
+    )
+
+    #: Progress within RUNNING (phase 6); null when not running.
+    current_stage: Mapped[ImportJobStage | None] = mapped_column(
+        pg_enum(ImportJobStage, "import_job_stage"), nullable=True
     )
 
     total_rows: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))

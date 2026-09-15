@@ -52,6 +52,9 @@ def api_settings(raw_dir: Path) -> Settings:
         auth_jwt_secret=SecretStr("integration-test-signing-key-at-least-32-chars"),
         storage_raw_dir=str(raw_dir),
         import_max_upload_mb=MAX_MB,
+        # These tests are about receiving and retaining; parsing has its own
+        # suite (test_import_processing.py).
+        import_process_on_upload=False,
     )
 
 

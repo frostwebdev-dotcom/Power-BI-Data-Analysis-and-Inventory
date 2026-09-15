@@ -31,6 +31,8 @@ dependencies = [
     # No pandas, ever — every cell is read as str (ADR 0008, risk R2).
     "openpyxl>=3.1",
     "python-multipart>=0.0.9",
+    # Encoding detection for CSV uploads that name no encoding (AC-5.8).
+    "charset-normalizer>=3.3",
 ]
 
 [project.optional-dependencies]
