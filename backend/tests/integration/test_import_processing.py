@@ -23,6 +23,7 @@ from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.v1.routes import imports as imports_routes
 from app.core.config import Settings
 from app.core.security import RoleCode
 from app.db.session import get_db
@@ -32,6 +33,7 @@ from app.main import create_app
 from app.models import AuditEvent, Organization, User, Vendor
 from app.models.enums import ImportJobStage, ImportJobStatus
 from app.models.ingestion import ImportJob, ImportJobRow
+from app.repositories.imports import ImportRepository
 from app.services.import_processing import CHUNK_ROWS, process_import_job
 from app.services.roles import assign_role, ensure_system_roles
 from tests.integration import factories
@@ -62,7 +64,19 @@ def api_settings(raw_dir: Path) -> Settings:
 
 
 @pytest.fixture
-def client(db_session: Session, api_settings: Settings) -> Iterator[TestClient]:
+def client(
+    db_session: Session, api_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
+    # This suite is about parsing. The upload hook runs parse *then* match;
+    # matching is stubbed out here so jobs stop at stage MATCHING, and the
+    # full hook is covered in test_import_matching.py.
+    monkeypatch.setattr(
+        imports_routes,
+        "match_import_job",
+        lambda session, *, organization_id, job_id, actor=None: ImportRepository(
+            session, organization_id
+        ).get_job(job_id),
+    )
     application = create_app(api_settings)
     application.dependency_overrides[get_db] = lambda: db_session
     with TestClient(application) as test_client:

@@ -209,29 +209,64 @@ string retained alongside the parsed value.
 
 ### 3.4 Matching engine
 
-`engine.match(row, context) -> MatchOutcome` evaluates rules 1→5 in order and
-short-circuits on the first rule returning exactly one product.
+*Implemented 2026-09-15 in `backend/app/matching/engine.py`; this section
+describes what exists.*
+
+`engine.evaluate(candidate: MatchInput, lookups: MatchLookups) -> MatchOutcome`
+is a pure function — no database, clock or randomness — that evaluates rules
+1→4 in the order CLAUDE.md §5.1 gives and short-circuits on the first rule
+returning exactly one product. `MatchInput` carries the normalised UPC and
+its checksum flag, the catalog item number, the vendor id and normalised
+vendor SKU, the Amazon seller SKU and the description. `MatchLookups` is
+what the rules read: `products_by_gtin`, `products_by_catalog_item_number`,
+`products_by_vendor_sku(vendor_id, sku)` (APPROVED mappings only),
+`products_by_amazon_sku` (APPROVED listings only) and
+`suggest_by_description`. For an import, `MatchIndexRepository` builds an
+in-memory `MatchIndex` once per job; the Amazon listing sync answers the
+same protocol from SQL.
 
 ```
 MatchOutcome = {
-  status:        matched | ambiguous | unmatched | suggestion_only,
-  product_id:    UUID | None,
-  matched_by:    upc | catalog_item | vendor_sku_mapping | amazon_sku_mapping | None,
-  rule_priority: 1..5 | None,
-  candidates:    [ {product_id, reason, score} ],      # priority 5 only
-  evaluations:   [ {priority, rule, hits, decision} ]  # full audit trail
+  result:        MATCHED | AMBIGUOUS | UNMATCHED | SUGGESTION_ONLY   # the MatchResult enum
+  product_id:    UUID | None                                         # MATCHED only
+  method:        UPC | CATALOG_ITEM_NUMBER | VENDOR_SKU_MAPPING | AMAZON_SKU_MAPPING | None
+  priority:      1..4 for MATCHED/AMBIGUOUS, 5 for SUGGESTION_ONLY, None for UNMATCHED
+  candidates:    [product_id]                                        # the rule's hits
+  suggestions:   [ {product_id, score, reason} ]                     # priority 5 only
+  evaluations:   [ {rule, priority, input, outcome, candidates, note} ]  # every rule, in order
 }
 ```
 
-Invariants enforced by tests:
+`outcome` per rule is `matched`, `ambiguous`, `no_match`, `skipped` (with
+the reason: no input, an earlier rule matched, an earlier rule was
+ambiguous) or `suggested`.
 
-- A rule returning **more than one** product yields `ambiguous` and an exception.
-  It never falls through to a lower-priority rule and never picks one.
-- `suggestion_only` **never** writes a mapping. It creates an exception with
-  candidates.
-- Description similarity may appear only inside `candidates[].reason`. There is
-  no code path in which it sets `product_id` automatically.
-- Given identical mapping state, `match()` is a pure function of the row.
+Invariants enforced by tests (`tests/unit/test_match_engine.py`,
+`tests/integration/test_import_matching.py`):
+
+- A rule returning **more than one** product yields `AMBIGUOUS` at that
+  priority and an exception. It never falls through to a lower-priority rule
+  and never picks one; the remaining rules are recorded as skipped.
+- Rule 5 runs only when rules 1–4 all return nothing. `SUGGESTION_ONLY`
+  **never** writes a mapping; it creates an exception with scored
+  candidates (pg_trgm similarity on `products.name`, threshold 0.3, top 5).
+- Description similarity appears only inside `suggestions`. There is no
+  code path in which it sets `product_id`.
+- A UPC whose check digit failed is not an identifier: rule 1 skips it.
+- Given identical lookups, `evaluate()` is a pure function of the input;
+  candidates are sorted so lookup order cannot change an outcome.
+
+The import step (`app/services/matching.py`) applies the outcome: MATCHED
+rows record `match_result` / `matched_by` / `match_priority` / `product_id`;
+the vendor line is created or refreshed but an APPROVED mapping is never
+modified — a match by UPC or catalog number leaves the line PENDING with a
+`SUGGESTION_ONLY` queue item, because a vendor-SKU mapping becomes permanent
+only through approval (§5.2), and a disagreement between the chain's product
+and an approved mapping raises `CONFLICTING_IDENTIFIER` rather than
+overwriting either. Every non-matched row opens one queue item per vendor
+line with reason, candidates and the full trail; the trail is also stored on
+the row (`normalized_data.match`), which is where the plan's `match_attempt`
+table lives in practice (phase1-status A23).
 
 ### 3.5 Nineyard integration
 

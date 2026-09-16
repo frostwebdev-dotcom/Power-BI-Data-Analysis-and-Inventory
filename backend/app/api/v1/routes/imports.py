@@ -21,7 +21,7 @@ from app.core.config import Settings
 from app.core.security import Principal, RoleCode
 from app.db.session import get_db
 from app.imports.storage import StorageBackend
-from app.models.enums import ImportJobStatus, ImportRowStatus
+from app.models.enums import ImportJobStage, ImportJobStatus, ImportRowStatus
 from app.schemas.imports import (
     ImportCounters,
     ImportJobListResponse,
@@ -33,6 +33,7 @@ from app.schemas.imports import (
 )
 from app.services import imports as service
 from app.services.import_processing import process_import_job
+from app.services.matching import match_import_job
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -108,6 +109,10 @@ async def upload_file(
             job_id=job.id,
             actor=principal,
         )
+        if job.status is ImportJobStatus.RUNNING and job.current_stage is ImportJobStage.MATCHING:
+            job = match_import_job(
+                session, organization_id=principal.organization_id, job_id=job.id, actor=principal
+            )
     return ImportUploadResponse(
         job=ImportJobResponse.model_validate(job), duplicate=outcome.duplicate
     )

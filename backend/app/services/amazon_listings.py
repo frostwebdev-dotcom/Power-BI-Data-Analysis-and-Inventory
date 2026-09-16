@@ -48,6 +48,12 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
 from app.db.transaction import transaction
+from app.matching.engine import (
+    MatchInput,
+    RuleEvaluation,
+    rule_amazon_sku_mapping,
+    rule_upc,
+)
 from app.matching.normalize import normalize_gtin
 from app.models.amazon import AmazonSyncRun
 from app.models.catalog import MarketplaceListing, ProductIdentifier
@@ -137,26 +143,6 @@ def normalize_seller_sku(seller_sku: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class RuleEvaluation:
-    rule: str
-    priority: int
-    input: str | None
-    outcome: Literal["matched", "ambiguous", "no_match", "skipped"]
-    candidates: tuple[uuid.UUID, ...] = ()
-    note: str | None = None
-
-    def as_json(self) -> dict[str, Any]:
-        return {
-            "rule": self.rule,
-            "priority": self.priority,
-            "input": self.input,
-            "outcome": self.outcome,
-            "candidates": [str(c) for c in self.candidates],
-            "note": self.note,
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class Resolution:
     """What the chain decided for one listing, and why."""
 
@@ -190,21 +176,19 @@ class Resolution:
 
 
 def resolve_listing(listing: ParsedListing, catalog: ListingCatalog) -> Resolution:
-    """Run the priority chain for one listing. Reads the catalog; writes nothing."""
+    """Run the chain for one listing. Reads the catalog; writes nothing.
+
+    The rule implementations are the engine's (:mod:`app.matching.engine`);
+    the policy above — priority 4 first, a UPC hit is a suggestion, a
+    disagreement is a conflict — is this module's.
+    """
     evaluations: list[RuleEvaluation] = []
 
     # Priority 4 — the catalog source already names this SKU.
     sku = normalize_seller_sku(listing.seller_sku)
-    by_sku = catalog.products_by_amazon_sku(sku)
-    evaluations.append(
-        RuleEvaluation(
-            rule=MatchMethod.AMAZON_SKU_MAPPING.value,
-            priority=4,
-            input=sku,
-            outcome=_outcome(by_sku),
-            candidates=tuple(by_sku),
-        )
-    )
+    by_sku_rule = rule_amazon_sku_mapping(MatchInput(amazon_seller_sku=sku), catalog)
+    evaluations.append(by_sku_rule)
+    by_sku = list(by_sku_rule.candidates)
     if len(by_sku) > 1:
         # Ambiguous: stop here. No fall-through, no pick (AC-7.4).
         evaluations.append(_skipped_upc("an earlier rule was ambiguous"))
@@ -222,14 +206,17 @@ def resolve_listing(listing: ParsedListing, catalog: ListingCatalog) -> Resoluti
     if listing.product_id_kind in GTIN_KINDS:
         normalized = normalize_gtin(listing.product_id)
         if normalized.usable and normalized.canonical is not None:
-            by_gtin = catalog.products_by_gtin(normalized.canonical)
+            upc_rule = rule_upc(
+                MatchInput(normalized_upc=normalized.canonical, upc_valid_checksum=True), catalog
+            )
+            by_gtin = list(upc_rule.candidates)
             evaluations.append(
                 RuleEvaluation(
-                    rule=MatchMethod.UPC.value,
-                    priority=1,
-                    input=normalized.canonical,
-                    outcome=_outcome(by_gtin),
-                    candidates=tuple(by_gtin),
+                    rule=upc_rule.rule,
+                    priority=upc_rule.priority,
+                    input=upc_rule.input,
+                    outcome=upc_rule.outcome,
+                    candidates=upc_rule.candidates,
                     note=f"{normalized.kind} {listing.product_id!r}",
                 )
             )
@@ -288,19 +275,10 @@ def resolve_listing(listing: ParsedListing, catalog: ListingCatalog) -> Resoluti
     return Resolution("UNMAPPED", None, None, ExceptionReason.NO_MATCH, (), tuple(evaluations))
 
 
-def _outcome(candidates: Sequence[uuid.UUID]) -> Literal["matched", "ambiguous", "no_match"]:
-    if len(candidates) == 1:
-        return "matched"
-    return "ambiguous" if candidates else "no_match"
-
-
 def _skipped_upc(note: str, *, input_value: str | None = None) -> RuleEvaluation:
     return RuleEvaluation(
         rule=MatchMethod.UPC.value, priority=1, input=input_value, outcome="skipped", note=note
     )
-
-
-# --- applying resolutions to the database ---------------------------------------------
 
 
 @dataclass(slots=True)

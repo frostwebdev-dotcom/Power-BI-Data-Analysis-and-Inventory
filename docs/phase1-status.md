@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-15 (phase 6 — parsing, row validation and the import report)
+Last updated: 2026-09-15 (phase 7 — the deterministic matching engine)
 
 ---
 
@@ -11,18 +11,19 @@ Last updated: 2026-09-15 (phase 6 — parsing, row validation and the import rep
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), and profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report. Parsed jobs wait at stage MATCHING; nothing yet matches a row to a product. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue. Matched jobs wait at stage SNAPSHOTTING; nothing yet writes inventory snapshots or lets a reviewer resolve the queue. |
 | Database schema | 25 tables, 23 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
 | Migrations | 5 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **1033 passed** (`pytest`: 681 unit + 352 integration). `grep -c "def test_"` over `tests/` finds 776 functions (468 unit, 308 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Backend tests | **1062 passed** (`pytest`: 702 unit + 360 integration). `grep -c "def test_"` over `tests/` finds 801 functions (485 unit, 316 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
 | Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 8 (see §7); B1 partially answered, B2 narrowed, B7 partially answered by ADR 0011, B8 new |
 
 The schema, the audit writer, the security foundation, and a read-only Nineyard
 diagnostic exist and are verified. A vendor file can be uploaded, retained byte for
-byte, parsed through its profile into validated rows, and reported on;
-nothing yet matches a vendor row to a product or synchronises Nineyard data.
+byte, parsed through its profile into validated rows, matched to products
+through the priority chain, and reported on; nothing yet snapshots inventory,
+resolves the exception queue, or synchronises Nineyard data.
 
 ---
 
@@ -41,8 +42,8 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
 | 5 | File ingestion + raw retention | 🟨 Upload, retention and parsing done; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
 | 6 | Parsing + validation + reporting | ✅ Complete (to the matching boundary) | Streaming CSV/XLSX readers with the file's own row numbers; `app/imports/extract.py` applies the profile and raises coded issues (`UPC_INVALID`, `QUANTITY_INVALID`, `QUANTITY_NEGATIVE`, `PRICE_INVALID`, `IDENTIFIER_MISSING`, `AVAILABILITY_UNKNOWN`, `DUPLICATE_IN_FILE`); `process_import_job` writes `import_job_rows` in 1,000-row transactions, fails the job before any row on a missing column or signature mismatch, reconciles counters from the rows, and leaves the job RUNNING at stage MATCHING; `GET /imports/{id}/report` and `GET /imports/{id}/rows`. AC-9.1, 9.2, 9.4, 9.5 covered by 31 tests including 20,000-row CSV and XLSX runs. **Not built:** the immutable `import_report` row (AC-9.3) and the matched-by-rule counts it needs — after phase 7. |
-| 7 | Matching engine | 🟨 Normaliser and listing resolver exist | `app/matching/normalize.py` (AC-7.6) is built and shared; the priority-chain resolver for *listings* is in `amazon_listings.py`. The vendor-row engine and `match_attempt` recording are unwritten. |
-| 8 | Exception workflow | ⬜ Not started | `product_mapping_exceptions` exists; `Principal` now supplies actor identity, so no longer blocked by B2 |
+| 7 | Matching engine | ✅ Complete | `app/matching/engine.py` — pure `evaluate(MatchInput, lookups) -> MatchOutcome`, rules 1→4 in strict order, first single hit wins, more than one hit is AMBIGUOUS at that priority with no fall-through, rule 5 (pg_trgm name similarity) only when 1–4 yield nothing and only ever SUGGESTION_ONLY; every rule tried is on the trail. `MatchIndexRepository` builds the lookups once per import from checksum-valid identifiers, active catalog numbers, APPROVED vendor mappings and APPROVED listings. `match_import_job` attributes every OK/WARNING row, maintains `vendor_products` (an APPROVED mapping is never touched), and opens one queue item per vendor line. The Amazon listing resolver now runs on the same rule functions. AC-7.1–7.6 covered by 21 engine cases and 8 integration tests incl. determinism. The trail is stored on the row (`normalized_data.match`), not in a separate `match_attempt` table — see A23. |
+| 8 | Exception workflow | 🟨 Queue is fed; no review API | Matching opens `product_mapping_exceptions` rows with reason, candidates, the full rule trail and the source row, one open item per vendor line (refreshed, not duplicated, on re-import). **Not built:** listing, assignment, approve / reject / defer, and the approval that turns a PENDING vendor-SKU mapping into the permanent APPROVED one priority 3 reads. |
 | 9 | Inventory, availability, watchlist | ⬜ Not started | All four tables exist; no diffing logic |
 | 10 | Admin interface | ⬜ Not started | Shell exists; screens are placeholders. Needs a sign-in flow once B2 settles. |
 | 11 | Hardening | ⬜ Not started | |
@@ -151,6 +152,87 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 7 — the deterministic matching engine (2026-09-15)
+
+One engine, two callers. Prompt 11's listing resolver had the only matching
+code; its rule implementations now live in `app/matching/engine.py` and it
+calls them, keeping the listing policy it documented (priority 4 first, a
+UPC hit on a *listing* is a suggestion, a disagreement is a conflict). The
+vendor-row import uses the engine's `evaluate()`, which is CLAUDE.md §5.1
+verbatim.
+
+* **`app/matching/engine.py`** — pure; no database, clock or randomness.
+  `MatchInput` (normalised UPC + its checksum flag, catalog item number,
+  vendor id + normalised vendor SKU, Amazon seller SKU, description);
+  `MatchLookups` protocol with the four lookups plus `suggest_by_description`;
+  `MatchIndex`, the in-memory implementation; `RuleEvaluation` (rule,
+  priority, input, outcome, candidates, note); `MatchOutcome` mirroring
+  `MatchResult` — MATCHED(product, method, priority), AMBIGUOUS(priority,
+  candidates), UNMATCHED(trail), SUGGESTION_ONLY(scored candidates, trail).
+  `evaluate()` runs rules 1→4 in order and stops at the first single hit;
+  more than one hit ends evaluation as AMBIGUOUS at that priority and the
+  weaker rules are recorded as *skipped* — never consulted. Rule 5 runs only
+  when 1–4 all yield nothing: candidates with scores above pg_trgm's 0.3,
+  at most five, never a match. Rule 1 refuses a UPC whose check digit
+  failed. Candidates are sorted so lookup order cannot change an outcome.
+* **`app/repositories/matching.py`** — `MatchIndexRepository.build(vendor)`:
+  GTIN identifiers (active, checksum not false), active products' catalog
+  numbers, this vendor's APPROVED `vendor_products`, APPROVED
+  `marketplace_listings`; tenant-scoped. `suggest_by_description` is
+  `similarity(products.name, :description)` through `ix_products_name_trgm`,
+  ordered by score then id.
+* **`app/services/matching.py`** — `match_import_job`: requires RUNNING at
+  stage MATCHING; builds the index once; walks OK/WARNING rows in file
+  order in 1,000-row transactions; skips rows superseded by a later
+  duplicate SKU (the last occurrence carries the line). MATCHED rows get
+  `match_result` / `matched_by` / `match_priority` / `product_id` (the
+  deciding-rule CHECK). The vendor line is created UNMAPPED or refreshed;
+  **an APPROVED mapping is never modified** — if the chain's product (a
+  stronger rule) differs from the approved one, the row keeps the chain's
+  answer and a `CONFLICTING_IDENTIFIER` item asks a person to reconcile.
+  A match by UPC or catalog number gives the line a **PENDING** mapping
+  and a `SUGGESTION_ONLY` item: per §5.2 the vendor-SKU mapping becomes
+  permanent only through approval. AMBIGUOUS / UNMATCHED / SUGGESTION_ONLY
+  rows open an item with the reason, candidates and full trail; a line with
+  an open item is refreshed, not duplicated (the partial unique index is the
+  backstop). The whole outcome is also written to the row's
+  `normalized_data.match` without timestamps. Counters `matched_rows` /
+  `exception_rows`, `error_details.matching` breakdown, stage →
+  SNAPSHOTTING (RUNNING; phase 9's step), audit `import_job.matched`.
+* **Hook** — the upload request now runs parse *then* match when a profile
+  is named (`IMPORT_PROCESS_ON_UPLOAD`).
+
+**A decision worth naming.** The priority order is CLAUDE.md's: a UPC hit
+(1) outranks an approved vendor-SKU mapping (3). When the two disagree the
+engine reports the UPC's product, and the service neither overwrites the
+approval nor silently accepts the disagreement — it raises a conflict. Both
+rules of §5 hold: matching is deterministic and approvals are permanent.
+
+**Tests.** `tests/unit/test_match_engine.py` (21), each named for its rule:
+exact UPC at priority 1; **a UPC matching two products is AMBIGUOUS at
+priority 1 even though the vendor SKU would have matched**, with rules 2–4
+recorded as skipped; a bad check digit is not an identifier; fall-through
+on no hit; exact catalog number; approved vendor SKU reused on the second
+import (same input, UNMATCHED before, MATCHED by rule 3 after); another
+vendor's mapping ignored; approved Amazon SKU at priority 4; ambiguity at
+4 never reaches rule 5; a description identical to a product name is
+SUGGESTION_ONLY, never MATCHED; suggestions ranked, capped, thresholded;
+rule 5 not run after a match; **empty input → UNMATCHED with four
+evaluations recorded**; determinism over five input shapes; candidate
+order independent of lookup order. `tests/integration/test_import_matching.py`
+(8): the index admits only what the rules may read (bad checksum, inactive
+identifier, inactive product, PENDING mapping, another vendor, PENDING
+listing, another tenant all excluded); pg_trgm suggestions scored and
+ordered; **every outcome recorded on rows, lines and the queue** for an
+eight-row file (UPC match with PENDING mapping, ambiguous UPC across two
+identifier types, approved SKU, name-only suggestion, nothing, a
+superseded duplicate, a bad-UPC WARNING row); approved mapping untouched
+and a disagreement raised as a conflict; a second import refreshes the
+open item instead of duplicating it; not-at-MATCHING refused; the upload
+hook parses then matches; and **determinism** — the same rows imported and
+matched twice against the same mapping state give identical per-row
+results, methods, priorities, products, trails and queue items.
 
 ### Phase 6 — parsing, row validation and the import report (2026-09-15)
 
@@ -716,10 +798,10 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 144 files unchanged |
+| Backend format | `ruff format .` | ✅ 149 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 138 source files |
-| Backend tests | `pytest` | ✅ `1033 passed in 37.82s` — `tests/unit`: `681 passed`; `tests/integration`: `352 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 143 source files |
+| Backend tests | `pytest` | ✅ `1062 passed in 66.23s` — `tests/unit`: `702 passed`; `tests/integration`: `360 passed` |
 | Migration apply | `alembic upgrade head` | ✅ All five revisions applied to PostgreSQL 16.15 |
 | Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0` and `fadb756b1b85` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
@@ -964,6 +1046,7 @@ A1–A17 carry forward from earlier phases, with these changes:
 | **A19** *(amended 2026-09-14)* | Tenant isolation is enforced in the repository layer by `app/repositories/scoping.py`, which every repository must use ([ADR 0012](decisions/0012-tenant-scoping-enforced-in-repository-layer.md)); unit and integration tests fix the rule in place. PostgreSQL row-level security remains **deferred** until the first multi-tenant deployment, when it is added in addition to the helper, not instead of it. |
 | **A20** | `pg_trgm` is available in every target environment. It ships with PostgreSQL contrib and is present in both `postgres:16-alpine` and the EDB Windows build. |
 | **A21** *(new)* | Microsoft Entra ID is the intended production identity provider. The `AuthenticationBackend` protocol is shaped for it; if a different provider is chosen, the protocol still holds but the JWKS/RS256 assumptions in `EntraIdAuthenticationBackend` would change. |
+| **A23** *(new)* | The full rule trail of a match is stored on `import_job_rows.normalized_data.match` and on the queue item's `match_evaluations`, not in a separate `match_attempt` table as architecture.md §5.5 sketched. It is the same data, addressable by the row, and reproducible from the engine; a table can be split out if the audit UI needs to query trails across jobs. |
 | **A22** *(new)* | The service sits behind a proxy that sets `X-Forwarded-For`. Exposed directly, that header is caller-supplied and the recorded client address is worth nothing (the value is validated, so a bad one is simply dropped). |
 
 The full A1–A17 list is unchanged from the 2026-09-07 revision and remains in
@@ -984,13 +1067,13 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phase 4 (import profiles), the upload half of phase 5 and phase 6 (parsing,
-validation, report) all landed on 2026-09-15. Parsed jobs now sit RUNNING at
-stage MATCHING. Next is phase 7: the vendor-row matching engine over the
-priority chain, recording `match_result` / `matched_by` / `match_priority` on
-each row and feeding the exception queue; after it, the worker claim loop
-(AC-5.7) and the immutable `import_report` (AC-9.3). B5 still decides where
-deployed files live.
+Phases 4, 5 (upload half), 6 and 7 all landed on 2026-09-15. Matched jobs
+now sit RUNNING at stage SNAPSHOTTING. Next is phase 8, the exception review
+API — list, assign, approve / reject / defer — whose approval is what turns a
+PENDING vendor-SKU mapping into the permanent APPROVED one priority 3 reads;
+then phase 9 (snapshots, availability events, watchlist), the worker claim
+loop (AC-5.7) and the immutable `import_report` (AC-9.3). B5 still decides
+where deployed files live.
 
 ---
 
