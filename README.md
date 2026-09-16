@@ -121,6 +121,34 @@ npm run dev          # http://localhost:3000
 `NEXT_PUBLIC_API_BASE_URL` must be reachable from the **browser**
 (`http://localhost:8000`), not from inside the Docker network.
 
+### Signing in (development)
+
+The interface uses the API's development sign-in: the email of a user that
+already exists, no password (`DEV_AUTH_ENABLED=true`; production replaces this
+— see `docs/security.md`). Seed an organization, four users and one demo
+product first:
+
+```bash
+cd backend
+python -m app.cli.seed_dev          # admin@ buyer@ operator@ viewer@example.test
+```
+
+Then sign in at http://localhost:3000 as `admin@example.test`.
+
+### End-to-end walk-through (Playwright)
+
+`frontend/e2e/milestone-1.spec.ts` drives the Milestone 1 exit gate through
+the interface — vendor, profile, upload, report, exception, approve, re-import,
+watchlist, availability event, audit — against a running, seeded stack:
+
+```bash
+cd frontend
+npx playwright install chromium
+E2E_BASE_URL=http://localhost:3000 npx playwright test
+```
+
+The `compose-smoke` CI job runs it against the Docker Compose stack.
+
 ---
 
 ## Quality gates

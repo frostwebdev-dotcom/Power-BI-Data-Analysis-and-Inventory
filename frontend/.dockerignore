@@ -6,3 +6,9 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+
+# End-to-end tests run from the host, not inside the image
+e2e
+playwright.config.ts
+test-results
+playwright-report

@@ -10,7 +10,9 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
+    audit,
     auth,
+    dashboard,
     exceptions,
     health,
     import_profiles,
@@ -29,3 +31,5 @@ api_router.include_router(imports.router)
 api_router.include_router(exceptions.router)
 api_router.include_router(watchlist.router)
 api_router.include_router(watchlist.availability_router)
+api_router.include_router(audit.router)
+api_router.include_router(dashboard.router)

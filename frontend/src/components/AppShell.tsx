@@ -6,7 +6,9 @@ import type { ReactNode } from "react";
 
 import { NAV_ICONS } from "@/components/icons";
 import { SidebarStatus } from "@/components/ApiStatus";
+import { SignIn } from "@/components/SignIn";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -67,8 +69,24 @@ const PAGE_TITLES: Record<string, string> = {
   "/audit": "Audit log",
 };
 
+function titleFor(pathname: string): string {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  const base = Object.keys(PAGE_TITLES)
+    .filter((key) => key !== "/" && pathname.startsWith(key))
+    .sort((a, b) => b.length - a.length)[0];
+  return base ? PAGE_TITLES[base] ?? "PRMS" : "PRMS";
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { status, principal, signOut } = useAuth();
+
+  if (status === "loading") {
+    return <div className="signin" aria-busy="true" />;
+  }
+  if (status === "anonymous") {
+    return <SignIn />;
+  }
 
   return (
     <div className="app-shell">
@@ -116,8 +134,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="main">
         <header className="topbar">
-          <span className="topbar__title">{PAGE_TITLES[pathname] ?? "PRMS"}</span>
+          <span className="topbar__title">{titleFor(pathname)}</span>
           <div className="topbar__actions">
+            {principal ? (
+              <span className="topbar__user" title={principal.roles.join(", ")}>
+                {principal.email}
+              </span>
+            ) : null}
+            <button type="button" className="button button--ghost" onClick={signOut}>
+              Sign out
+            </button>
             <ThemeToggle />
           </div>
         </header>

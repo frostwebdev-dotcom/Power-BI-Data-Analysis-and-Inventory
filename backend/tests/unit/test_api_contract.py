@@ -91,6 +91,8 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/watchlist/{entry_id}/remove",
         "/api/v1/watchlist/{entry_id}/history",
         "/api/v1/availability/events",
+        "/api/v1/audit/events",
+        "/api/v1/dashboard",
     }
 
 
@@ -107,6 +109,8 @@ def test_every_vendor_route_documents_403(client: TestClient) -> None:
                 "/api/v1/exceptions",
                 "/api/v1/watchlist",
                 "/api/v1/availability",
+                "/api/v1/audit",
+                "/api/v1/dashboard",
             )
         ):
             continue

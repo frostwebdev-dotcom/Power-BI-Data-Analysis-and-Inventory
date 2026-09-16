@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-16 (phase 9 — snapshots, availability events, watchlist; screens not built)
+Last updated: 2026-09-16 (phase 10 — admin interface and the Playwright walk-through)
 
 ---
 
@@ -11,10 +11,10 @@ Last updated: 2026-09-16 (phase 9 — snapshots, availability events, watchlist;
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3; and the snapshot stage that closes an import — append-only inventory snapshots, availability events on every transition, the OOS watchlist and its status history, and the availability feed. **The import lifecycle is complete end to end**: upload → parse → match → snapshot → COMPLETED. No admin screen exists beyond the shell. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3; and the snapshot stage that closes an import — append-only inventory snapshots, availability events on every transition, the OOS watchlist and its status history, and the availability feed. **The import lifecycle is complete end to end**: upload → parse → match → snapshot → COMPLETED. The admin interface now has working screens for every one of those steps — sign-in, vendors, import profiles, imports, exception queue, watchlist, availability, audit log, dashboard — and a Playwright walk-through drives the whole Milestone 1 flow through them. Products is the one remaining placeholder (its API is phase 3, B1). |
 | Database schema | 25 tables, 23 enum types, 136 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
 | Migrations | 7 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc`, `52e787f49770`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **1106 passed** (`pytest`: 702 unit + 404 integration). `grep -c "def test_"` over `tests/` finds 829 functions (485 unit, 344 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Backend tests | **1110 passed** (`pytest`: 702 unit + 408 integration). `grep -c "def test_"` over `tests/` finds 833 functions (485 unit, 348 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. Plus one Playwright end-to-end test (`frontend/e2e`), passed twice locally against the running stack. |
 | Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 9 (see §7); B1 partially answered, B2 narrowed, B3 decided for Milestone 1, B7 partially answered by ADR 0011, B9 new (admin screens need their foundation) |
@@ -44,9 +44,9 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 5 | File ingestion + raw retention | 🟨 Complete in-request; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
 | 6 | Parsing + validation + reporting | ✅ Complete (to the matching boundary) | Streaming CSV/XLSX readers with the file's own row numbers; `app/imports/extract.py` applies the profile and raises coded issues (`UPC_INVALID`, `QUANTITY_INVALID`, `QUANTITY_NEGATIVE`, `PRICE_INVALID`, `IDENTIFIER_MISSING`, `AVAILABILITY_UNKNOWN`, `DUPLICATE_IN_FILE`); `process_import_job` writes `import_job_rows` in 1,000-row transactions, fails the job before any row on a missing column or signature mismatch, reconciles counters from the rows, and leaves the job RUNNING at stage MATCHING; `GET /imports/{id}/report` and `GET /imports/{id}/rows`. AC-9.1, 9.2, 9.4, 9.5 covered by 31 tests including 20,000-row CSV and XLSX runs. **Not built:** the immutable `import_report` row (AC-9.3) and the matched-by-rule counts it needs — after phase 7. |
 | 7 | Matching engine | ✅ Complete | `app/matching/engine.py` — pure `evaluate(MatchInput, lookups) -> MatchOutcome`, rules 1→4 in strict order, first single hit wins, more than one hit is AMBIGUOUS at that priority with no fall-through, rule 5 (pg_trgm name similarity) only when 1–4 yield nothing and only ever SUGGESTION_ONLY; every rule tried is on the trail. `MatchIndexRepository` builds the lookups once per import from checksum-valid identifiers, active catalog numbers, APPROVED vendor mappings and APPROVED listings. `match_import_job` attributes every OK/WARNING row, maintains `vendor_products` (an APPROVED mapping is never touched), and opens one queue item per vendor line. The Amazon listing resolver now runs on the same rule functions. AC-7.1–7.6 covered by 21 engine cases and 8 integration tests incl. determinism. The trail is stored on the row (`normalized_data.match`), not in a separate `match_attempt` table — see A23. |
-| 8 | Exception workflow | 🟨 API complete; screen not built | `GET /api/v1/exceptions` (filters: status, reason, vendor, import job, age; deferred items hidden by default), `GET /{id}` (source row, candidates with product names and scores, the rule trail, the vendor line), `POST /{id}/approve` `{product_id, supersede?, note?}` → APPROVED mapping with `MANUAL_APPROVAL`, approver and UTC time on the vendor line (or listing), item APPROVED, source row MATCHED at priority 5, job counters moved; `POST /{id}/reject` `{note}`; `POST /{id}/defer` `{until, note?}` (migration `fab7311199fc`). Supersession needs `supersede: true` and is two audited steps. AC-8.1–8.7 and **Milestone 1 exit criterion 7** covered by 20 tests. **Not built:** the queue screen (item 4 of the prompt) — there is no vendors screen, typed client or sign-in to copy from; see §3 below and B9. Assignment is stored but has no route. |
-| 9 | Inventory, availability, watchlist | 🟨 API complete; screens not built | `snapshot_import_job` writes one append-only `vendor_inventory_snapshots` row per vendor line (matched or not — AC-11.7), diffs against the line's previous snapshot, raises exactly one `availability_events` row per transition (first seen with stock → BECAME_AVAILABLE), links it to the watchlist, and closes the job COMPLETED / COMPLETED_WITH_ERRORS. `POST/GET /api/v1/watchlist`, `POST /{id}/remove`, `GET /{id}/history`, `GET /api/v1/availability/events` (vendor, product, watchlist-only, since). `max_unit_cost` flags (`over_max_unit_cost`, migration `52e787f49770`), never drops. AC-10.1, 10.2, 10.4, AC-11.1–11.4, 11.6, 11.7 and **exit criterion 9** covered by 22 tests. **Not built:** the watchlist and availability screens (item 6 of the prompt; B9) and event acknowledgement. |
-| 10 | Admin interface | ⬜ Not started | Shell exists; every screen is a placeholder, including `/vendors` and `/exceptions`. The vendors screen (react-query, zod, typed client, dev sign-in) was specified but never built because its API did not exist at the time; that API now does. Needs a sign-in flow once B2 settles. |
+| 8 | Exception workflow | ✅ Complete | `GET /api/v1/exceptions` (filters: status, reason, vendor, import job, age; deferred items hidden by default), `GET /{id}` (source row, candidates with product names and scores, the rule trail, the vendor line), `POST /{id}/approve` `{product_id, supersede?, note?}` → APPROVED mapping with `MANUAL_APPROVAL`, approver and UTC time on the vendor line (or listing), item APPROVED, source row MATCHED at priority 5, job counters moved; `POST /{id}/reject` `{note}`; `POST /{id}/defer` `{until, note?}` (migration `fab7311199fc`). Supersession needs `supersede: true` and is two audited steps. AC-8.1–8.7 and **Milestone 1 exit criterion 7** covered by 20 tests. The queue screen is built (phase 10). Assignment is stored but has no route. |
+| 9 | Inventory, availability, watchlist | ✅ Complete | `snapshot_import_job` writes one append-only `vendor_inventory_snapshots` row per vendor line (matched or not — AC-11.7), diffs against the line's previous snapshot, raises exactly one `availability_events` row per transition (first seen with stock → BECAME_AVAILABLE), links it to the watchlist, and closes the job COMPLETED / COMPLETED_WITH_ERRORS. `POST/GET /api/v1/watchlist`, `POST /{id}/remove`, `GET /{id}/history`, `GET /api/v1/availability/events` (vendor, product, watchlist-only, since). `max_unit_cost` flags (`over_max_unit_cost`, migration `52e787f49770`), never drops. AC-10.1, 10.2, 10.4, AC-11.1–11.4, 11.6, 11.7 and **exit criterion 9** covered by 22 tests. The watchlist and availability screens are built (phase 10). **Not built:** event acknowledgement. |
+| 10 | Admin interface | 🟨 Built except Products | Development sign-in, typed API client, react-query; working screens for vendors, import profiles (form generated from the rule JSON Schemas, validate-against-sample preview, header pinning), imports (drag-and-drop upload, job list, detail with report, row browser by status, raw download), exception queue (filters, drawer with the raw row, candidates with scores, rule trail, approve / reject / defer, supersede prompt), watchlist (add / remove / history), availability feed, audit log (filters, before/after diff), dashboard (live counts, last import per vendor, sync status). `python -m app.cli.seed_dev` seeds an organization, four users and one demo product. **Playwright walk-through** (`frontend/e2e/milestone-1.spec.ts`) drives the whole Milestone 1 flow and runs in the `compose-smoke` CI job. **Not built:** the products screen (needs the phase 3 product API — B1) and product search by name in the approve / watch forms (B9); production sign-in (B2). |
 | 11 | Hardening | ⬜ Not started | |
 
 Legend: ✅ complete · 🟨 in progress · ⬜ not started · 🚫 blocked
@@ -153,6 +153,85 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 10 — the admin interface and the walk-through (2026-09-16)
+
+Every screen except Products, built on a foundation that did not exist
+before this step (the vendors-screen prompt was never run), plus the
+Playwright walk-through of the Milestone 1 exit gate.
+
+* **Foundation** (`frontend/src/lib`) — `api.ts`: one typed client that
+  knows the base URL, the bearer token and the error envelope, so screens
+  react to `mapping_supersession_required` by name; `auth.tsx`:
+  development sign-in through `POST /auth/dev-token` (email of an existing
+  user, no password — B2 replaces this), the principal from `/auth/me`,
+  `hasRole` with ADMIN passing everything; `queries.ts`: react-query hooks
+  for every list and detail; `types.ts`: the response shapes, hand-written
+  from `app/schemas`. The shell shows the sign-in screen until a token is
+  held and the signed-in email afterwards.
+* **Screens** — vendors (search, status filter, create / edit / deactivate
+  in a drawer, link to a vendor's profiles); import profiles (per vendor,
+  retired versions on request, editor whose six rule sections are
+  **generated from the JSON Schemas** the API serves — enums as selects,
+  booleans as checks, `column_map.columns` as an editable table — with
+  validate-against-sample preview and header pinning; saving an active
+  profile creates the next version); imports (drag-and-drop or click upload
+  with vendor and profile selectors, job list with vendor / status filters,
+  detail with the report counters and issue breakdown, row browser filtered
+  by status showing each row's match and deciding rule, raw download with
+  the original filename); exception queue (status / reason / vendor /
+  deferred filters, drawer with the row as imported, the vendor line's
+  mapping, candidates with catalog numbers and similarity, the rule trail,
+  approve a candidate or a typed product id, reject with a required note,
+  defer to a time; a `mapping_supersession_required` refusal turns into a
+  supersede tick-box; an approved item offers "Watch this product");
+  watchlist (add with vendor / priority / quantity / cost ceiling, remove,
+  status history drawer; arrives pre-filled from an approved exception);
+  availability feed (vendor, watched-only, since; each event with its
+  quantities, watch link and cost-ceiling flag); audit log (entity, action,
+  actor, entity id, date range; a before/after diff highlighting changed
+  fields); dashboard (open exceptions, watched items back in stock in 7
+  days, watched in stock / watched, imports running, last import per
+  vendor, Amazon and Nineyard sync status — every number a live count).
+* **Backend reads the screens needed** — `GET /api/v1/audit/events`
+  (entity type / id, action prefix, actor email or label, date range;
+  distinct entity types and actions for the filters) and
+  `GET /api/v1/dashboard`. `python -m app.cli.seed_dev` (refused unless
+  `DEV_AUTH_ENABLED`) creates an organization, the four roles' users
+  (`admin@`, `buyer@`, `operator@`, `viewer@example.test`) and one product
+  — "Blue Widget 12 pack", DEMO-001, UPC 012345678905 — so the walk-through
+  has something to match before the Nineyard sync exists.
+* **Playwright** (`frontend/e2e/milestone-1.spec.ts`, `playwright.config.ts`)
+  — one serial test, 90 s budget, fixture CSVs built in memory: sign in →
+  create vendor → create profile from the schemas and validate it against
+  the fixture → upload → report and row browser → open the exception →
+  approve the suggested product → re-upload (header case changed so the
+  bytes differ) → the row shows *vendor sku mapping (p3)* and no new
+  exception → "Watch this product" pre-fills the watch form → upload the
+  now-available fixture → the availability event shows *watched*, *0 → 40*
+  and the product name → the watch row reads *in stock* → the dashboard's
+  newly-available count is non-zero → the audit log shows
+  `mapping_exception.approved` with a before/after diff. Every created name
+  carries a per-run suffix so it can run repeatedly against one database.
+  **Passed twice locally** (12.1 s, 9.1 s) against `uvicorn` + `next dev` on
+  the development database.
+* **CI** — the `compose-smoke` job now seeds the stack (`seed_dev`),
+  installs Chromium, runs the walk-through against
+  `http://localhost:3000`, and uploads the Playwright report and traces on
+  failure. Not yet observed green in GitHub Actions: `main` has not been
+  pushed since 2026-09-14 (see §4).
+
+**Two things found on the way.** (1) Port 3000 on this machine is held by
+an unrelated project's dev server; the local run used `next dev --port
+3100` with `CORS_ALLOW_ORIGINS` widened for the session. CI uses 3000. (2)
+The exception drawer originally showed the "Watch this product" link only
+right after approving; it now shows on every approved item, which is what
+the walk-through (and a reviewer coming back later) needs.
+
+**Not built.** The products screen — there is no product API until the
+Nineyard sync (phase 3, B1); the approve and watch forms take a product id,
+with candidates offered where the engine found any. Production sign-in
+(B2). The e2e test has not yet run inside GitHub Actions.
 
 ### Phase 9 — snapshots, availability events and the watchlist (2026-09-16)
 
@@ -962,16 +1041,17 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 162 files unchanged |
+| Backend format | `ruff format .` | ✅ 166 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 154 source files |
-| Backend tests | `pytest` | ✅ `1106 passed in 88.94s` — `tests/unit`: `702 passed`; `tests/integration`: `404 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 158 source files |
+| Backend tests | `pytest` | ✅ `1110 passed in 44.76s` — `tests/unit`: `702 passed`; `tests/integration`: `408 passed` |
 | Migration apply | `alembic upgrade head` | ✅ All five revisions applied to PostgreSQL 16.15 |
 | Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc` and `52e787f49770` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
 | Frontend lint | `npm run lint` | ✅ Clean |
 | Frontend types | `npm run typecheck` | ✅ Clean |
-| Frontend build | `npm run build` | ✅ 10 routes prerendered (12 static pages) |
+| Frontend build | `npm run build` | ✅ 10 routes prerendered (12 static pages); every route except `/products` is now a real screen (2–5 kB each) |
+| End-to-end | `npx playwright test` (frontend) | ✅ `1 passed` — the Milestone 1 walk-through, run twice locally against `uvicorn` + `next dev`; wired into `compose-smoke`, not yet run there |
 | Compose config | `docker compose config` | ✅ Valid (client-side) |
 
 ### A design conflict the tests caught
@@ -1188,15 +1268,14 @@ makes the read-only SP-API listings retrieval a source for
 is visible through that account and marketplace set, or whether some still
 need import or manual entry.
 
-### B9 — Admin screens need their foundation and a product search *(new 2026-09-16)*
-Prompt 21 asked for the exception-queue screen "copying the patterns from
-the vendors screen". No such screen exists: Prompt 16 (vendors screen, typed
-client, react-query, zod, dev sign-in, Vitest) stopped because the vendors
-API was missing at the time. That API exists since Prompt 15, so Prompt 16
-can run now. The exceptions screen additionally needs a product search
-endpoint — `GET /api/v1/products?q=` over catalog number, UPC and name — for
-the reviewer to pick a product that is not among the candidates. Neither is
-built; the exception API is complete and tested without them.
+### B9 — Product search for the approve and watch forms *(narrowed 2026-09-16)*
+The admin screens and their foundation were built in phase 10 (this was the
+first half of B9). What remains: the reviewer approving an exception, or a
+buyer adding a watch, can only pick a product that the engine offered as a
+candidate or paste a product id. A product search — `GET /api/v1/products?q=`
+over catalog number, UPC and name — needs the product API, which arrives with
+the Nineyard sync (phase 3, B1). Until then the demo product from `seed_dev`
+is the only product a fresh environment has.
 
 ### B8 — Amazon SP-API credentials *(new; blocks any live POC run)*
 The client must register an SP-API application (or authorise an existing one)
@@ -1241,15 +1320,14 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phases 4, 5 (upload half), 6 and 7 landed on 2026-09-15 and the phase 8 and 9
-APIs on 2026-09-16. The import lifecycle is complete end to end and exit
-criteria 7 and 9 hold in tests. Every backend capability of Milestone 1 except
-Nineyard synchronisation (phase 3, blocked on B1) now exists behind the API;
-none has a screen. Next: the frontend foundation and vendors screen (Prompt 16,
-unblocked), then the exceptions, watchlist, availability and imports screens
-with a product search endpoint (B9); the worker claim loop (AC-5.7); the
-immutable `import_report` (AC-9.3); Nineyard sync when B1 is answered. B5
-still decides where deployed files live.
+Phases 4, 5 (upload half), 6 and 7 landed on 2026-09-15; phases 8, 9 and 10
+on 2026-09-16. The import lifecycle is complete end to end, every step has a
+screen, and the Milestone 1 walk-through passes as a Playwright test. Next:
+**push `main` and watch the three CI jobs** — the compose-smoke job now runs
+the walk-through and has not yet been seen green; then Nineyard sync when B1 is
+answered (which also unlocks the products screen and product search, B9); the
+worker claim loop (AC-5.7); the immutable `import_report` (AC-9.3); production
+sign-in (B2). B5 still decides where deployed files live.
 
 ---
 

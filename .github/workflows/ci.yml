@@ -8,11 +8,14 @@
 #   compose-smoke  builds and starts the full Docker Compose stack from a clean
 #                  checkout and .env.example, waits for the API to report the
 #                  database healthy, applies and checks the Alembic migration,
-#                  and confirms the web container answers.
+#                  confirms the web container answers, seeds a development
+#                  organization, and runs the Playwright walk-through
+#                  (frontend/e2e) against the stack: sign in, vendor, profile,
+#                  upload, report, exception, approve, re-import, watchlist,
+#                  availability event, audit.
 #
 # The smoke job is Milestone 1 exit criterion #1 (docs/milestone-1-scope.md
-# §4). The development machine cannot run Docker, so this job is the only
-# place the stack is proven end to end.
+# §4) and, with the walk-through, the exit-gate of docs/acceptance-criteria.md.
 # =============================================================================
 name: CI
 
@@ -153,6 +156,38 @@ jobs:
           done
           echo "web did not answer within 60s"
           exit 1
+
+      - name: Seed the development organization and users
+        run: $COMPOSE exec -T api python -m app.cli.seed_dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Milestone 1 walk-through (Playwright)
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_ADMIN_EMAIL: admin@example.test
+        run: npx playwright test
+
+      - name: Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
 
       - name: Container logs
         if: failure()

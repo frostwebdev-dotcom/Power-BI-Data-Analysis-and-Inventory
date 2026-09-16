@@ -1,89 +1,20 @@
+"use client";
+
 import Link from "next/link";
 
 import { SystemStatusCard } from "@/components/ApiStatus";
-import {
-  ExceptionsIcon,
-  ImportsIcon,
-  MatchIcon,
-  ProductsIcon,
-  VendorsIcon,
-  WatchlistIcon,
-} from "@/components/icons";
+import { ErrorNote, Loading, StatusBadge, fmtDate, fmtNumber } from "@/components/ui";
+import { useDashboard } from "@/lib/queries";
 
 /**
- * The dashboard.
- *
- * Deliberately shows no counts or charts. Every number here would be zero or
- * invented, and an invented figure on the first screen a client sees is the
- * fastest way to lose their trust in every other number the system reports.
- *
- * What it shows instead is true and useful: live system health, and how the
- * system actually processes a vendor file.
+ * The dashboard. Every number is a live count from the API; where there is
+ * nothing to count yet the card says so instead of showing a zero that looks
+ * like data.
  */
-
-const PIPELINE = [
-  {
-    title: "Receive",
-    text: "A vendor's CSV or XLSX is uploaded and kept byte-for-byte, before anything parses it.",
-  },
-  {
-    title: "Parse",
-    text: "A per-vendor profile maps that vendor's columns. Every value is read as text, so leading zeros survive.",
-  },
-  {
-    title: "Match",
-    text: "UPC, then catalogue number, then approved mappings. First unambiguous rule wins, and it is recorded.",
-  },
-  {
-    title: "Review",
-    text: "Anything uncertain goes to a person. Nothing is guessed, and approvals are reused thereafter.",
-  },
-  {
-    title: "Detect",
-    text: "New stock levels are compared against the last snapshot, raising an alert when a watched item returns.",
-  },
-];
-
-const SECTIONS = [
-  {
-    href: "/products",
-    label: "Products",
-    icon: ProductsIcon,
-    text: "The canonical catalogue, with every identifier that resolves to a product.",
-  },
-  {
-    href: "/vendors",
-    label: "Vendors",
-    icon: VendorsIcon,
-    text: "Suppliers, their contact details, and their default lead times.",
-  },
-  {
-    href: "/imports",
-    label: "Imports",
-    icon: ImportsIcon,
-    text: "Upload a vendor file, follow the run, and read its validation report.",
-  },
-  {
-    href: "/exceptions",
-    label: "Exception queue",
-    icon: ExceptionsIcon,
-    text: "Rows the matcher could not resolve on its own, waiting for a decision.",
-  },
-  {
-    href: "/watchlist",
-    label: "Watchlist",
-    icon: WatchlistIcon,
-    text: "Products you want to buy, watched for the moment a vendor has them again.",
-  },
-  {
-    href: "/availability",
-    label: "Availability",
-    icon: MatchIcon,
-    text: "Stock transitions detected between one import and the next.",
-  },
-];
-
 export default function DashboardPage() {
+  const dashboard = useDashboard();
+  const data = dashboard.data;
+
   return (
     <>
       <header className="page-header">
@@ -91,91 +22,157 @@ export default function DashboardPage() {
           <h1>Purchasing &amp; Replenishment</h1>
         </div>
         <p className="page-header__lede">
-          One catalogue, every vendor&rsquo;s inventory, and a matching process that asks
-          rather than guesses — so the numbers behind a purchasing decision can be trusted.
+          One catalogue, every vendor&rsquo;s inventory, and a matching process that asks rather
+          than guesses.
         </p>
       </header>
 
-      <div className="grid grid--2" style={{ marginBottom: 26 }}>
+      <ErrorNote error={dashboard.error} />
+      {dashboard.isPending ? <Loading what="Loading counts" /> : null}
+
+      {data ? (
+        <div className="counters counters--tiles" data-testid="dashboard-counts">
+          <Link href="/exceptions" className="counter counter--tile">
+            <span className="counter__value" data-testid="count-open-exceptions">
+              {fmtNumber(data.open_exceptions)}
+            </span>
+            <span className="counter__label">open exceptions</span>
+          </Link>
+          <Link href="/availability?watchlist=1" className="counter counter--tile">
+            <span className="counter__value" data-testid="count-newly-available">
+              {fmtNumber(data.watchlist_newly_available_7d)}
+            </span>
+            <span className="counter__label">watched items back in stock, 7 days</span>
+          </Link>
+          <Link href="/watchlist" className="counter counter--tile">
+            <span className="counter__value">
+              {fmtNumber(data.watchlist_in_stock)} / {fmtNumber(data.watchlist_active)}
+            </span>
+            <span className="counter__label">watched items in stock / watched</span>
+          </Link>
+          <Link href="/imports" className="counter counter--tile">
+            <span className="counter__value">{fmtNumber(data.imports_running)}</span>
+            <span className="counter__label">imports running</span>
+          </Link>
+        </div>
+      ) : null}
+
+      <div className="grid grid--2" style={{ marginTop: 26 }}>
+        <section className="card">
+          <div className="card__header">
+            <span className="card__title">Last import per vendor</span>
+          </div>
+          {data && data.last_imports.length === 0 ? <p className="muted">No vendors yet.</p> : null}
+          {data && data.last_imports.length > 0 ? (
+            <table className="table table--compact" data-testid="last-imports">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th>Status</th>
+                  <th>Rows</th>
+                  <th>Exceptions</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.last_imports.map((row) => (
+                  <tr key={row.vendor_id}>
+                    <td>
+                      <span className="mono">{row.vendor_code}</span> {row.vendor_name}
+                    </td>
+                    <td>{row.job_id ? <Link href={`/imports?job=${row.job_id}`}><StatusBadge value={row.status} /></Link> : <span className="muted">never imported</span>}</td>
+                    <td>{fmtNumber(row.total_rows)}</td>
+                    <td>{fmtNumber(row.exception_rows)}</td>
+                    <td>{fmtDate(row.completed_at ?? row.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </section>
+
+        <section className="card">
+          <div className="card__header">
+            <span className="card__title">Synchronisations</span>
+          </div>
+          <table className="table table--compact">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.amazon_syncs.map((sync) => (
+                <tr key={sync.job_type}>
+                  <td>Amazon · {sync.job_type?.toLowerCase()}</td>
+                  <td>
+                    <StatusBadge value={sync.status} />
+                  </td>
+                  <td>{fmtDate(sync.started_at)}</td>
+                  <td>{fmtDate(sync.completed_at)}</td>
+                </tr>
+              ))}
+              {data && data.amazon_syncs.length === 0 ? (
+                <tr>
+                  <td>Amazon</td>
+                  <td colSpan={3} className="muted">
+                    never run
+                  </td>
+                </tr>
+              ) : null}
+              <tr>
+                <td>Nineyard catalogue</td>
+                {data?.nineyard_sync ? (
+                  <>
+                    <td>
+                      <StatusBadge value={data.nineyard_sync.status} />
+                    </td>
+                    <td>{fmtDate(data.nineyard_sync.started_at)}</td>
+                    <td>{fmtDate(data.nineyard_sync.completed_at)}</td>
+                  </>
+                ) : (
+                  <td colSpan={3} className="muted">
+                    not yet connected (B1)
+                  </td>
+                )}
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
         <SystemStatusCard />
 
-        <div className="card">
+        <section className="card">
           <div className="card__header">
-            <span className="card__title">
-              <MatchIcon />
-              Matching policy
-            </span>
+            <span className="card__title">Matching policy</span>
           </div>
           <div className="kv">
-            <div className="kv__row">
-              <span className="kv__key">1 &nbsp;Normalised UPC</span>
-              <span className="kv__value">Automatic</span>
-            </div>
-            <div className="kv__row">
-              <span className="kv__key">2 &nbsp;Catalogue item number</span>
-              <span className="kv__value">Automatic</span>
-            </div>
-            <div className="kv__row">
-              <span className="kv__key">3 &nbsp;Approved vendor SKU</span>
-              <span className="kv__value">Automatic</span>
-            </div>
-            <div className="kv__row">
-              <span className="kv__key">4 &nbsp;Approved marketplace SKU</span>
-              <span className="kv__value">Automatic</span>
-            </div>
-            <div className="kv__row">
-              <span className="kv__key">5 &nbsp;Suggested match</span>
-              <span className="kv__value" style={{ color: "var(--warn)" }}>
-                Needs approval
-              </span>
-            </div>
+            {[
+              ["1", "Normalised UPC", "Automatic"],
+              ["2", "Catalogue item number", "Automatic"],
+              ["3", "Approved vendor SKU", "Automatic"],
+              ["4", "Approved marketplace SKU", "Automatic"],
+              ["5", "Suggested match", "Needs approval"],
+            ].map(([n, rule, how]) => (
+              <div className="kv__row" key={n}>
+                <span className="kv__key">
+                  {n} &nbsp;{rule}
+                </span>
+                <span className="kv__value" style={how === "Needs approval" ? { color: "var(--warn)" } : undefined}>
+                  {how}
+                </span>
+              </div>
+            ))}
           </div>
           <p className="card__note">
-            A description alone never matches a product automatically. Anything ambiguous
-            goes to the exception queue rather than being resolved by guesswork.
+            A description alone never matches a product automatically. Anything ambiguous goes to
+            the exception queue rather than being resolved by guesswork.
           </p>
-        </div>
+        </section>
       </div>
-
-      <section style={{ marginBottom: 26 }}>
-        <div className="card">
-          <div className="card__header">
-            <span className="card__title">
-              <ImportsIcon />
-              How a vendor file becomes trusted data
-            </span>
-          </div>
-          <ol className="pipeline" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {PIPELINE.map((step, index) => (
-              <li className="pipeline__step" key={step.title}>
-                <div className="pipeline__num">{index + 1}</div>
-                <div className="pipeline__title">{step.title}</div>
-                <div className="pipeline__text">{step.text}</div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section>
-        <h2 style={{ marginBottom: 12 }}>Sections</h2>
-        <div className="grid grid--3">
-          {SECTIONS.map((section) => {
-            const IconComponent = section.icon;
-            return (
-              <Link href={section.href} key={section.href} className="card-link">
-                <span className="card-link__head">
-                  <span className="card-link__icon">
-                    <IconComponent />
-                  </span>
-                  <span className="card-link__title">{section.label}</span>
-                </span>
-                <span className="card-link__text">{section.text}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
     </>
   );
 }
