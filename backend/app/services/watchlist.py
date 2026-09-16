@@ -19,6 +19,7 @@ event whose cost is above the ceiling is linked with
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -184,19 +185,53 @@ def history(session: Session, principal: Principal, entry_id: uuid.UUID) -> list
 # --- events reaching the watchlist ---------------------------------------------------------------
 
 
+def apply_events(
+    session: Session,
+    organization_id: uuid.UUID,
+    raised: Sequence[tuple[AvailabilityEvent, VendorInventorySnapshot]],
+    actor: Principal | None,
+) -> list[WatchHit]:
+    """``apply_event`` for a chunk of events with one watch lookup for all of
+    them, so 25,000 events cost one query, not 25,000."""
+    product_ids = {event.product_id for event, _ in raised if event.product_id is not None}
+    if not product_ids:
+        return [WatchHit(linked=False, over_ceiling=False) for _ in raised]
+    inventory = InventoryRepository(session, organization_id)
+    watches = inventory.active_watches_for_products(product_ids)
+    return [
+        apply_event(session, organization_id, event, snapshot, actor, watches=watches)
+        for event, snapshot in raised
+    ]
+
+
 def apply_event(
     session: Session,
     organization_id: uuid.UUID,
     event: AvailabilityEvent,
     snapshot: VendorInventorySnapshot,
     actor: Principal | None,
+    *,
+    watches: Sequence[OosWatchlistEntry] | None = None,
 ) -> WatchHit:
     """Link an availability event to the watch entries it concerns and move
-    their status. Runs inside the snapshot stage's transaction."""
+    their status. Runs inside the snapshot stage's transaction. ``watches``
+    is the pre-fetched active entries for the chunk's products, if any."""
     if event.product_id is None:
         return WatchHit(linked=False, over_ceiling=False)
     inventory = InventoryRepository(session, organization_id)
-    entries = inventory.active_watches_for(event.product_id, event.vendor_id)
+    if watches is None:
+        entries: Sequence[OosWatchlistEntry] = inventory.active_watches_for(
+            event.product_id, event.vendor_id
+        )
+    else:
+        concerned = [
+            w
+            for w in watches
+            if w.product_id == event.product_id
+            and (w.vendor_id is None or w.vendor_id == event.vendor_id)
+        ]
+        # Vendor-specific first, then all-vendors, oldest first — as the query does.
+        entries = sorted(concerned, key=lambda w: (w.vendor_id is None, w.created_at))
     if not entries:
         return WatchHit(linked=False, over_ceiling=False)
 

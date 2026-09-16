@@ -15,6 +15,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import instance_state
 
 from app.core.logging import get_logger
 from app.db.session import get_session_factory
@@ -94,3 +95,30 @@ def run_in_transaction[T](work: Callable[[Session], T]) -> T:
     """Run ``work`` in its own session and transaction, returning its result."""
     with session_scope() as session:
         return work(session)
+
+
+def identity_snapshot(session: Session) -> frozenset[object]:
+    """The identity-map keys held right now; pair with :func:`release_since`."""
+    return frozenset(session.identity_map.keys())
+
+
+def release_since(
+    session: Session, snapshot: frozenset[object], *, keep: tuple[object, ...] = ()
+) -> int:
+    """Expunge every object the session acquired since ``snapshot``.
+
+    For chunked batch work that walks tens of thousands of rows through one
+    session: without this the identity map grows by every row, line and
+    event touched, and memory with it. Objects that were already in the
+    session before the chunk — a caller's own instances — stay attached, as
+    do ``keep``. Returns how many objects were released.
+    """
+    released = 0
+    kept = {id(obj) for obj in keep}
+    for instance in list(session.identity_map.values()):
+        key = instance_state(instance).key
+        if key in snapshot or id(instance) in kept:
+            continue
+        session.expunge(instance)
+        released += 1
+    return released

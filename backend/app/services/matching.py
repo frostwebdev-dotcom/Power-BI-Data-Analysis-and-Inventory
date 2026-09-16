@@ -21,6 +21,11 @@ records what the chain decided:
   person REJECTED is not re-queued for the same reason and candidates —
   the re-review policy AC-8.5 asks for; different evidence opens a new item.
 
+Rows are walked in chunks of 1,000, each its own transaction; new vendor
+lines and queue items are given their ids client-side and flushed once per
+chunk, not once per row — the difference between 50,000 rows taking minutes
+and taking seconds (phase 11).
+
 Rows superseded by a later duplicate vendor SKU are not matched: the last
 occurrence carries the line. The whole trail is also stored on the row
 (``normalized_data.match``) without timestamps, so two runs against the
@@ -38,13 +43,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Final
 
+from sqlalchemy import insert, update
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError
 from app.core.logging import get_logger
 from app.core.security import Principal
-from app.db.transaction import transaction
-from app.matching.engine import MatchIndex, MatchInput, MatchOutcome, evaluate
+from app.db.transaction import identity_snapshot, release_since, transaction
+from app.matching.engine import MatchIndex, MatchInput, MatchOutcome, Suggestion, evaluate
 from app.models.enums import (
     ActorType,
     ExceptionReason,
@@ -72,6 +78,46 @@ _REASON_OF: Final = {
     MatchResult.UNMATCHED: ExceptionReason.NO_MATCH,
     MatchResult.SUGGESTION_ONLY: ExceptionReason.SUGGESTION_ONLY,
 }
+
+
+LINE_COLUMNS: Final = (
+    "id",
+    "organization_id",
+    "vendor_id",
+    "vendor_sku",
+    "normalized_vendor_sku",
+    "vendor_description",
+    "raw_upc",
+    "normalized_upc",
+    "pack_size",
+    "unit_of_measure",
+    "product_id",
+    "mapping_status",
+    "mapping_method",
+    "mapping_approved_by_user_id",
+    "mapping_approved_at",
+    "first_seen_at",
+    "last_seen_at",
+)
+ITEM_COLUMNS: Final = (
+    "id",
+    "organization_id",
+    "import_job_id",
+    "import_job_row_id",
+    "vendor_id",
+    "vendor_product_id",
+    "marketplace_listing_id",
+    "reason",
+    "status",
+    "suggested_product_id",
+    "suggestion_score",
+    "candidates",
+    "match_evaluations",
+)
+
+
+def _columns(instance: object, names: tuple[str, ...]) -> dict[str, Any]:
+    return {name: getattr(instance, name) for name in names}
 
 
 class ImportJobNotAtMatching(ConflictError):  # noqa: N818
@@ -116,6 +162,12 @@ class _Matcher:
         self.actor = actor
         self.repository = MatchIndexRepository(session, organization_id)
         self.index: MatchIndex = self.repository.build(job.vendor_id)
+        # Rule 5 is answered from a per-chunk prefetch (one query per chunk),
+        # not a query per row; _load_context fills it.
+        self.chunk_suggestions: dict[str, list[Suggestion]] = {}
+        self.index.suggester = lambda description: self.chunk_suggestions.get(
+            description.strip(), []
+        )
         self.lines: dict[str, VendorProduct] = {}
         self.open_items: dict[uuid.UUID, ProductMappingException] = {}
         #: The latest REJECTED item per vendor line: the same evidence is not
@@ -125,6 +177,11 @@ class _Matcher:
         self.results: Counter[str] = Counter()
         self.exceptions_opened = 0
         self.exceptions_refreshed = 0
+        self.exceptions_unchanged = 0
+        self.seen_line_ids: list[uuid.UUID] = []
+        self.row_updates: list[dict[str, Any]] = []
+        self.new_lines: list[VendorProduct] = []
+        self.new_items: list[ProductMappingException] = []
         self.mapping_suggestions = 0
         self.conflicts = 0
         self.superseded = 0
@@ -133,25 +190,73 @@ class _Matcher:
     # --- the stage ---------------------------------------------------------------------
 
     def run(self) -> None:
-        self._load_vendor_lines()
-        self._load_open_items()
         last_row_number = -1
         while True:
+            held = identity_snapshot(self.session)
             rows = self._next_rows(last_row_number)
             if not rows:
                 break
+            self._load_context(rows)
             with transaction(self.session):
                 for row in rows:
                     self._match_row(row)
+                self._flush_rows()
+                self._touch_lines()
                 self.job.matched_rows = self.results[MatchResult.MATCHED.value]
                 self.job.exception_rows = (
                     self.results[MatchResult.AMBIGUOUS.value]
                     + self.results[MatchResult.UNMATCHED.value]
                     + self.results[MatchResult.SUGGESTION_ONLY.value]
                 )
-            self.chunks += 1
             last_row_number = rows[-1].row_number
+            self._release_chunk(held)
+            self.chunks += 1
         self._finish()
+
+    def _flush_rows(self) -> None:
+        """The chunk's writes, one statement each: new vendor lines, new queue
+        items, then the row verdicts (rows point at lines and items, so that
+        order). Existing lines and items changed in the chunk go through the
+        unit of work as usual."""
+        if self.new_lines:
+            self.session.execute(
+                insert(VendorProduct).execution_options(render_nulls=True),
+                [_columns(line, LINE_COLUMNS) for line in self.new_lines],
+            )
+            self.new_lines.clear()
+        if self.new_items:
+            self.session.execute(
+                insert(ProductMappingException).execution_options(render_nulls=True),
+                [_columns(item, ITEM_COLUMNS) for item in self.new_items],
+            )
+            self.new_items.clear()
+        if not self.row_updates:
+            return
+        self.session.flush()
+        self.session.execute(
+            update(ImportJobRow).execution_options(synchronize_session=False), self.row_updates
+        )
+        self.row_updates.clear()
+
+    def _touch_lines(self) -> None:
+        """One UPDATE for the chunk's existing lines' last_seen_at."""
+        if not self.seen_line_ids:
+            return
+        self.session.execute(
+            update(VendorProduct)
+            .where(VendorProduct.id.in_(self.seen_line_ids))
+            .values(last_seen_at=datetime.now(UTC))
+            .execution_options(synchronize_session=False)
+        )
+        self.seen_line_ids.clear()
+
+    def _release_chunk(self, held: frozenset[object]) -> None:
+        """Drop what this chunk loaded or created from the session so memory
+        stays flat over 50,000 rows. Objects the caller already held stay."""
+        release_since(self.session, held, keep=(self.job,))
+        self.lines.clear()
+        self.open_items.clear()
+        self.rejected_items.clear()
 
     def _next_rows(self, after: int) -> list[ImportJobRow]:
         return list(
@@ -169,12 +274,23 @@ class _Matcher:
             .all()
         )
 
-    def _load_vendor_lines(self) -> None:
-        """Every line of this vendor, keyed by normalised SKU. An APPROVED row
-        wins over any other spelling of the same SKU."""
+    def _load_context(self, rows: list[ImportJobRow]) -> None:
+        """The vendor lines this chunk's SKUs name, keyed by normalised SKU (an
+        APPROVED row wins over another spelling of the same SKU), and their
+        open and latest-rejected queue items. Three queries per chunk, not
+        one per row and not the whole vendor up front."""
+        self.chunk_suggestions = self.repository.suggest_many(
+            [row.description for row in rows if row.description]
+        )
+        skus = {row.normalized_vendor_sku for row in rows if row.normalized_vendor_sku}
+        if not skus:
+            return
         for line in self.session.execute(
             self.repository.select(VendorProduct)
-            .where(VendorProduct.vendor_id == self.job.vendor_id)
+            .where(
+                VendorProduct.vendor_id == self.job.vendor_id,
+                VendorProduct.normalized_vendor_sku.in_(list(skus)),
+            )
             .order_by(VendorProduct.created_at, VendorProduct.id)
         ).scalars():
             current = self.lines.get(line.normalized_vendor_sku)
@@ -183,13 +299,13 @@ class _Matcher:
                 and line.mapping_status is MappingStatus.APPROVED
             ):
                 self.lines[line.normalized_vendor_sku] = line
-
-    def _load_open_items(self) -> None:
+        line_ids = [line.id for line in self.lines.values()]
+        if not line_ids:
+            return
         for item in self.session.execute(
             self.repository.select(ProductMappingException).where(
-                ProductMappingException.vendor_id == self.job.vendor_id,
+                ProductMappingException.vendor_product_id.in_(line_ids),
                 ProductMappingException.status == ExceptionStatus.PENDING,
-                ProductMappingException.vendor_product_id.is_not(None),
             )
         ).scalars():
             assert item.vendor_product_id is not None
@@ -197,9 +313,8 @@ class _Matcher:
         for item in self.session.execute(
             self.repository.select(ProductMappingException)
             .where(
-                ProductMappingException.vendor_id == self.job.vendor_id,
+                ProductMappingException.vendor_product_id.in_(line_ids),
                 ProductMappingException.status == ExceptionStatus.REJECTED,
-                ProductMappingException.vendor_product_id.is_not(None),
             )
             .order_by(ProductMappingException.resolved_at)
         ).scalars():
@@ -216,16 +331,21 @@ class _Matcher:
 
         outcome = evaluate(self._input_of(row), self.index)
         self.results[outcome.result.value] += 1
-        row.match_result = outcome.result
-        row.matched_by = outcome.method
-        row.match_priority = outcome.priority
-        row.product_id = outcome.product_id
         data["match"] = outcome.as_json()
-        row.normalized_data = data
-
         line = self._vendor_line(row) if row.vendor_sku else None
-        if line is not None:
-            row.vendor_product_id = line.id
+        # The row's verdict is collected and written once per chunk in a single
+        # bulk UPDATE (_flush_rows), not through the unit of work row by row.
+        self.row_updates.append(
+            {
+                "id": row.id,
+                "match_result": outcome.result,
+                "matched_by": outcome.method,
+                "match_priority": outcome.priority,
+                "product_id": outcome.product_id,
+                "vendor_product_id": line.id if line is not None else row.vendor_product_id,
+                "normalized_data": data,
+            }
+        )
 
         if outcome.result is MatchResult.MATCHED:
             assert outcome.product_id is not None and outcome.method is not None
@@ -250,7 +370,10 @@ class _Matcher:
         line = self.lines.get(row.normalized_vendor_sku)
         now = datetime.now(UTC)
         if line is None:
+            # The id is minted here so the exception that may follow can point
+            # at the line without a flush per row; the chunk flushes once.
             line = VendorProduct(
+                id=uuid.uuid4(),
                 organization_id=self.organization_id,
                 vendor_id=self.job.vendor_id,
                 vendor_sku=row.vendor_sku,
@@ -264,11 +387,13 @@ class _Matcher:
                 first_seen_at=now,
                 last_seen_at=now,
             )
-            self.session.add(line)
-            self.session.flush()
+            # Transient until the chunk flushes: new lines go in one Core INSERT.
+            self.new_lines.append(line)
             self.lines[row.normalized_vendor_sku] = line
             return line
-        line.last_seen_at = now
+        # last_seen_at is stamped for the whole chunk in one UPDATE (_touch_lines),
+        # not one statement per line.
+        self.seen_line_ids.append(line.id)
         if row.description and not line.vendor_description:
             line.vendor_description = row.description
         if row.normalized_upc and not line.normalized_upc:
@@ -323,22 +448,35 @@ class _Matcher:
             # A person already declined exactly this: same reason, same
             # candidates. Re-queueing it unchanged would be nagging (AC-8.5).
             self.rejected_skipped += 1
-            data = dict(row.normalized_data)
-            data["match"] = {**data.get("match", {}), "previously_rejected": str(rejected.id)}
-            row.normalized_data = data
+            update_row = self.row_updates[-1]
+            assert update_row["id"] == row.id
+            update_row["normalized_data"] = {
+                **update_row["normalized_data"],
+                "match": {
+                    **update_row["normalized_data"]["match"],
+                    "previously_rejected": str(rejected.id),
+                },
+            }
             return
         if existing is not None:
-            # One open item per vendor line: refresh it with this import's evidence.
+            # One open item per vendor line. Same reason and candidates as the
+            # open item already carries: nothing to say; leave it pointing at the
+            # row that first raised it. Otherwise refresh it with this evidence.
+            candidates = outcome.candidates_json()
+            if existing.reason is reason and existing.candidates == candidates:
+                self.exceptions_unchanged += 1
+                return
             existing.import_job_id = self.job.id
             existing.import_job_row_id = row.id
             existing.reason = reason
             existing.suggested_product_id = suggested
             existing.suggestion_score = score
-            existing.candidates = outcome.candidates_json()
+            existing.candidates = candidates
             existing.match_evaluations = evaluations
             self.exceptions_refreshed += 1
             return
         item = ProductMappingException(
+            id=uuid.uuid4(),
             organization_id=self.organization_id,
             import_job_id=self.job.id,
             import_job_row_id=row.id,
@@ -351,8 +489,7 @@ class _Matcher:
             candidates=outcome.candidates_json(),
             match_evaluations=evaluations,
         )
-        self.session.add(item)
-        self.session.flush()
+        self.new_items.append(item)  # written in one Core INSERT at chunk end
         if line is not None:
             self.open_items[line.id] = item
         self.exceptions_opened += 1
@@ -367,6 +504,7 @@ class _Matcher:
             "superseded_skipped": self.superseded,
             "exceptions_opened": self.exceptions_opened,
             "exceptions_refreshed": self.exceptions_refreshed,
+            "exceptions_unchanged": self.exceptions_unchanged,
             "rejected_not_requeued": self.rejected_skipped,
             "mapping_suggestions": self.mapping_suggestions,
             "conflicts": self.conflicts,

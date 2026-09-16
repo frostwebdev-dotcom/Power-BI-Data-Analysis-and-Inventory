@@ -47,6 +47,36 @@ class InventoryRepository(ScopedRepository):
             )
         ).scalar_one_or_none()
 
+    def snapshotted_lines(self, job_id: uuid.UUID, line_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+        """Vendor lines this job has already snapshotted (an interrupted run)."""
+        if not line_ids:
+            return set()
+        rows = self.session.execute(
+            self.select(VendorInventorySnapshot, VendorInventorySnapshot.vendor_product_id).where(
+                VendorInventorySnapshot.import_job_id == job_id,
+                VendorInventorySnapshot.vendor_product_id.in_(list(line_ids)),
+            )
+        ).scalars()
+        return set(rows)
+
+    def latest_snapshots(
+        self, line_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, VendorInventorySnapshot]:
+        """Each line's most recent observation, for a chunk of lines at once."""
+        if not line_ids:
+            return {}
+        rows = self.session.execute(
+            self.select(VendorInventorySnapshot)
+            .where(VendorInventorySnapshot.vendor_product_id.in_(list(line_ids)))
+            .distinct(VendorInventorySnapshot.vendor_product_id)
+            .order_by(
+                VendorInventorySnapshot.vendor_product_id,
+                VendorInventorySnapshot.captured_at.desc(),
+                VendorInventorySnapshot.id.desc(),
+            )
+        ).scalars()
+        return {snapshot.vendor_product_id: snapshot for snapshot in rows}
+
     def latest_snapshot(self, vendor_product_id: uuid.UUID) -> VendorInventorySnapshot | None:
         """The vendor line's most recent observation, by capture time."""
         return self.session.execute(
@@ -142,6 +172,23 @@ class InventoryRepository(ScopedRepository):
                     | (OosWatchlistEntry.vendor_id.is_(None)),
                 )
                 .order_by(OosWatchlistEntry.vendor_id.is_(None), OosWatchlistEntry.created_at)
+            )
+            .scalars()
+            .all()
+        )
+
+    def active_watches_for_products(
+        self, product_ids: set[uuid.UUID]
+    ) -> Sequence[OosWatchlistEntry]:
+        """Every active entry concerning any of these products (a chunk's worth)."""
+        if not product_ids:
+            return []
+        return (
+            self.session.execute(
+                self.select(OosWatchlistEntry).where(
+                    OosWatchlistEntry.product_id.in_(list(product_ids)),
+                    OosWatchlistEntry.is_active.is_(True),
+                )
             )
             .scalars()
             .all()

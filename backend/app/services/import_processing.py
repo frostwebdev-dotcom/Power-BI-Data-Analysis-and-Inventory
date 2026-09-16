@@ -224,7 +224,11 @@ class _Run:
             if not buffer:
                 return
             with transaction(self.session):
-                self.session.execute(insert(ImportJobRow), buffer)
+                # render_nulls: rows with a None here and there must not become
+                # different statements — one executemany per chunk, not one per row.
+                self.session.execute(
+                    insert(ImportJobRow).execution_options(render_nulls=True), buffer
+                )
                 job.total_rows += len(buffer)
                 job.processed_rows += sum(
                     1 for r in buffer if r["status"] != ImportRowStatus.SKIPPED

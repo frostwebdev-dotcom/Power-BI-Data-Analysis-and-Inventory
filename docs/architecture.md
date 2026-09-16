@@ -375,18 +375,27 @@ proves too slow on large vendor files. Not adopted up front.
 
 ## 5. Database entity list
 
-> **Superseded as of 2026-09-08.** The schema is implemented, and
-> [docs/database-schema.md](database-schema.md) is now the authoritative
-> description — it documents the 21 tables as built, with the ER diagram,
-> relationship and delete-behaviour reference, and index coverage.
+> **Superseded.** The schema is implemented; [docs/database-schema.md](database-schema.md)
+> is the authoritative description — 25 tables across 7 migrations
+> (`506fd0ecc33a` → `52e787f49770`), with the ER diagram, the relationship and
+> delete-behaviour reference, index coverage, and a note per migration. If
+> this section and that document disagree, that document is right.
 >
 > The section below is the original planning sketch, kept for the reasoning it
-> records. It differs from what shipped in three ways: table names are plural
-> (`products`, not `product`); tenancy was added, so every table carries
-> `organization_id` ([ADR 0009](decisions/0009-organization-scoped-multi-tenancy.md));
-> and approved mappings live on `vendor_products` and `marketplace_listings`
-> rather than in a separate mapping table
-> ([ADR 0010](decisions/0010-identifier-model-and-mapping-placement.md)).
+> records. Where it differs from what shipped:
+>
+> | Planned here | Shipped |
+> |---|---|
+> | singular names (`product`, `vendor`, …) | plural (`products`, `vendors`, …) |
+> | single tenant | every table carries `organization_id` ([ADR 0009](decisions/0009-organization-scoped-multi-tenancy.md)) |
+> | `vendor_product_mapping`, `amazon_sku` mapping tables | approved mappings live on `vendor_products` and `marketplace_listings` ([ADR 0010](decisions/0010-identifier-model-and-mapping-placement.md)) |
+> | `import_batch`, `import_row`, `import_issue`, `import_report` | `import_jobs`, `import_job_rows` (issues in `normalized_data.issues`, report computed from the job and its rows — AC-9.3's immutable report is still open) |
+> | `match_attempt`, `match_candidate` | the rule trail on `import_job_rows.normalized_data.match` and on the queue item's `match_evaluations` / `candidates` (phase1-status A23) |
+> | `match_exception` | `product_mapping_exceptions` (with `deferred_until`) |
+> | `nineyard_item_payload` | `source_records` (not yet written to — phase 3) |
+> | `vendor_inventory_snapshot`, `availability_event`, `watchlist_entry`, `watchlist_hit` | `vendor_inventory_snapshots`, `availability_events`, `oos_watchlist` + `oos_status_history` (a hit is the event's `oos_watchlist_id` link plus a history row) |
+> | `app_user` with a `role` column | `users`, `roles`, `user_roles` |
+> | `audit_log` | `audit_events` |
 
 All tables carry a UUID primary key (`id`) and `created_at` / `updated_at` as
 `TIMESTAMPTZ` in UTC. Business keys are separate, uniquely constrained columns.

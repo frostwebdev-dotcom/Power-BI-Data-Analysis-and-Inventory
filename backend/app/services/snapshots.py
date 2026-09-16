@@ -32,12 +32,13 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import Any, Final
 
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError
 from app.core.logging import get_logger
 from app.core.security import Principal
-from app.db.transaction import transaction
+from app.db.transaction import identity_snapshot, release_since, transaction
 from app.models.enums import (
     ActorType,
     AvailabilityEventType,
@@ -56,6 +57,42 @@ _logger = get_logger(__name__)
 
 CHUNK_ROWS: Final = 1000
 UNAVAILABLE: Final = frozenset({AvailabilityStatus.OUT_OF_STOCK, AvailabilityStatus.DISCONTINUED})
+
+SNAPSHOT_COLUMNS: Final = (
+    "id",
+    "organization_id",
+    "vendor_id",
+    "vendor_product_id",
+    "product_id",
+    "import_job_id",
+    "quantity_available",
+    "unit_cost",
+    "currency",
+    "availability_status",
+    "effective_at",
+    "captured_at",
+)
+EVENT_COLUMNS: Final = (
+    "id",
+    "organization_id",
+    "vendor_id",
+    "vendor_product_id",
+    "product_id",
+    "oos_watchlist_id",
+    "event_type",
+    "previous_snapshot_id",
+    "current_snapshot_id",
+    "previous_status",
+    "new_status",
+    "previous_quantity",
+    "new_quantity",
+    "over_max_unit_cost",
+    "detected_at",
+)
+
+
+def _columns(instance: object, names: tuple[str, ...]) -> dict[str, Any]:
+    return {name: getattr(instance, name) for name in names}
 
 
 class ImportJobNotAtSnapshotting(ConflictError):  # noqa: N818
@@ -122,14 +159,16 @@ class _Snapshotter:
     def run(self) -> None:
         last = -1
         while True:
+            held = identity_snapshot(self.session)
             rows = self._next_rows(last)
             if not rows:
                 break
             with transaction(self.session):
-                for row in rows:
-                    self._snapshot_row(row)
-            self.chunks += 1
+                self._snapshot_chunk(rows)
             last = rows[-1].row_number
+            # Release what the chunk loaded or created so memory stays flat.
+            release_since(self.session, held, keep=(self.job,))
+            self.chunks += 1
         self._finish()
 
     def _next_rows(self, after: int) -> list[ImportJobRow]:
@@ -149,55 +188,85 @@ class _Snapshotter:
             .all()
         )
 
-    def _snapshot_row(self, row: ImportJobRow) -> None:
-        assert row.vendor_product_id is not None
-        existing = self.inventory.snapshot_for(self.job.id, row.vendor_product_id)
-        if existing is not None:
-            return  # the stage ran before and was interrupted: never a second snapshot
-        previous = self.inventory.latest_snapshot(row.vendor_product_id)
-        status = row.availability_status or AvailabilityStatus.UNKNOWN
-        snapshot = VendorInventorySnapshot(
-            organization_id=self.organization_id,
-            vendor_id=self.job.vendor_id,
-            vendor_product_id=row.vendor_product_id,
-            product_id=row.product_id,
-            import_job_id=self.job.id,
-            quantity_available=row.quantity,
-            unit_cost=row.unit_cost,
-            currency=row.currency if row.unit_cost is not None else None,
-            availability_status=status,
-            effective_at=self.effective_at,
-            captured_at=datetime.now(UTC),
-        )
-        self.session.add(snapshot)
-        self.session.flush()
-        self.snapshots += 1
+    def _snapshot_chunk(self, rows: list[ImportJobRow]) -> None:
+        """One chunk: two lookups for the whole chunk, then one bulk INSERT of
+        snapshots and one of events — not two queries and a flush per row.
 
-        kind = transition(previous.availability_status if previous else None, status)
-        if kind is None:
+        Snapshots and events are built as transient instances (never added to
+        the session) so the watchlist can read and annotate them, then written
+        with Core executemany; only the few status-history rows go through the
+        unit of work.
+        """
+        line_ids = [row.vendor_product_id for row in rows if row.vendor_product_id is not None]
+        already = self.inventory.snapshotted_lines(self.job.id, line_ids)
+        previous_by_line = self.inventory.latest_snapshots(line_ids)
+
+        pending: list[
+            tuple[ImportJobRow, VendorInventorySnapshot, VendorInventorySnapshot | None]
+        ] = []
+        for row in rows:
+            assert row.vendor_product_id is not None
+            if row.vendor_product_id in already:
+                continue  # the stage ran before and was interrupted: never a second snapshot
+            status = row.availability_status or AvailabilityStatus.UNKNOWN
+            snapshot = VendorInventorySnapshot(
+                id=uuid.uuid4(),
+                organization_id=self.organization_id,
+                vendor_id=self.job.vendor_id,
+                vendor_product_id=row.vendor_product_id,
+                product_id=row.product_id,
+                import_job_id=self.job.id,
+                quantity_available=row.quantity,
+                unit_cost=row.unit_cost,
+                currency=row.currency if row.unit_cost is not None else None,
+                availability_status=status,
+                effective_at=self.effective_at,
+                captured_at=datetime.now(UTC),
+            )
+            pending.append((row, snapshot, previous_by_line.get(row.vendor_product_id)))
+        if not pending:
             return
-        event = AvailabilityEvent(
-            organization_id=self.organization_id,
-            vendor_id=self.job.vendor_id,
-            vendor_product_id=row.vendor_product_id,
-            product_id=row.product_id,
-            event_type=kind,
-            previous_snapshot_id=previous.id if previous else None,
-            current_snapshot_id=snapshot.id,
-            previous_status=previous.availability_status if previous else None,
-            new_status=status,
-            previous_quantity=previous.quantity_available if previous else None,
-            new_quantity=row.quantity,
-            detected_at=datetime.now(UTC),
+        self.session.execute(
+            insert(VendorInventorySnapshot).execution_options(render_nulls=True),
+            [_columns(snapshot, SNAPSHOT_COLUMNS) for _, snapshot, _ in pending],
         )
-        self.session.add(event)
-        self.session.flush()
-        self.events[kind.value] += 1
-        hit = watchlist.apply_event(self.session, self.organization_id, event, snapshot, self.actor)
-        if hit.linked:
-            self.watch_hits += 1
-        if hit.over_ceiling:
-            self.over_ceiling += 1
+        self.snapshots += len(pending)
+
+        raised: list[tuple[AvailabilityEvent, VendorInventorySnapshot]] = []
+        for row, snapshot, previous in pending:
+            kind = transition(
+                previous.availability_status if previous else None, snapshot.availability_status
+            )
+            if kind is None:
+                continue
+            event = AvailabilityEvent(
+                id=uuid.uuid4(),
+                organization_id=self.organization_id,
+                vendor_id=self.job.vendor_id,
+                vendor_product_id=snapshot.vendor_product_id,
+                product_id=row.product_id,
+                event_type=kind,
+                previous_snapshot_id=previous.id if previous else None,
+                current_snapshot_id=snapshot.id,
+                previous_status=previous.availability_status if previous else None,
+                new_status=snapshot.availability_status,
+                previous_quantity=previous.quantity_available if previous else None,
+                new_quantity=row.quantity,
+                detected_at=datetime.now(UTC),
+            )
+            self.events[kind.value] += 1
+            raised.append((event, snapshot))
+        if not raised:
+            return
+        for hit in watchlist.apply_events(self.session, self.organization_id, raised, self.actor):
+            if hit.linked:
+                self.watch_hits += 1
+            if hit.over_ceiling:
+                self.over_ceiling += 1
+        self.session.execute(
+            insert(AvailabilityEvent).execution_options(render_nulls=True),
+            [_columns(event, EVENT_COLUMNS) for event, _ in raised],
+        )
 
     def _finish(self) -> None:
         job = self.job

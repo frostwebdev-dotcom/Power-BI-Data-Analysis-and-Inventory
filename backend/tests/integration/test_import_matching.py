@@ -550,8 +550,11 @@ class TestMatchImportJob:
             ).scalars()
         )
         assert len(items) == 1
-        assert items[0].import_job_id == second.id
-        assert second.error_details["matching"]["exceptions_refreshed"] == 1
+        # Same reason, same (empty) candidates: the open item is left as it was,
+        # still pointing at the row that first raised it.
+        assert items[0].import_job_id == first.id
+        assert second.error_details["matching"]["exceptions_unchanged"] == 1
+        assert second.error_details["matching"]["exceptions_refreshed"] == 0
         assert (
             len(
                 db_session.execute(
@@ -562,6 +565,33 @@ class TestMatchImportJob:
             )
             == 1
         )
+
+        # New evidence — a product now exists whose name resembles the row's —
+        # refreshes the same item rather than opening a second one.
+        factories.make_product(db_session, organization, name="Mystery")
+        db_session.flush()
+        third = parsed_job(
+            client,
+            operator,
+            vendor,
+            db_session,
+            raw_dir,
+            organization,
+            [["NONE-1", "", "Mystery", "3"]],
+            name="c.csv",
+        )
+        match_import_job(db_session, organization_id=organization.id, job_id=third.id)
+        items = list(
+            db_session.execute(
+                select(ProductMappingException).where(
+                    ProductMappingException.vendor_id == vendor.id
+                )
+            ).scalars()
+        )
+        assert len(items) == 1
+        assert items[0].import_job_id == third.id
+        assert items[0].reason is ExceptionReason.SUGGESTION_ONLY
+        assert third.error_details["matching"]["exceptions_refreshed"] == 1
 
     def test_only_a_running_job_at_matching_can_be_matched(
         self,
@@ -682,9 +712,21 @@ class TestDeterminism:
                     "evaluations": i.match_evaluations,
                 }
                 for i in sorted(
-                    items_of(db_session, job), key=lambda i: i.vendor_product_id or uuid.UUID(int=0)
+                    vendor_items(), key=lambda i: i.vendor_product_id or uuid.UUID(int=0)
                 )
             ]
+
+        def vendor_items() -> list[ProductMappingException]:
+            # Every open item on the vendor's lines: the second run leaves the
+            # first run's items exactly as they were (same evidence), so the
+            # queue is compared as a whole rather than per job.
+            return list(
+                db_session.execute(
+                    select(ProductMappingException).where(
+                        ProductMappingException.vendor_id == vendor.id
+                    )
+                ).scalars()
+            )
 
         first = parsed_job(
             client, operator, vendor, db_session, raw_dir, organization, rows, name="run-1.csv"

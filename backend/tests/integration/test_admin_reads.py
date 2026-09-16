@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -239,3 +240,46 @@ class TestSeed:
             .all()
         )
         assert [p.catalog_item_number for p in products] == ["DEMO-001"]
+
+
+class TestSeedDemo:
+    def test_the_demo_seed_runs_the_whole_lifecycle_and_is_idempotent(
+        self, db_session: Session, tmp_path: Path
+    ) -> None:
+        from app.cli.seed_demo import seed as seed_demo
+        from app.imports.storage import LocalStorageBackend
+
+        storage = LocalStorageBackend(tmp_path / "raw")
+        first = seed_demo(db_session, storage, max_bytes=50 * 1024 * 1024)
+
+        assert first.vendors == ["NORTHWIND", "CONTOSO"]
+        assert [status for _, _, status in first.jobs] == [
+            "COMPLETED",
+            "COMPLETED",
+            "COMPLETED",
+        ]
+        assert first.watch_status == "IN_STOCK"
+        organization = db_session.execute(
+            select(Organization).where(Organization.slug == "demo")
+        ).scalar_one()
+        products = (
+            db_session.execute(select(Product).where(Product.organization_id == organization.id))
+            .scalars()
+            .all()
+        )
+        assert len(products) == 5
+
+        second = seed_demo(db_session, storage, max_bytes=50 * 1024 * 1024)
+
+        assert all("already imported" in status for _, _, status in second.jobs)
+        assert second.watch_status == "IN_STOCK"
+        assert (
+            len(
+                db_session.execute(
+                    select(Product).where(Product.organization_id == organization.id)
+                )
+                .scalars()
+                .all()
+            )
+            == 5
+        )

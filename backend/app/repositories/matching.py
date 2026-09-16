@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from app.matching.engine import (
     SUGGESTION_LIMIT,
@@ -86,6 +87,42 @@ class MatchIndexRepository(ScopedRepository):
             by_amazon_sku={k: tuple(sorted(v)) for k, v in by_amazon_sku.items()},
             suggester=self.suggest_by_description,
         )
+
+    def suggest_many(self, descriptions: Sequence[str]) -> dict[str, list[Suggestion]]:
+        """Rule 5 for a whole chunk in one round trip: a LATERAL join runs the
+        indexed ``%`` (trigram) search once per description and keeps the top
+        five, so 1,000 rows cost one query instead of 1,000."""
+        distinct = sorted({d.strip() for d in descriptions if d and d.strip()})
+        if not distinct:
+            return {}
+        rows = self.session.execute(
+            text(
+                """
+                select d.description, p.id, p.score
+                  from unnest(cast(:descriptions as text[])) as d(description)
+                  cross join lateral (
+                      select products.id, similarity(products.name, d.description) as score
+                        from products
+                       where products.organization_id = :organization_id
+                         and products.is_active
+                         and products.name % d.description
+                         and similarity(products.name, d.description) >= :threshold
+                       order by score desc, products.id
+                       limit :limit
+                  ) as p
+                """
+            ),
+            {
+                "descriptions": distinct,
+                "organization_id": self.scope.organization_id,
+                "threshold": SUGGESTION_THRESHOLD,
+                "limit": SUGGESTION_LIMIT,
+            },
+        ).all()
+        suggestions: dict[str, list[Suggestion]] = {d: [] for d in distinct}
+        for description, product_id, score in rows:
+            suggestions[description].append(Suggestion(product_id=product_id, score=float(score)))
+        return suggestions
 
     def suggest_by_description(self, description: str) -> list[Suggestion]:
         """Rule 5: the closest product names by trigram similarity, scored.
