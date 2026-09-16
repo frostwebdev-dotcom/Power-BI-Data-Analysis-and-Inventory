@@ -162,7 +162,7 @@ def import_rows(
     )
     assert response.status_code == 201, response.text
     job: dict[str, Any] = response.json()["job"]
-    assert job["status"] == "RUNNING" and job["current_stage"] == "SNAPSHOTTING", job
+    assert job["status"] in ("COMPLETED", "COMPLETED_WITH_ERRORS"), job
     return job
 
 

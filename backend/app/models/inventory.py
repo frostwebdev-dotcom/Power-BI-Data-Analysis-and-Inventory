@@ -19,7 +19,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -169,6 +169,10 @@ class AvailabilityEvent(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampM
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    #: Set when the event was linked to a watch entry with a ``max_unit_cost``:
+    #: true means the vendor's cost is above the buyer's ceiling. The event is
+    #: still raised and linked — flagged, never dropped (phase 9).
+    over_max_unit_cost: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     vendor: Mapped[Vendor] = relationship()
     vendor_product: Mapped[VendorProduct] = relationship()

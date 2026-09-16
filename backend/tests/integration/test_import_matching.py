@@ -580,7 +580,7 @@ class TestMatchImportJob:
         with pytest.raises(ImportJobNotAtMatching):
             match_import_job(db_session, organization_id=organization.id, job_id=job.id)
 
-    def test_upload_runs_parse_then_match_when_processing_on_upload(
+    def test_upload_runs_parse_match_and_snapshot_when_processing_on_upload(
         self, db_session: Session, raw_dir: Path, organization: Organization, vendor: Vendor
     ) -> None:
         settings = Settings(
@@ -617,8 +617,10 @@ class TestMatchImportJob:
 
         application.dependency_overrides.clear()
         body = response.json()["job"]
-        assert body["status"] == "RUNNING" and body["current_stage"] == "SNAPSHOTTING"
+        # The hook runs parse, match and snapshot: the job is complete.
+        assert body["status"] == "COMPLETED" and body["current_stage"] is None
         assert body["matched_rows"] == 1 and body["exception_rows"] == 0
+        assert body["error_details"]["snapshotting"]["snapshots"] == 1
 
 
 # --- determinism (AC-7.5) ---------------------------------------------------------------------

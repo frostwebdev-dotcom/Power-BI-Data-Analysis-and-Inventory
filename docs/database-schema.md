@@ -3,8 +3,9 @@
 Status: **Implemented.** Migrations `506fd0ecc33a` (initial schema),
 `3767ee979011` (Amazon ingestion, ADR 0011), `3de5c4e5def0` (listing
 mapping context), `44c932e601b0` (vendor contacts, minimum order,
-purchasing terms), `fadb756b1b85` (import job stage) and `fab7311199fc`
-(exception deferral) applied and verified against PostgreSQL 16.
+purchasing terms), `fadb756b1b85` (import job stage), `fab7311199fc`
+(exception deferral) and `52e787f49770` (availability event cost ceiling
+flag) applied and verified against PostgreSQL 16.
 Last updated: 2026-09-15
 
 25 tables, 22 native enum types, 135 indexes, 82 check constraints, 83 foreign
@@ -755,6 +756,14 @@ one-step downgrade test:
 The downgrade deletes the rows the old schema cannot hold (listings without
 a product, exceptions without a vendor, unlinked `AMAZON_SKU` identifiers)
 before re-tightening `NOT NULL`, deliberately and in the migration text.
+
+### `52e787f49770` — availability event cost ceiling flag
+
+Adds `availability_events.over_max_unit_cost` (nullable boolean). Set when
+the snapshot stage links an event to a watch entry that carries a
+`max_unit_cost`: true means the vendor's cost is above the buyer's ceiling.
+The event is raised and linked either way — flagged, never dropped. One
+column, autogenerate correct, one-step round trip verified.
 
 ### `fab7311199fc` — exception deferral
 

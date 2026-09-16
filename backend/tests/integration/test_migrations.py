@@ -326,3 +326,29 @@ def test_the_deferral_revision_reverses_and_reapplies(scratch_database_url: URL)
 
     run_migrations(scratch_database_url)
     check_migrations(scratch_database_url)
+
+
+def test_the_ceiling_flag_revision_reverses_and_reapplies(scratch_database_url: URL) -> None:
+    run_migrations(scratch_database_url)
+    downgrade_migrations(scratch_database_url, "fab7311199fc")
+
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as connection:
+            columns = set(
+                connection.execute(
+                    text(
+                        "select column_name from information_schema.columns"
+                        " where table_name = 'availability_events'"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+
+    assert "over_max_unit_cost" not in columns
+
+    run_migrations(scratch_database_url)
+    check_migrations(scratch_database_url)

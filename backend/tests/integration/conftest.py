@@ -87,8 +87,13 @@ def drop_database(url: URL) -> None:
         with engine.connect() as connection:
             connection.execute(
                 text(
+                    # Client sessions only: an autovacuum worker on the scratch
+                    # database runs as a superuser, and terminating it is a
+                    # permission error for the test role (the intermittent
+                    # setup failure this suite used to show).
                     "select pg_terminate_backend(pid) from pg_stat_activity"
                     " where datname = :name and pid <> pg_backend_pid()"
+                    " and backend_type = 'client backend'"
                 ),
                 {"name": url.database},
             )

@@ -86,6 +86,11 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/exceptions/{exception_id}/approve",
         "/api/v1/exceptions/{exception_id}/reject",
         "/api/v1/exceptions/{exception_id}/defer",
+        "/api/v1/watchlist",
+        "/api/v1/watchlist/{entry_id}",
+        "/api/v1/watchlist/{entry_id}/remove",
+        "/api/v1/watchlist/{entry_id}/history",
+        "/api/v1/availability/events",
     }
 
 
@@ -95,7 +100,14 @@ def test_every_vendor_route_documents_403(client: TestClient) -> None:
 
     for path, operations in paths.items():
         if not path.startswith(
-            ("/api/v1/vendors", "/api/v1/import-profiles", "/api/v1/imports", "/api/v1/exceptions")
+            (
+                "/api/v1/vendors",
+                "/api/v1/import-profiles",
+                "/api/v1/imports",
+                "/api/v1/exceptions",
+                "/api/v1/watchlist",
+                "/api/v1/availability",
+            )
         ):
             continue
         for method, operation in operations.items():

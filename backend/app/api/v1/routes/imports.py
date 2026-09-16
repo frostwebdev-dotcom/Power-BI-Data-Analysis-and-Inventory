@@ -34,6 +34,7 @@ from app.schemas.imports import (
 from app.services import imports as service
 from app.services.import_processing import process_import_job
 from app.services.matching import match_import_job
+from app.services.snapshots import snapshot_import_job
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -111,6 +112,13 @@ async def upload_file(
         )
         if job.status is ImportJobStatus.RUNNING and job.current_stage is ImportJobStage.MATCHING:
             job = match_import_job(
+                session, organization_id=principal.organization_id, job_id=job.id, actor=principal
+            )
+        if (
+            job.status is ImportJobStatus.RUNNING
+            and job.current_stage is ImportJobStage.SNAPSHOTTING
+        ):
+            job = snapshot_import_job(
                 session, organization_id=principal.organization_id, job_id=job.id, actor=principal
             )
     return ImportUploadResponse(

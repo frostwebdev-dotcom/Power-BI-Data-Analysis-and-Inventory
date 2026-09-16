@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-16 (phase 8 — the exception queue API; its screen is not built)
+Last updated: 2026-09-16 (phase 9 — snapshots, availability events, watchlist; screens not built)
 
 ---
 
@@ -11,10 +11,10 @@ Last updated: 2026-09-16 (phase 8 — the exception queue API; its screen is not
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3. Matched jobs wait at stage SNAPSHOTTING; nothing yet writes inventory snapshots, and the queue has no screen. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3; and the snapshot stage that closes an import — append-only inventory snapshots, availability events on every transition, the OOS watchlist and its status history, and the availability feed. **The import lifecycle is complete end to end**: upload → parse → match → snapshot → COMPLETED. No admin screen exists beyond the shell. |
 | Database schema | 25 tables, 23 enum types, 136 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
-| Migrations | 6 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **1083 passed** (`pytest`: 702 unit + 381 integration). `grep -c "def test_"` over `tests/` finds 817 functions (485 unit, 332 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Migrations | 7 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc`, `52e787f49770`), applied and reversed against PostgreSQL 16.15 |
+| Backend tests | **1106 passed** (`pytest`: 702 unit + 404 integration). `grep -c "def test_"` over `tests/` finds 829 functions (485 unit, 344 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
 | Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
 | Blocking questions open | 9 (see §7); B1 partially answered, B2 narrowed, B3 decided for Milestone 1, B7 partially answered by ADR 0011, B9 new (admin screens need their foundation) |
@@ -22,8 +22,9 @@ Last updated: 2026-09-16 (phase 8 — the exception queue API; its screen is not
 The schema, the audit writer, the security foundation, and a read-only Nineyard
 diagnostic exist and are verified. A vendor file can be uploaded, retained byte for
 byte, parsed through its profile into validated rows, matched to products
-through the priority chain, and reported on; nothing yet snapshots inventory,
-resolves the exception queue, or synchronises Nineyard data.
+through the priority chain, snapshotted, diffed into availability events that
+reach the watchlist, and reported on; a reviewer can resolve the queue through
+the API. Nothing yet synchronises Nineyard data, and no screen exists.
 
 ---
 
@@ -40,11 +41,11 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
 | 3 | Nineyard integration + sync | 🟨 Diagnostic only | **Exists:** read-only client (`app/integrations/nineyard/client.py`, `errors.py`, `sanitize.py`), probe (`app/integrations/nineyard/probe.py`), and CLI (`app/cli/nineyard_probe.py`), tested by `tests/unit/test_nineyard_client.py`, `test_nineyard_probe.py`, `test_nineyard_cli.py` (mocked; no live calls). The public OpenAPI spec has been analysed ([nineyard-field-mapping.md](nineyard-field-mapping.md)). **Does not exist:** any sync service — nothing writes Nineyard data to `products`, `product_identifiers`, `marketplace_listings`, `nineyard_sync_runs`, or `nineyard_item_payloads`. The probe has not been run against the live API. See [nineyard-integration.md](nineyard-integration.md) and B1. |
 | 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
-| 5 | File ingestion + raw retention | 🟨 Upload, retention and parsing done; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
+| 5 | File ingestion + raw retention | 🟨 Complete in-request; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
 | 6 | Parsing + validation + reporting | ✅ Complete (to the matching boundary) | Streaming CSV/XLSX readers with the file's own row numbers; `app/imports/extract.py` applies the profile and raises coded issues (`UPC_INVALID`, `QUANTITY_INVALID`, `QUANTITY_NEGATIVE`, `PRICE_INVALID`, `IDENTIFIER_MISSING`, `AVAILABILITY_UNKNOWN`, `DUPLICATE_IN_FILE`); `process_import_job` writes `import_job_rows` in 1,000-row transactions, fails the job before any row on a missing column or signature mismatch, reconciles counters from the rows, and leaves the job RUNNING at stage MATCHING; `GET /imports/{id}/report` and `GET /imports/{id}/rows`. AC-9.1, 9.2, 9.4, 9.5 covered by 31 tests including 20,000-row CSV and XLSX runs. **Not built:** the immutable `import_report` row (AC-9.3) and the matched-by-rule counts it needs — after phase 7. |
 | 7 | Matching engine | ✅ Complete | `app/matching/engine.py` — pure `evaluate(MatchInput, lookups) -> MatchOutcome`, rules 1→4 in strict order, first single hit wins, more than one hit is AMBIGUOUS at that priority with no fall-through, rule 5 (pg_trgm name similarity) only when 1–4 yield nothing and only ever SUGGESTION_ONLY; every rule tried is on the trail. `MatchIndexRepository` builds the lookups once per import from checksum-valid identifiers, active catalog numbers, APPROVED vendor mappings and APPROVED listings. `match_import_job` attributes every OK/WARNING row, maintains `vendor_products` (an APPROVED mapping is never touched), and opens one queue item per vendor line. The Amazon listing resolver now runs on the same rule functions. AC-7.1–7.6 covered by 21 engine cases and 8 integration tests incl. determinism. The trail is stored on the row (`normalized_data.match`), not in a separate `match_attempt` table — see A23. |
 | 8 | Exception workflow | 🟨 API complete; screen not built | `GET /api/v1/exceptions` (filters: status, reason, vendor, import job, age; deferred items hidden by default), `GET /{id}` (source row, candidates with product names and scores, the rule trail, the vendor line), `POST /{id}/approve` `{product_id, supersede?, note?}` → APPROVED mapping with `MANUAL_APPROVAL`, approver and UTC time on the vendor line (or listing), item APPROVED, source row MATCHED at priority 5, job counters moved; `POST /{id}/reject` `{note}`; `POST /{id}/defer` `{until, note?}` (migration `fab7311199fc`). Supersession needs `supersede: true` and is two audited steps. AC-8.1–8.7 and **Milestone 1 exit criterion 7** covered by 20 tests. **Not built:** the queue screen (item 4 of the prompt) — there is no vendors screen, typed client or sign-in to copy from; see §3 below and B9. Assignment is stored but has no route. |
-| 9 | Inventory, availability, watchlist | ⬜ Not started | All four tables exist; no diffing logic |
+| 9 | Inventory, availability, watchlist | 🟨 API complete; screens not built | `snapshot_import_job` writes one append-only `vendor_inventory_snapshots` row per vendor line (matched or not — AC-11.7), diffs against the line's previous snapshot, raises exactly one `availability_events` row per transition (first seen with stock → BECAME_AVAILABLE), links it to the watchlist, and closes the job COMPLETED / COMPLETED_WITH_ERRORS. `POST/GET /api/v1/watchlist`, `POST /{id}/remove`, `GET /{id}/history`, `GET /api/v1/availability/events` (vendor, product, watchlist-only, since). `max_unit_cost` flags (`over_max_unit_cost`, migration `52e787f49770`), never drops. AC-10.1, 10.2, 10.4, AC-11.1–11.4, 11.6, 11.7 and **exit criterion 9** covered by 22 tests. **Not built:** the watchlist and availability screens (item 6 of the prompt; B9) and event acknowledgement. |
 | 10 | Admin interface | ⬜ Not started | Shell exists; every screen is a placeholder, including `/vendors` and `/exceptions`. The vendors screen (react-query, zod, typed client, dev sign-in) was specified but never built because its API did not exist at the time; that API now does. Needs a sign-in flow once B2 settles. |
 | 11 | Hardening | ⬜ Not started | |
 
@@ -153,6 +154,81 @@ permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
 
+### Phase 9 — snapshots, availability events and the watchlist (2026-09-16)
+
+The last stage of an import, and the brief's "Product ABC is now available
+from Vendor B". Backend complete; the two screens the prompt asked for are
+not built — same reason as phase 8, see B9.
+
+* **Migration `52e787f49770`** — `availability_events.over_max_unit_cost`
+  (nullable boolean): set when an event is linked to a watch entry with a
+  cost ceiling; true means the vendor's cost is above it.
+* **`app/services/snapshots.py`** — `snapshot_import_job` requires RUNNING
+  at stage SNAPSHOTTING. One snapshot per vendor line the job touched
+  (every OK/WARNING row with a `vendor_product_id`, matched or not, with
+  `product_id` where matched — AC-11.7), `effective_at` = the file's upload
+  time, `captured_at` = now; the unique `(import_job_id, vendor_product_id)`
+  index plus an existence check mean an interrupted stage cannot
+  double-write. The diff is one function, `transition(previous, current)`:
+  AVAILABLE from nothing / OUT_OF_STOCK / DISCONTINUED / UNKNOWN →
+  `BECAME_AVAILABLE`; OUT_OF_STOCK or DISCONTINUED from AVAILABLE →
+  `BECAME_UNAVAILABLE`; anything involving a move *to* UNKNOWN, or no
+  change → nothing. Each event references both snapshots; the unique
+  `(current_snapshot_id, event_type)` index is the backstop (AC-11.4).
+  The job then closes: `COMPLETED`, or `COMPLETED_WITH_ERRORS` when
+  `error_rows > 0`; `current_stage` null, `completed_at` set, audited
+  `import_job.completed` with the snapshot/event/watch-hit counts in
+  `error_details.snapshotting`.
+* **`app/services/watchlist.py`** — add (product active, vendor exists,
+  one active entry per product / product+vendor by the partial unique
+  indexes; `current_status` initialised from the latest snapshots), remove
+  (deactivated with who and when, never deleted — AC-10.2), list, history;
+  both mutations audited (AC-10.4). `apply_event` links each event to the
+  most specific active entry (vendor-specific before all-vendors), moves
+  every matching entry's `current_status` — IN_STOCK on BECAME_AVAILABLE;
+  OUT_OF_STOCK on BECAME_UNAVAILABLE only when no vendor line the entry
+  watches is still available — and writes one `oos_status_history` row per
+  actual change. `max_unit_cost` is honoured by flagging: the event is
+  linked with `over_max_unit_cost = true`, never dropped.
+* **Routes** — `/api/v1/watchlist` (list with vendor / product /
+  include_inactive; add; get; `POST /{id}/remove`; `GET /{id}/history`) and
+  `/api/v1/availability/events` (vendor, product, watchlist_only, since;
+  newest first, with vendor SKU and product name denormalised). Reads for
+  every role; add / remove for PURCHASING_MANAGER.
+* **Hook** — the upload request now runs parse → match → snapshot; a job
+  uploaded with a profile comes back COMPLETED.
+
+**Exit criterion 9, as a test** (`TestProductBecomesAvailable`): watch a
+product with a ceiling of 5.00; import Vendor B showing 0 → one snapshot,
+OUT_OF_STOCK, no event, watch still UNKNOWN; import Vendor B showing 40 at
+4.50 → exactly one BECAME_AVAILABLE referencing both snapshots, linked to the
+watch entry, `over_max_unit_cost = false`, entry IN_STOCK, one history row
+UNKNOWN → IN_STOCK pointing at the snapshot, the feed shows it under
+`watchlist_only`, audit rows for the watch and the completed jobs; the same
+bytes a third time are a duplicate upload (nothing runs), and a
+byte-different file with the same state is a new COMPLETED job with a third
+snapshot and **no new event and no new history row**.
+
+**Tests** (`tests/integration/test_availability_api.py`, 22): the flow
+above; the state machine's twelve transitions; reverse transition
+referencing the earlier snapshot with quantities, plus an unmatched line's
+event with a null product (AC-11.7); COMPLETED_WITH_ERRORS when a row was
+rejected; snapshot `effective_at` = the file's upload time and a
+PRICE_INVALID cost stored as null; watchlist add / duplicate 409 / list
+filters / remove with who-and-when / second remove 409 / row kept / audit
+`watchlist.added` + `watchlist.removed` / VIEWER 403 / 401; unknown product
+or vendor 404, bad quantity 422; a new watch starts IN_STOCK when the
+latest snapshot says so; **`max_unit_cost` flags but never drops**;
+OUT_OF_STOCK only once no vendor has it, with the history
+UNKNOWN → IN_STOCK → OUT_OF_STOCK; feed filters and tenancy.
+
+**A flake, fixed.** The migration round-trip test's intermittent setup
+error (noted under phase 6) reproduced in this run and its cause is now
+known: `drop_database` terminated every backend on the scratch database,
+and an autovacuum worker there runs as a superuser, which the test role may
+not terminate (`InsufficientPrivilege`). It now terminates client backends
+only. Recorded under §4.
+
 ### Phase 8 — the exception queue API (2026-09-16)
 
 The queue where a person decides what the engine could not (AC-8). Backend
@@ -238,7 +314,8 @@ have meant doing Prompt 16's infrastructure under a different commit
 message without the vendors screen it was designed around. The vendors API
 now exists, so Prompt 16 is unblocked; the exceptions screen needs, in
 addition, a product search endpoint (by catalog number / UPC / name) that
-does not exist yet — recorded as **B9**.
+does not exist yet — recorded as **B9**. Prompt 22's watchlist and
+availability screens (item 6) are not built for the same reason.
 
 ### Phase 7 — the deterministic matching engine (2026-09-15)
 
@@ -484,12 +561,12 @@ with nothing on disk, exactly the limit accepted; empty → 422; missing or
 unknown vendor; inactive profile → 409; another vendor's profile → 404;
 profile id and version pinned on the job; list filters and paging.
 
-**Observed once, not reproduced.** In one of four full-suite runs the
+**Observed once, later explained.** In one of four full-suite runs the
 pre-existing `test_migrations.py::test_upgrade_then_downgrade_then_upgrade_succeeds`
-errored at setup while dropping its scratch database; the three other runs
-and the `tasks.ps1 check` run below passed. It is not caused by this
-change (the test touches a separate `_roundtrip` database) and is noted
-here so it is not forgotten if it recurs.
+errored at setup while dropping its scratch database. It recurred on
+2026-09-16 with the real error visible — the test role cannot terminate an
+autovacuum worker's superuser backend — and was fixed in the fixture (phase
+9 section).
 
 ### Phase 4 — versioned import profiles (2026-09-15, ADR 0013)
 
@@ -885,12 +962,12 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 155 files unchanged |
+| Backend format | `ruff format .` | ✅ 162 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 148 source files |
-| Backend tests | `pytest` | ✅ `1083 passed in 70.09s` — `tests/unit`: `702 passed`; `tests/integration`: `381 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 154 source files |
+| Backend tests | `pytest` | ✅ `1106 passed in 88.94s` — `tests/unit`: `702 passed`; `tests/integration`: `404 passed` |
 | Migration apply | `alembic upgrade head` | ✅ All five revisions applied to PostgreSQL 16.15 |
-| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85` and `fab7311199fc` each re-apply cleanly |
+| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc` and `52e787f49770` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
 | Frontend lint | `npm run lint` | ✅ Clean |
 | Frontend types | `npm run typecheck` | ✅ Clean |
@@ -1164,14 +1241,15 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phases 4, 5 (upload half), 6 and 7 landed on 2026-09-15 and the phase 8 API on
-2026-09-16; exit criterion 7 (approve → re-import → priority 3) holds in a
-test. Matched jobs sit RUNNING at stage SNAPSHOTTING. Next: phase 9 (snapshots,
-availability events, watchlist) to close the import lifecycle; the frontend
-foundation and vendors screen (Prompt 16, now unblocked) followed by the
-exceptions screen and a product search endpoint (B9); the worker claim loop
-(AC-5.7) and the immutable `import_report` (AC-9.3). B5 still decides where
-deployed files live.
+Phases 4, 5 (upload half), 6 and 7 landed on 2026-09-15 and the phase 8 and 9
+APIs on 2026-09-16. The import lifecycle is complete end to end and exit
+criteria 7 and 9 hold in tests. Every backend capability of Milestone 1 except
+Nineyard synchronisation (phase 3, blocked on B1) now exists behind the API;
+none has a screen. Next: the frontend foundation and vendors screen (Prompt 16,
+unblocked), then the exceptions, watchlist, availability and imports screens
+with a product search endpoint (B9); the worker claim loop (AC-5.7); the
+immutable `import_report` (AC-9.3); Nineyard sync when B1 is answered. B5
+still decides where deployed files live.
 
 ---
 
