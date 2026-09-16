@@ -3,8 +3,8 @@
 Status: **Implemented.** Migrations `506fd0ecc33a` (initial schema),
 `3767ee979011` (Amazon ingestion, ADR 0011), `3de5c4e5def0` (listing
 mapping context), `44c932e601b0` (vendor contacts, minimum order,
-purchasing terms) and `fadb756b1b85` (import job stage) applied and
-verified against PostgreSQL 16.
+purchasing terms), `fadb756b1b85` (import job stage) and `fab7311199fc`
+(exception deferral) applied and verified against PostgreSQL 16.
 Last updated: 2026-09-15
 
 25 tables, 22 native enum types, 135 indexes, 82 check constraints, 83 foreign
@@ -755,6 +755,14 @@ one-step downgrade test:
 The downgrade deletes the rows the old schema cannot hold (listings without
 a product, exceptions without a vendor, unlinked `AMAZON_SKU` identifiers)
 before re-tightening `NOT NULL`, deliberately and in the migration text.
+
+### `fab7311199fc` — exception deferral
+
+Adds `product_mapping_exceptions.deferred_until` (nullable TIMESTAMPTZ) and
+a partial index on `(organization_id, deferred_until)` where not null. A
+deferred item stays PENDING and leaves the default queue view until that
+moment; `exception_status` is unchanged. Autogenerate got both right; no
+enum, no check constraint. One-step round trip verified.
 
 ### `fadb756b1b85` — import job current stage
 

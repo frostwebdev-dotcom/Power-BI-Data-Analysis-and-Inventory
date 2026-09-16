@@ -17,7 +17,9 @@ records what the chain decided:
 * **AMBIGUOUS / UNMATCHED / SUGGESTION_ONLY** — ``match_result`` on the
   row, no product, and one queue item per vendor line with the reason, the
   candidates and the full rule trail. A line that already has an open
-  item is refreshed rather than duplicated.
+  item is refreshed rather than duplicated. A line whose latest item a
+  person REJECTED is not re-queued for the same reason and candidates —
+  the re-review policy AC-8.5 asks for; different evidence opens a new item.
 
 Rows superseded by a later duplicate vendor SKU are not matched: the last
 occurrence carries the line. The whole trail is also stored on the row
@@ -116,6 +118,10 @@ class _Matcher:
         self.index: MatchIndex = self.repository.build(job.vendor_id)
         self.lines: dict[str, VendorProduct] = {}
         self.open_items: dict[uuid.UUID, ProductMappingException] = {}
+        #: The latest REJECTED item per vendor line: the same evidence is not
+        #: re-queued (AC-8.5); new evidence is.
+        self.rejected_items: dict[uuid.UUID, ProductMappingException] = {}
+        self.rejected_skipped = 0
         self.results: Counter[str] = Counter()
         self.exceptions_opened = 0
         self.exceptions_refreshed = 0
@@ -188,6 +194,17 @@ class _Matcher:
         ).scalars():
             assert item.vendor_product_id is not None
             self.open_items[item.vendor_product_id] = item
+        for item in self.session.execute(
+            self.repository.select(ProductMappingException)
+            .where(
+                ProductMappingException.vendor_id == self.job.vendor_id,
+                ProductMappingException.status == ExceptionStatus.REJECTED,
+                ProductMappingException.vendor_product_id.is_not(None),
+            )
+            .order_by(ProductMappingException.resolved_at)
+        ).scalars():
+            assert item.vendor_product_id is not None
+            self.rejected_items[item.vendor_product_id] = item  # latest wins
 
     # --- one row -----------------------------------------------------------------------
 
@@ -296,6 +313,20 @@ class _Matcher:
             "rules": outcome.evaluations_json(),
         }
         existing = self.open_items.get(line.id) if line is not None else None
+        rejected = self.rejected_items.get(line.id) if line is not None else None
+        if (
+            existing is None
+            and rejected is not None
+            and rejected.reason is reason
+            and rejected.candidates == outcome.candidates_json()
+        ):
+            # A person already declined exactly this: same reason, same
+            # candidates. Re-queueing it unchanged would be nagging (AC-8.5).
+            self.rejected_skipped += 1
+            data = dict(row.normalized_data)
+            data["match"] = {**data.get("match", {}), "previously_rejected": str(rejected.id)}
+            row.normalized_data = data
+            return
         if existing is not None:
             # One open item per vendor line: refresh it with this import's evidence.
             existing.import_job_id = self.job.id
@@ -336,6 +367,7 @@ class _Matcher:
             "superseded_skipped": self.superseded,
             "exceptions_opened": self.exceptions_opened,
             "exceptions_refreshed": self.exceptions_refreshed,
+            "rejected_not_requeued": self.rejected_skipped,
             "mapping_suggestions": self.mapping_suggestions,
             "conflicts": self.conflicts,
             "index": {

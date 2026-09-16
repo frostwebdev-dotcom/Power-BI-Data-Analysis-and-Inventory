@@ -168,6 +168,8 @@ def test_the_migration_creates_the_expected_index_coverage(
         # Vendor contacts (44c932e601b0)
         "uq_vendor_contacts_vendor_id_lower_email",
         "uq_vendor_contacts_primary",
+        # Exception deferral (fab7311199fc)
+        "ix_product_mapping_exceptions_deferred_until",
     }
 
     assert required <= indexes, f"missing indexes: {sorted(required - indexes)}"
@@ -287,6 +289,40 @@ def test_the_import_stage_revision_reverses_and_reapplies(scratch_database_url: 
     assert "import_job_status" in enums
     assert len(enums) == 22
     assert "current_stage" not in job_columns
+
+    run_migrations(scratch_database_url)
+    check_migrations(scratch_database_url)
+
+
+def test_the_deferral_revision_reverses_and_reapplies(scratch_database_url: URL) -> None:
+    run_migrations(scratch_database_url)
+    downgrade_migrations(scratch_database_url, "fadb756b1b85")
+
+    engine = create_engine(scratch_database_url)
+    try:
+        with engine.connect() as connection:
+            columns = set(
+                connection.execute(
+                    text(
+                        "select column_name from information_schema.columns"
+                        " where table_name = 'product_mapping_exceptions'"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            indexes = set(
+                connection.execute(
+                    text("select indexname from pg_indexes where schemaname = 'public'")
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+
+    assert "deferred_until" not in columns
+    assert "ix_product_mapping_exceptions_deferred_until" not in indexes
 
     run_migrations(scratch_database_url)
     check_migrations(scratch_database_url)

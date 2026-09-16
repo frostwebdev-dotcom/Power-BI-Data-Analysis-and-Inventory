@@ -98,6 +98,9 @@ class ProductMappingException(UUIDPrimaryKeyMixin, OrganizationScopedMixin, Time
     )
     resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
     resolution_note: Mapped[str | None] = mapped_column(nullable=True)
+    #: A PENDING item deferred by a reviewer drops out of the default queue
+    #: view until this moment (phase 8). Null means "not deferred".
+    deferred_until: Mapped[datetime | None] = mapped_column(nullable=True)
 
     import_job: Mapped[ImportJob | None] = relationship()
     import_job_row: Mapped[ImportJobRow | None] = relationship()
@@ -138,6 +141,13 @@ class ProductMappingException(UUIDPrimaryKeyMixin, OrganizationScopedMixin, Time
             "organization_id",
             "status",
             "created_at",
+        ),
+        # Deferred items re-enter the queue when their time comes.
+        Index(
+            "ix_product_mapping_exceptions_deferred_until",
+            "organization_id",
+            "deferred_until",
+            postgresql_where=text("deferred_until is not null"),
         ),
         Index(
             "ix_product_mapping_exceptions_vendor_id_status",

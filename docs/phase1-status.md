@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-15 (phase 7 — the deterministic matching engine)
+Last updated: 2026-09-16 (phase 8 — the exception queue API; its screen is not built)
 
 ---
 
@@ -11,13 +11,13 @@ Last updated: 2026-09-15 (phase 7 — the deterministic matching engine)
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
 | Stage | **Phase 1 complete; phase 3 diagnostic built.** Schema, audit service, configuration/security foundation, and a read-only Nineyard probe exist. Backend is deployed to Railway. |
-| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue. Matched jobs wait at stage SNAPSHOTTING; nothing yet writes inventory snapshots or lets a reviewer resolve the queue. |
-| Database schema | 25 tables, 23 enum types, 135 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
-| Migrations | 5 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`), applied and reversed against PostgreSQL 16.15 |
-| Backend tests | **1062 passed** (`pytest`: 702 unit + 360 integration). `grep -c "def test_"` over `tests/` finds 801 functions (485 unit, 316 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
+| Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3. Matched jobs wait at stage SNAPSHOTTING; nothing yet writes inventory snapshots, and the queue has no screen. |
+| Database schema | 25 tables, 23 enum types, 136 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
+| Migrations | 6 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc`), applied and reversed against PostgreSQL 16.15 |
+| Backend tests | **1083 passed** (`pytest`: 702 unit + 381 integration). `grep -c "def test_"` over `tests/` finds 817 functions (485 unit, 332 integration — one of which is the `test_database_url` fixture helper in `conftest.py`); the difference is parametrisation. |
 | Quality gates | 8 of 8 passing locally (§4, 2026-09-15); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
 | Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
-| Blocking questions open | 8 (see §7); B1 partially answered, B2 narrowed, B7 partially answered by ADR 0011, B8 new |
+| Blocking questions open | 9 (see §7); B1 partially answered, B2 narrowed, B3 decided for Milestone 1, B7 partially answered by ADR 0011, B9 new (admin screens need their foundation) |
 
 The schema, the audit writer, the security foundation, and a read-only Nineyard
 diagnostic exist and are verified. A vendor file can be uploaded, retained byte for
@@ -43,9 +43,9 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | 5 | File ingestion + raw retention | 🟨 Upload, retention and parsing done; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
 | 6 | Parsing + validation + reporting | ✅ Complete (to the matching boundary) | Streaming CSV/XLSX readers with the file's own row numbers; `app/imports/extract.py` applies the profile and raises coded issues (`UPC_INVALID`, `QUANTITY_INVALID`, `QUANTITY_NEGATIVE`, `PRICE_INVALID`, `IDENTIFIER_MISSING`, `AVAILABILITY_UNKNOWN`, `DUPLICATE_IN_FILE`); `process_import_job` writes `import_job_rows` in 1,000-row transactions, fails the job before any row on a missing column or signature mismatch, reconciles counters from the rows, and leaves the job RUNNING at stage MATCHING; `GET /imports/{id}/report` and `GET /imports/{id}/rows`. AC-9.1, 9.2, 9.4, 9.5 covered by 31 tests including 20,000-row CSV and XLSX runs. **Not built:** the immutable `import_report` row (AC-9.3) and the matched-by-rule counts it needs — after phase 7. |
 | 7 | Matching engine | ✅ Complete | `app/matching/engine.py` — pure `evaluate(MatchInput, lookups) -> MatchOutcome`, rules 1→4 in strict order, first single hit wins, more than one hit is AMBIGUOUS at that priority with no fall-through, rule 5 (pg_trgm name similarity) only when 1–4 yield nothing and only ever SUGGESTION_ONLY; every rule tried is on the trail. `MatchIndexRepository` builds the lookups once per import from checksum-valid identifiers, active catalog numbers, APPROVED vendor mappings and APPROVED listings. `match_import_job` attributes every OK/WARNING row, maintains `vendor_products` (an APPROVED mapping is never touched), and opens one queue item per vendor line. The Amazon listing resolver now runs on the same rule functions. AC-7.1–7.6 covered by 21 engine cases and 8 integration tests incl. determinism. The trail is stored on the row (`normalized_data.match`), not in a separate `match_attempt` table — see A23. |
-| 8 | Exception workflow | 🟨 Queue is fed; no review API | Matching opens `product_mapping_exceptions` rows with reason, candidates, the full rule trail and the source row, one open item per vendor line (refreshed, not duplicated, on re-import). **Not built:** listing, assignment, approve / reject / defer, and the approval that turns a PENDING vendor-SKU mapping into the permanent APPROVED one priority 3 reads. |
+| 8 | Exception workflow | 🟨 API complete; screen not built | `GET /api/v1/exceptions` (filters: status, reason, vendor, import job, age; deferred items hidden by default), `GET /{id}` (source row, candidates with product names and scores, the rule trail, the vendor line), `POST /{id}/approve` `{product_id, supersede?, note?}` → APPROVED mapping with `MANUAL_APPROVAL`, approver and UTC time on the vendor line (or listing), item APPROVED, source row MATCHED at priority 5, job counters moved; `POST /{id}/reject` `{note}`; `POST /{id}/defer` `{until, note?}` (migration `fab7311199fc`). Supersession needs `supersede: true` and is two audited steps. AC-8.1–8.7 and **Milestone 1 exit criterion 7** covered by 20 tests. **Not built:** the queue screen (item 4 of the prompt) — there is no vendors screen, typed client or sign-in to copy from; see §3 below and B9. Assignment is stored but has no route. |
 | 9 | Inventory, availability, watchlist | ⬜ Not started | All four tables exist; no diffing logic |
-| 10 | Admin interface | ⬜ Not started | Shell exists; screens are placeholders. Needs a sign-in flow once B2 settles. |
+| 10 | Admin interface | ⬜ Not started | Shell exists; every screen is a placeholder, including `/vendors` and `/exceptions`. The vendors screen (react-query, zod, typed client, dev sign-in) was specified but never built because its API did not exist at the time; that API now does. Needs a sign-in flow once B2 settles. |
 | 11 | Hardening | ⬜ Not started | |
 
 Legend: ✅ complete · 🟨 in progress · ⬜ not started · 🚫 blocked
@@ -152,6 +152,93 @@ vendor of the **same code** in each — which the per-organization unique index
 permits, and which is exactly the shape of a leak — and proves select, update
 and delete stay inside the caller's tenant, including a lookup by the other
 tenant's primary key. Assumption A19 is amended accordingly.
+
+### Phase 8 — the exception queue API (2026-09-16)
+
+The queue where a person decides what the engine could not (AC-8). Backend
+complete; the screen the prompt asked for is **not** built — see the end of
+this section.
+
+* **Migration `fab7311199fc`** — `product_mapping_exceptions.deferred_until`
+  (nullable TIMESTAMPTZ) and a partial index on it. `ExceptionStatus` keeps
+  its three values; a deferred item is PENDING and hidden from the default
+  queue view until its time.
+* **`app/repositories/exceptions.py`** — the queue query (oldest first;
+  status defaults to PENDING; filters by reason, vendor, import job and
+  minimum age; deferred items excluded unless asked for), detail with the
+  vendor line, listing, source row and products preloaded, candidate
+  product lookup, and the active-product check an approval needs.
+* **`app/services/exceptions.py`** — `approve`: refuses a non-PENDING item
+  (409 `exception_not_pending`) or an unknown/inactive product (404
+  `product_not_found`); sets the vendor line — or the marketplace listing —
+  to APPROVED with `MANUAL_APPROVAL`, the approver and the UTC moment; the
+  item APPROVED with the same approver and note; the originating row
+  MATCHED by `MANUAL_APPROVAL` at priority 5 with the resolution recorded
+  in its JSON; the job's counters move one row from exceptions to matches.
+  **Supersession (AC-8.6):** if the line already has an APPROVED mapping to
+  a *different* product the call is refused with 409
+  `mapping_supersession_required` naming the current product, unless
+  `supersede: true`; then the old mapping is first set to SUPERSEDED — its
+  own audit row whose before/after name the old product — and only then
+  approved to the new one. Nothing is deleted; the mapping's history is the
+  audit log, as database-schema.md §3.3 says. `reject` requires a note,
+  marks the item REJECTED, makes no mapping, and clears a PENDING
+  suggestion the matcher had left on the line (UNMAPPED again). `defer`
+  requires a future, timezone-aware `until`. Every action is one
+  transaction with `before`/`after` audit rows: `mapping_exception.approved`
+  / `.rejected` / `.deferred`, `vendor_product.mapping_approved` /
+  `.mapping_superseded` / `.mapping_suggestion_rejected` (and the listing
+  equivalents), `import_job_row.matched_manually`.
+* **Re-review policy (AC-8.5)** — the matcher now remembers the latest
+  REJECTED item per vendor line: the same reason with the same candidates
+  is not re-queued (the row records `previously_rejected`); different
+  evidence — a UPC that now points somewhere — opens a new item.
+* **`app/api/v1/routes/exceptions.py`** — reads for every role; approve /
+  reject / defer for PURCHASING_MANAGER (ADMIN passes). The list carries
+  the row's vendor SKU, description, row number and age so the queue can be
+  scanned; the detail carries the raw row, the extractor's values, each
+  candidate with its product's catalog number and name and the rule that
+  found it (with score for rule 5), the full trail and the vendor line.
+
+**Milestone 1 exit criterion 7, as a test**
+(`TestReimportAfterApproval`): a row with no identifier lands in the queue
+as SUGGESTION_ONLY; a purchasing manager approves it; the line is APPROVED
+to the product with approver and time, the row is MATCHED at priority 5,
+the job's counters move; the same rows are imported again and the row
+matches by `VENDOR_SKU_MAPPING` at priority 3 with the trail
+`UPC skipped → CATALOG_ITEM_NUMBER skipped → VENDOR_SKU_MAPPING matched →
+AMAZON_SKU_MAPPING skipped`, and no new exception exists.
+
+**Tests** (`tests/integration/test_exception_api.py`, 20): the re-import
+above; 401 on every route; VIEWER and DATA_OPERATOR read but every decision
+is 403; ADMIN decides; another tenant's item is 404 and absent from the
+list; filters (reason, vendor, import job, age, status, paging, bad
+enum → 422); detail shows the raw row, candidates with catalog numbers,
+the ambiguous trail and the vendor line; reject (blank note → 422, the
+line's PENDING suggestion cleared to UNMAPPED, row verdict untouched,
+second reject → 409, audited); a rejected line is not re-queued for the
+same evidence but is for new evidence; defer (past → 422, hidden, visible
+with `include_deferred`, back once the time passes, audited); approve
+refuses unknown and inactive products; approving a PENDING suggestion makes
+it permanent; **supersession** — refused without the flag with the current
+product named and nothing changed, the same product re-affirmed without a
+flag, and with `supersede: true` both steps audited with before/after
+(`APPROVED → SUPERSEDED`, then `SUPERSEDED → APPROVED` to the new product)
+and the next import using the new mapping; every unresolved row has
+exactly one item with a reason (AC-8.1).
+
+**What is not built, and why.** Item 4 of the prompt — replacing
+`frontend/src/app/exceptions/page.tsx` with a queue screen "copying the
+patterns from the vendors screen" — is not done. There is no vendors
+screen: `/vendors` is the same placeholder as `/exceptions`, and the
+frontend has no typed API client, no react-query, no zod, no dev sign-in
+and no Vitest — the foundation Prompt 16 specified and stopped on because
+its API did not exist. Building that foundation here, for one screen, would
+have meant doing Prompt 16's infrastructure under a different commit
+message without the vendors screen it was designed around. The vendors API
+now exists, so Prompt 16 is unblocked; the exceptions screen needs, in
+addition, a product search endpoint (by catalog number / UPC / name) that
+does not exist yet — recorded as **B9**.
 
 ### Phase 7 — the deterministic matching engine (2026-09-15)
 
@@ -798,12 +885,12 @@ file: https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend format | `ruff format .` | ✅ 149 files unchanged |
+| Backend format | `ruff format .` | ✅ 155 files unchanged |
 | Backend lint | `ruff check .` | ✅ All checks passed |
-| Backend types | `mypy` (strict) | ✅ No issues in 143 source files |
-| Backend tests | `pytest` | ✅ `1062 passed in 66.23s` — `tests/unit`: `702 passed`; `tests/integration`: `360 passed` |
+| Backend types | `mypy` (strict) | ✅ No issues in 148 source files |
+| Backend tests | `pytest` | ✅ `1083 passed in 70.09s` — `tests/unit`: `702 passed`; `tests/integration`: `381 passed` |
 | Migration apply | `alembic upgrade head` | ✅ All five revisions applied to PostgreSQL 16.15 |
-| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0` and `fadb756b1b85` each re-apply cleanly |
+| Migration reverse | `alembic downgrade base` → `upgrade head` | ✅ Clean round trip, 0 residual enum types; one-step downgrades of `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85` and `fab7311199fc` each re-apply cleanly |
 | Migration drift | `alembic check` | ✅ No new upgrade operations detected |
 | Frontend lint | `npm run lint` | ✅ Clean |
 | Frontend types | `npm run typecheck` | ✅ Clean |
@@ -1024,6 +1111,16 @@ makes the read-only SP-API listings retrieval a source for
 is visible through that account and marketplace set, or whether some still
 need import or manual entry.
 
+### B9 — Admin screens need their foundation and a product search *(new 2026-09-16)*
+Prompt 21 asked for the exception-queue screen "copying the patterns from
+the vendors screen". No such screen exists: Prompt 16 (vendors screen, typed
+client, react-query, zod, dev sign-in, Vitest) stopped because the vendors
+API was missing at the time. That API exists since Prompt 15, so Prompt 16
+can run now. The exceptions screen additionally needs a product search
+endpoint — `GET /api/v1/products?q=` over catalog number, UPC and name — for
+the reviewer to pick a product that is not among the candidates. Neither is
+built; the exception API is complete and tested without them.
+
 ### B8 — Amazon SP-API credentials *(new; blocks any live POC run)*
 The client must register an SP-API application (or authorise an existing one)
 and supply the LWA client id, client secret, refresh token, seller id, and
@@ -1067,13 +1164,14 @@ audit writer, the transaction utilities, the role guard, and the error envelope
 against real endpoints, which is the honest test of whether the foundation is
 usable rather than merely present.
 
-Phases 4, 5 (upload half), 6 and 7 all landed on 2026-09-15. Matched jobs
-now sit RUNNING at stage SNAPSHOTTING. Next is phase 8, the exception review
-API — list, assign, approve / reject / defer — whose approval is what turns a
-PENDING vendor-SKU mapping into the permanent APPROVED one priority 3 reads;
-then phase 9 (snapshots, availability events, watchlist), the worker claim
-loop (AC-5.7) and the immutable `import_report` (AC-9.3). B5 still decides
-where deployed files live.
+Phases 4, 5 (upload half), 6 and 7 landed on 2026-09-15 and the phase 8 API on
+2026-09-16; exit criterion 7 (approve → re-import → priority 3) holds in a
+test. Matched jobs sit RUNNING at stage SNAPSHOTTING. Next: phase 9 (snapshots,
+availability events, watchlist) to close the import lifecycle; the frontend
+foundation and vendors screen (Prompt 16, now unblocked) followed by the
+exceptions screen and a product search endpoint (B9); the worker claim loop
+(AC-5.7) and the immutable `import_report` (AC-9.3). B5 still decides where
+deployed files live.
 
 ---
 
