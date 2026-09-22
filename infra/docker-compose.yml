@@ -51,6 +51,11 @@ services:
       APP_NAME: ${APP_NAME:-prms-api}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-json}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-insecure-development-signing-key-change-me}
+      AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-480}
+      AUTH_ISSUER: ${AUTH_ISSUER:-prms-dev}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-prms-api}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER:-prms}:${POSTGRES_PASSWORD:-local_dev_only_change_me}@postgres:5432/${POSTGRES_DB:-prms}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}

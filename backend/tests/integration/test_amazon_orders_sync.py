@@ -322,10 +322,14 @@ def test_a_failed_run_frees_the_slot_for_the_next(db_session: Session) -> None:
     run = sync(db_session, organization.id, FakeFetcher(FIXTURE_UTF8))
 
     assert run.status is SyncStatus.COMPLETED
-    assert [r.status for r in runs_for(db_session, organization.id)] == [
-        SyncStatus.FAILED,
-        SyncStatus.COMPLETED,
-    ]
+    # Both runs use the injected ``NOW`` clock, so PostgreSQL may give their
+    # server-generated timestamps the same value on a fast CI host.  The
+    # contract is one retained failure and one successful retry, not their
+    # incidental SELECT order.
+    statuses = [r.status for r in runs_for(db_session, organization.id)]
+    assert len(statuses) == 2
+    assert statuses.count(SyncStatus.FAILED) == 1
+    assert statuses.count(SyncStatus.COMPLETED) == 1
 
 
 def test_a_second_concurrent_run_is_refused_by_the_partial_unique_index(
