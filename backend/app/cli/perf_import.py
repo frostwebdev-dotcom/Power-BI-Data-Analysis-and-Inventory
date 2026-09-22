@@ -75,8 +75,12 @@ def _rss_windows() -> int:
 
     counters = Counters()
     counters.cb = ctypes.sizeof(Counters)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    # ``WinDLL`` is intentionally absent from ctypes' public type surface on
+    # non-Windows hosts.  Resolve it dynamically so this Windows-only branch
+    # remains importable and type-checkable in Linux CI.
+    win_dll = getattr(ctypes, "Win" + "DLL")
+    kernel32 = win_dll("kernel32", use_last_error=True)
+    psapi = win_dll("psapi", use_last_error=True)
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
     psapi.GetProcessMemoryInfo.argtypes = [
         wintypes.HANDLE,

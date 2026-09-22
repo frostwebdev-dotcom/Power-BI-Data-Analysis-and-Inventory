@@ -5,11 +5,12 @@
 Milestone 1 — data foundation, Nineyard catalog synchronisation, vendor
 inventory ingestion, and deterministic product matching.
 
-**Current state:** the database schema (21 tables, one reversible migration),
-the audit and security foundation, and a read-only Nineyard diagnostic exist
-and pass every quality gate. No vendor CRUD, file ingestion, or matching logic
-exists yet. See [docs/phase1-status.md](docs/phase1-status.md) for exactly what
-is built and what comes next.
+**Current state:** the vendor/import/matching/watchlist workflow and the
+read-only Amazon SP-API ingestion are implemented. The Amazon integration is
+complete against deterministic tests and awaits one live seller-account run.
+The Nineyard client/probe exists, but catalog synchronization remains blocked
+on verified live API fields. See [docs/phase1-status.md](docs/phase1-status.md)
+for the exact evidence and remaining gates.
 
 Rules that govern all work in this repository are in [CLAUDE.md](CLAUDE.md).
 

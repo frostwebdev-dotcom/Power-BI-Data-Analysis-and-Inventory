@@ -1,11 +1,10 @@
 # Amazon SP-API Integration
 
-Status: **Complete against fakes.** Client, tables, the three ingestions,
-listings→product mapping, the scheduler and the `amazon_poc` CLI exist and
-are tested. Nothing has run against the real seller account (blocking
-question **B8**), and the read-only velocity HTTP endpoint from ADR 0011 is
-not yet built (the velocity *service* the CLI uses is).
-Last updated: 2026-09-15
+Status: **Implementation complete; live validation pending.** Client, tables,
+the three ingestions, listings→product mapping, scheduler, `amazon_poc` CLI,
+and read-only velocity HTTP endpoint exist and are tested. Nothing has run
+against the real seller account (blocking question **B8**).
+Last updated: 2026-09-22
 
 ---
 
@@ -457,6 +456,19 @@ product's Catalog Item Number and UPC. Days of supply is `(fulfillable +
 FBM) / (units_14 / 14)`, and is blank rather than infinite when nothing
 sold. `--level product` merges a product's SKUs into one row. No
 replenishment quantity is computed anywhere (ADR 0011).
+
+The same result is available to authenticated read-only users over HTTP:
+
+```http
+GET /api/v1/amazon/velocity?level=product&top=25
+Authorization: Bearer <application token>
+```
+
+`level` is `sku` (default) or `product`; `top` is optional and limited to
+1–1000. The response includes the 7/14/30-day unit totals, average daily
+14-day velocity, fulfillable/FBM/inbound quantities, on-hand units, days of
+supply, and the current mapping state. It reads only the PostgreSQL copy and
+does not call or write to Amazon.
 
 ---
 

@@ -1,7 +1,7 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-16 (phase 11 — hardening, runbook, seed data and the exit-gate evidence in §11)
+Last updated: 2026-09-22 (Amazon velocity HTTP endpoint and local verification)
 
 ---
 
@@ -40,7 +40,7 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | — | Planning and documentation | ✅ Complete | Scope, architecture, criteria, 13 ADRs |
 | 0 | Scaffolding | ✅ Complete | Backend, frontend, infra, quality gates, GitHub Actions CI (2026-09-14) |
 | 1 | DB foundation + audit | ✅ Complete | Schema, migration, transactional audit writer, transaction utilities, config/security foundation |
-| A | Amazon SP-API read-only ingestion ([ADR 0011](decisions/0011-amazon-sp-api-proof-of-concept-in-milestone-1.md)) | 🟨 Complete against fakes | Precedes phase 2 by client request (§10). **Exists:** settings, redaction, the read-only client, the tables, the three ingestions, listings→product mapping, the velocity service, scheduled jobs with stale-run recovery, and the `amazon_poc` CLI ([amazon-integration.md](amazon-integration.md)). **Does not exist:** the read-only velocity HTTP endpoint named in the ADR. **Not yet done:** a single run against the real seller account (B8) — the one thing the client asked to see. |
+| A | Amazon SP-API read-only ingestion ([ADR 0011](decisions/0011-amazon-sp-api-proof-of-concept-in-milestone-1.md)) | 🟨 Implementation complete; live validation pending | Precedes phase 2 by client request (§10). **Exists:** settings, redaction, the read-only client, the tables, the three ingestions, listings→product mapping, the velocity service, scheduled jobs with stale-run recovery, the `amazon_poc` CLI, and authenticated `GET /api/v1/amazon/velocity` ([amazon-integration.md](amazon-integration.md)). **Not yet done:** a single run against the real seller account (B8) — the remaining client-side proof. |
 | 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
 | 3 | Nineyard integration + sync | 🟨 Diagnostic only | **Exists:** read-only client (`app/integrations/nineyard/client.py`, `errors.py`, `sanitize.py`), probe (`app/integrations/nineyard/probe.py`), and CLI (`app/cli/nineyard_probe.py`), tested by `tests/unit/test_nineyard_client.py`, `test_nineyard_probe.py`, `test_nineyard_cli.py` (mocked; no live calls). The public OpenAPI spec has been analysed ([nineyard-field-mapping.md](nineyard-field-mapping.md)). **Does not exist:** any sync service — nothing writes Nineyard data to `products`, `product_identifiers`, `marketplace_listings`, `nineyard_sync_runs`, or `nineyard_item_payloads`. The probe has not been run against the live API. See [nineyard-integration.md](nineyard-integration.md) and B1. |
 | 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
@@ -949,7 +949,8 @@ mutation, each naming the acting user with `before` / `after` state.
   computation that did not exist (the prompt sequence skipped from 11 to
   13): units 7/14/30 from order lines excluding cancellations, the latest
   snapshot per SKU, mapping + Catalog Item Number + UPC, days of supply
-  blank when nothing sold. The HTTP endpoint from the ADR is still owed.
+  blank when nothing sold. `GET /api/v1/amazon/velocity` now exposes the same
+  read-only result to authenticated users at SKU or product level.
 * Also: `AmazonClient.check_credentials()` (an LWA exchange that returns
   only expiry and a hash prefix), `run_listings_sync` for the standalone
   listings job, `resolve_amazon_organization` (`AMAZON_ORGANIZATION_SLUG`,

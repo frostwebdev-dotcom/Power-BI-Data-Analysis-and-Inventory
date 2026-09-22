@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
+    amazon,
     audit,
     auth,
     dashboard,
@@ -24,6 +25,7 @@ from app.api.v1.routes import (
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(amazon.router)
 api_router.include_router(vendors.router)
 api_router.include_router(import_profiles.router)
 api_router.include_router(import_profiles.schemas_router)

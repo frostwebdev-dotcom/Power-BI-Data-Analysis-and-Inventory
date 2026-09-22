@@ -64,6 +64,7 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/health",
         "/api/v1/auth/me",
         "/api/v1/auth/dev-token",
+        "/api/v1/amazon/velocity",
         "/api/v1/vendors",
         "/api/v1/vendors/{vendor_id}",
         "/api/v1/vendors/{vendor_id}/deactivate",
@@ -111,6 +112,7 @@ def test_every_vendor_route_documents_403(client: TestClient) -> None:
                 "/api/v1/availability",
                 "/api/v1/audit",
                 "/api/v1/dashboard",
+                "/api/v1/amazon",
             )
         ):
             continue
