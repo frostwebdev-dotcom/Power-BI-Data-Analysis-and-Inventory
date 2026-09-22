@@ -119,8 +119,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create .env from the example
-        run: cp .env.example .env
+      - name: Prepare the local Compose environment
+        run: |
+          cp .env.example .env
+          # The API deliberately runs as a non-root container user.  This
+          # repository directory is a bind mount in Compose, so make the
+          # disposable CI copy writable before Docker starts.  Production
+          # storage uses platform-managed ownership instead.
+          chmod -R a+rwx storage
 
       - name: Build and start the stack
         run: $COMPOSE up -d --build
