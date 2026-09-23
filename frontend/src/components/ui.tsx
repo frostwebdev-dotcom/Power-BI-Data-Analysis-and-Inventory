@@ -126,10 +126,58 @@ export function Pager({
   );
 }
 
+/**
+ * Timestamps arrive as UTC and are shown in the reader's own zone, which is
+ * only honest if the zone is named (AC-13.6). `dateStyle`/`timeStyle` cannot be
+ * combined with `timeZoneName`, so the components are spelled out.
+ */
+const DATE_TIME: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZoneName: "short",
+};
+
 export function fmtDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(undefined, DATE_TIME);
+}
+
+/**
+ * The same moment, short enough for a narrow card: no seconds, and the year
+ * only when it is not the current one.
+ */
+export function fmtWhen(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+/** How long something took, from two timestamps. Null when it cannot be known. */
+export function fmtDuration(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): string | null {
+  if (!from || !to) return null;
+  const seconds = (new Date(to).getTime() - new Date(from).getTime()) / 1000;
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 export function fmtNumber(value: string | number | null | undefined): string {

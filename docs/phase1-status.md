@@ -10,7 +10,7 @@ Last updated: 2026-09-22 (Amazon velocity HTTP endpoint and local verification)
 | | |
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
-| **Milestone 1 status** | **Not complete.** Phases 0, 1, 2, 4, 6, 7, 8, 9 are complete and phase 11 (hardening) is done as far as it can be without live data; phase A and phase 5 are complete against fakes / without a worker; phase 3 is a diagnostic only (the Nineyard sync is blocked on B1) and phase 10 lacks the products screen for the same reason. Of the 85 acceptance criteria, **58 are proven by a named test or command, 13 are proven in part** (the automated half passes; the manual demonstration on real vendor data, or a stated deviation, is outstanding) **and 14 are open** — the whole of AC-3, AC-2.3/2.4/2.5, AC-5.7, AC-9.3, AC-13.3, AC-13.6 (§11). None of the four Milestone-level exit-gate items is met yet: the current `main` has not run in CI since 2026-09-14, the real-data walkthrough has not happened (B4), phase 3 is not built and nine blocking questions are open. §11 says exactly why for each. |
+| **Milestone 1 status** | **Not complete.** Phases 0, 1, 2, 4, 6, 7, 8, 9 are complete and phase 11 (hardening) is done as far as it can be without live data; phase A and phase 5 are complete against fakes / without a worker; phase 3 is a diagnostic only (the Nineyard sync is blocked on B1) and phase 10 lacks the products screen for the same reason. Of the 85 acceptance criteria, **58 are proven by a named test or command, 13 are proven in part** (the automated half passes; the manual demonstration on real vendor data, or a stated deviation, is outstanding) **and 13 are open** — the whole of AC-3, AC-2.3/2.4/2.5, AC-5.7, AC-9.3, AC-13.3 (§11). None of the four Milestone-level exit-gate items is met yet: the current `main` has not run in CI since 2026-09-14, the real-data walkthrough has not happened (B4), phase 3 is not built and nine blocking questions are open. §11 says exactly why for each. |
 | Stage | **Phases 0–2, 4, 6–9 complete; 11 done; A, 5, 10 built with a named gap each; 3 diagnostic only.** Backend is deployed to Railway. |
 | Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3; and the snapshot stage that closes an import — append-only inventory snapshots, availability events on every transition, the OOS watchlist and its status history, and the availability feed. **The import lifecycle is complete end to end**: upload → parse → match → snapshot → COMPLETED. The admin interface now has working screens for every one of those steps — sign-in, vendors, import profiles, imports, exception queue, watchlist, availability, audit log, dashboard — and a Playwright walk-through drives the whole Milestone 1 flow through them. Products is the one remaining placeholder (its API is phase 3, B1). Phase 11 made the pipeline fast enough for real files — **50,000 rows in 38.8 s (CSV) and 56.5 s (XLSX) at ~110 MB peak**, down from 15 min 56 s — proved every interface query index-backed, rehearsed backup and restore, and added `docs/runbook.md`, `seed_demo`, `perf_import` and `explain_queries`. |
 | Database schema | 25 tables, 23 enum types, 136 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
@@ -1486,8 +1486,7 @@ not yet been seen green); **Nineyard sync when B1 is answered** (AC-2.3–2.5,
 all of AC-3, the products screen and product search — gate items 2 and 3);
 the **real-data walkthrough** once B4's files arrive (every [M] criterion);
 then the worker claim loop (AC-5.7), the immutable `import_report` (AC-9.3),
-generated API types (AC-13.3), explicit timezones in the UI (AC-13.6, a
-one-line change to `fmtDate`) and production sign-in (B2). B5 still decides
+generated API types (AC-13.3) and production sign-in (B2). B5 still decides
 where deployed files live.
 
 ---
@@ -1527,7 +1526,7 @@ part of the wording, is outstanding — the note says which; ⬜ means nothing
 proves it yet. **Nothing below is marked done on the strength of code
 existing.**
 
-Tally: **58 ✅ · 13 🟨 · 14 ⬜** of 85 criteria.
+Tally: **58 ✅ · 14 🟨 · 13 ⬜** of 85 criteria (AC-13.6 moved to part-proven on 2026-09-23).
 
 ### Milestone-level exit gate
 
@@ -1700,7 +1699,7 @@ Tally: **58 ✅ · 13 🟨 · 14 ⬜** of 85 criteria.
 | AC-13.3 | ⬜ | `frontend/src/lib/types.ts` is hand-written from `app/schemas`; nothing generates it from OpenAPI and CI does not check staleness. |
 | AC-13.4 | 🟨 | `frontend/e2e/milestone-1.spec.ts` covers the full path and more (watch, availability, audit); passed twice locally (12.1 s, 9.1 s). **Not yet run in CI** — wired into `compose-smoke`, awaiting the push. |
 | AC-13.5 | ✅ | `test_exception_api::TestAccessControl::test_viewers_and_operators_read_but_do_not_decide`, `::test_admin_can_decide`; `test_availability_api::TestWatchlistApi` (VIEWER 403). The UI additionally hides the actions by `hasRole`; that is not tested. |
-| AC-13.6 [A+M] | ⬜ | `fmtDate` in `frontend/src/components/ui.tsx` renders `toLocaleString()` — the browser's local time **without** naming the zone. Stored values are UTC (AC-1.3); the presentation does not make the zone explicit. A one-line change (`timeZoneName: "short"`) and a check in the walk-through. |
+| AC-13.6 [A+M] | 🟨 | [M] Every timestamp on every screen goes through `fmtDate` or `fmtWhen` in `frontend/src/components/ui.tsx`, which since 2026-09-23 render the reader's local time **with the zone named** (`timeZoneName: "short"`, e.g. *Sep 23, 2026, 5:26:32 PM EDT*); stored values are UTC (AC-1.3). Verified by rendering the dashboard against fixture data. [A] **No automated assertion** — the walk-through does not check any timestamp, and the frontend has no unit-test runner. |
 
 ### What the tally means
 
@@ -1709,7 +1708,7 @@ the audit trail — the parts of Milestone 1 that carry correctness risk — are
 proven by tests that ran today. What is open falls into four groups, each
 with one owner: **Nineyard** (AC-2.3–2.5, AC-3, the products screen, product
 search — the client, B1); **the real-data walkthrough** (every [M] — the
-client, B4); **the CI run** (gate 1, AC-0.4, AC-13.4 — a push); and **four
+client, B4); **the CI run** (gate 1, AC-0.4, AC-13.4 — a push); and **three
 engineering items** with no external dependency (AC-5.7 worker, AC-9.3
-report row, AC-13.3 generated types, AC-13.6 timezone), plus two wording
-deviations to settle with the client (AC-5.6 confirmation, AC-9.5 export).
+report row, AC-13.3 generated types), plus two wording deviations to settle
+with the client (AC-5.6 confirmation, AC-9.5 export).

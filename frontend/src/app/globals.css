@@ -1182,3 +1182,53 @@ textarea:focus {
 .empty--compact {
   padding: 28px;
 }
+
+/* ==========================================================================
+   Synchronisations — one block per source, so a failure has room for its
+   reason instead of being a red badge with nothing beside it.
+   ========================================================================== */
+.syncs {
+  display: flex;
+  flex-direction: column;
+}
+.sync {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sync:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.sync:first-child {
+  padding-top: 0;
+}
+.sync__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.sync__source {
+  font-weight: 550;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sync__meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+.sync__error {
+  margin: 7px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}

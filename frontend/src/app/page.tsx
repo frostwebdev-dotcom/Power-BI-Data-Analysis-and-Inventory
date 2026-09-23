@@ -3,8 +3,53 @@
 import Link from "next/link";
 
 import { SystemStatusCard } from "@/components/ApiStatus";
-import { ErrorNote, Loading, StatusBadge, fmtDate, fmtNumber } from "@/components/ui";
+import { ErrorNote, Loading, StatusBadge, fmtDate, fmtDuration, fmtNumber, fmtWhen } from "@/components/ui";
 import { useDashboard } from "@/lib/queries";
+import type { SyncSummary } from "@/lib/types";
+
+/** `FBA_INVENTORY` reads as "FBA inventory", `ORDERS_REPORT` as "Orders report". */
+function sourceLabel(jobType: string | null | undefined): string {
+  if (!jobType) return "run";
+  const words = jobType.toLowerCase().replaceAll("_", " ");
+  return (words.charAt(0).toUpperCase() + words.slice(1)).replace(/\bfba\b/i, "FBA");
+}
+
+/**
+ * One synchronisation source. A failure carries its reason: a red badge with
+ * nothing beside it sends the reader back to the server logs, which is exactly
+ * what this screen exists to avoid.
+ */
+function SyncRow({
+  source,
+  sync,
+  note,
+}: {
+  source: string;
+  sync?: SyncSummary | null;
+  note?: string;
+}) {
+  const took = sync ? fmtDuration(sync.started_at, sync.completed_at) : null;
+  const running = Boolean(sync?.started_at && !sync?.completed_at);
+  return (
+    <div className="sync">
+      <div className="sync__head">
+        <span className="sync__source">{source}</span>
+        {sync ? <StatusBadge value={sync.status} /> : <span className="muted">{note}</span>}
+      </div>
+      {sync ? (
+        <div className="sync__meta">
+          {fmtWhen(sync.started_at)}
+          {took ? ` · took ${took}` : running ? " · still running" : null}
+        </div>
+      ) : null}
+      {sync?.error_message ? (
+        <p className="sync__error" role="alert">
+          {sync.error_message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * The dashboard. Every number is a live count from the API; where there is
@@ -95,52 +140,19 @@ export default function DashboardPage() {
           <div className="card__header">
             <span className="card__title">Synchronisations</span>
           </div>
-          <table className="table table--compact">
-            <thead>
-              <tr>
-                <th>Source</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Completed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.amazon_syncs.map((sync) => (
-                <tr key={sync.job_type}>
-                  <td>Amazon · {sync.job_type?.toLowerCase()}</td>
-                  <td>
-                    <StatusBadge value={sync.status} />
-                  </td>
-                  <td>{fmtDate(sync.started_at)}</td>
-                  <td>{fmtDate(sync.completed_at)}</td>
-                </tr>
-              ))}
-              {data && data.amazon_syncs.length === 0 ? (
-                <tr>
-                  <td>Amazon</td>
-                  <td colSpan={3} className="muted">
-                    never run
-                  </td>
-                </tr>
-              ) : null}
-              <tr>
-                <td>Nineyard catalogue</td>
-                {data?.nineyard_sync ? (
-                  <>
-                    <td>
-                      <StatusBadge value={data.nineyard_sync.status} />
-                    </td>
-                    <td>{fmtDate(data.nineyard_sync.started_at)}</td>
-                    <td>{fmtDate(data.nineyard_sync.completed_at)}</td>
-                  </>
-                ) : (
-                  <td colSpan={3} className="muted">
-                    not yet connected (B1)
-                  </td>
-                )}
-              </tr>
-            </tbody>
-          </table>
+          <div className="syncs" data-testid="syncs">
+            {data?.amazon_syncs.map((sync) => (
+              <SyncRow key={sync.job_type} source={`Amazon · ${sourceLabel(sync.job_type)}`} sync={sync} />
+            ))}
+            {data && data.amazon_syncs.length === 0 ? (
+              <SyncRow source="Amazon" note="never run" />
+            ) : null}
+            {data?.nineyard_sync ? (
+              <SyncRow source="Nineyard catalogue" sync={data.nineyard_sync} />
+            ) : (
+              <SyncRow source="Nineyard catalogue" note="not yet connected (B1)" />
+            )}
+          </div>
         </section>
 
         <SystemStatusCard />

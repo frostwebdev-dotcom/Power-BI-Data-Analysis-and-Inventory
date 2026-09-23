@@ -20,7 +20,13 @@ from app.db.session import get_db
 from app.main import create_app
 from app.models import Organization, User
 from app.models.catalog import Product
-from app.models.enums import ExceptionStatus, ImportJobStatus, OosStatus
+from app.models.enums import (
+    AmazonSyncJobType,
+    ExceptionStatus,
+    ImportJobStatus,
+    OosStatus,
+    SyncStatus,
+)
 from app.services.roles import assign_role, ensure_system_roles
 from tests.integration import factories
 
@@ -207,6 +213,32 @@ class TestDashboard:
 
         assert len(body["amazon_syncs"]) == 1
         assert body["amazon_syncs"][0]["status"] is not None
+
+    def test_a_failed_run_carries_its_reason(
+        self, client: TestClient, login: Login, db_session: Session, organization: Organization
+    ) -> None:
+        """The dashboard shows why a sync failed, so the reader is not sent to the logs."""
+        headers, _ = login(RoleCode.VIEWER)
+        started = datetime.now(UTC) - timedelta(minutes=5)
+        factories.make_amazon_sync_run(
+            db_session,
+            organization,
+            job_type=AmazonSyncJobType.FBA_INVENTORY,
+            status=SyncStatus.FAILED,
+            started_at=started,
+            completed_at=started + timedelta(seconds=2),
+            error_message="getInventorySummaries page 1: SP-API returned 403: Access denied.",
+        )
+        db_session.flush()
+
+        body = client.get("/api/v1/dashboard", headers=headers).json()
+
+        (summary,) = body["amazon_syncs"]
+        assert summary["status"] == "FAILED"
+        assert summary["error_message"] == (
+            "getInventorySummaries page 1: SP-API returned 403: Access denied."
+        )
+        assert summary["started_at"] is not None and summary["completed_at"] is not None
 
 
 class TestSeed:
