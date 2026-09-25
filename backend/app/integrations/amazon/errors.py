@@ -66,11 +66,11 @@ class AmazonRateLimited(AmazonError):  # noqa: N818 — name fixed by ADR 0011's
 
 
 class AmazonTransientError(AmazonError):
-    """5xx — the fault is on Amazon's side, and it persisted through retries."""
+    """A 5xx or transport failure persisted through every retry."""
 
     guidance = (
-        "SP-API returned a server error on every attempt. Nothing here can fix "
-        "it; the next scheduled run will try again."
+        "SP-API returned a server error or the connection failed on every attempt. "
+        "The next scheduled run will try again."
     )
 
 

@@ -24,6 +24,9 @@ dependencies = [
     # Amazon SP-API (ADR 0011). Wrapped by app/integrations/amazon; its types
     # stop at that boundary.
     "python-amazon-sp-api>=1.9",
+    # The SP-API library uses httpx internally. The wrapper catches its typed
+    # transport failures so an interrupted inventory page can be retried.
+    "httpx>=0.27",
     # In-process scheduler for the Amazon ingestion jobs (ADR 0011). 3.x on
     # purpose: 4.x is a rewrite with a different API and no stable release.
     "apscheduler>=3.10,<4",

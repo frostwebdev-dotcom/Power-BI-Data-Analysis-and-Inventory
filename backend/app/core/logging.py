@@ -25,7 +25,15 @@ from structlog.types import Processor
 from app.core.config import Settings
 from app.core.redaction import redaction_processor
 
-_STDLIB_LOGGERS_TO_TAME = ("uvicorn", "uvicorn.error", "uvicorn.access", "sqlalchemy.engine")
+_STDLIB_LOGGERS_TO_TAME = (
+    "uvicorn",
+    "uvicorn.error",
+    "uvicorn.access",
+    "sqlalchemy.engine",
+    "httpx",
+    "httpcore",
+)
+_QUIET_THIRD_PARTY_LOGGERS = ("httpx", "httpcore")
 
 
 def configure_logging(settings: Settings) -> None:
@@ -92,6 +100,13 @@ def configure_logging(settings: Settings) -> None:
         stdlib_logger = logging.getLogger(name)
         stdlib_logger.handlers.clear()
         stdlib_logger.propagate = True
+
+    # httpx's INFO record contains the complete request URL. Amazon report
+    # downloads use presigned URLs and inventory pagination uses opaque tokens,
+    # neither of which belongs in durable logs. Application-level events still
+    # record operation names, status, page number, and retry outcomes.
+    for name in _QUIET_THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> Any:

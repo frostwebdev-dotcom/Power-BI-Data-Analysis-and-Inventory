@@ -270,6 +270,31 @@ class TestAmazonRedaction:
         assert redacted["headers"]["x-amz-date"] == "20260915T000000Z"
         assert self.ACCESS not in json.dumps(redacted)
 
+    def test_presigned_and_pagination_url_values_are_masked(self) -> None:
+        url = (
+            "https://example.test/report?nextToken=opaque-page-token"
+            "&X-Amz-Credential=temporary-credential"
+            "&X-Amz-Signature=temporary-signature"
+        )
+
+        masked = redact_text(url)
+
+        assert "opaque-page-token" not in masked
+        assert "temporary-credential" not in masked
+        assert "temporary-signature" not in masked
+        assert masked.count(REDACTED) == 3
+
+    def test_http_client_info_urls_are_not_logged(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        configure_logging(Settings(log_level="INFO", log_format="json"))
+
+        logging.getLogger("httpx").info(
+            "HTTP Request: GET https://example.test/?X-Amz-Signature=do-not-log"
+        )
+
+        assert capsys.readouterr().out == ""
+
     def test_lwa_keys_are_masked_at_any_depth(self) -> None:
         event = {"config": {"amazon": {"lwa_client_id": "amzn1.app", "lwa_client_secret": "s"}}}
 

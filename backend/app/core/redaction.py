@@ -93,6 +93,14 @@ _JWT_RE: Final = re.compile(r"\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z
 # Credentials embedded in a URL: scheme://user:password@host
 _URL_CREDENTIALS_RE: Final = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://[^\s:/@]+):([^\s@]+)@")
 
+# Sensitive URL query values. This is defense in depth for third-party logs:
+# httpx INFO logging is disabled, but a warning or exception may still include
+# the request URL. Preserve the key for diagnosis and mask only its value.
+_SENSITIVE_QUERY_PARAM_RE: Final = re.compile(
+    r"(?i)([?&](?:nexttoken|access_token|refresh_token|x-amz-signature|"
+    r"x-amz-credential|x-amz-security-token)=)([^&\s\"']*)"
+)
+
 # `api_key=...`, `password: ...`, `token=...` inside an otherwise plain string.
 _INLINE_ASSIGNMENT_RE: Final = re.compile(
     r"(?i)\b(api[_-]?key|password|passwd|pwd|secret|access[_-]?token|refresh[_-]?token"
@@ -124,6 +132,7 @@ def is_sensitive_key(key: str) -> bool:
 def redact_text(value: str) -> str:
     """Mask credential shapes inside a free-text string."""
     masked = _URL_CREDENTIALS_RE.sub(rf"\1:{REDACTED}@", value)
+    masked = _SENSITIVE_QUERY_PARAM_RE.sub(rf"\1{REDACTED}", masked)
     masked = _BEARER_RE.sub(rf"\1 {REDACTED}", masked)
     masked = _JWT_RE.sub(REDACTED, masked)
     masked = _LWA_TOKEN_RE.sub(REDACTED, masked)

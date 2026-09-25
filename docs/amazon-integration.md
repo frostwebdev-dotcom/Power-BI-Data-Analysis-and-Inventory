@@ -97,6 +97,11 @@ way to reach any other library endpoint through this object.
 | `fetch_report(report_type, data_start, data_end, report_options=None, *, poll_interval_s=15, timeout_s=1800)` | `bytes` | Request → poll until terminal → download. Raises `AmazonReportFailed` on `CANCELLED`, `FATAL`, `DONE` without a document, or timeout. |
 | `iter_inventory_summaries(*, details=True, page_delay_s=0.0)` | `Iterator[InventorySummary]` | Every FBA inventory summary for the marketplace, following `nextToken` until exhausted. `details=True` requests the `inventoryDetails` block, which is where the inbound quantities live. `page_delay_s` is slept *between* pages — the retry policy reacts to throttling; the delay avoids it. |
 
+Inventory traversal is buffered until every page succeeds. If Amazon rejects a
+continuation token as invalid or expired, the client discards that incomplete
+buffer and restarts once from page 1; callers therefore never receive duplicate
+or partial pages.
+
 Report types are passed as strings (the library's `ReportType` enum values,
 e.g. `GET_MERCHANT_LISTINGS_ALL_DATA`,
 `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL`,
@@ -137,7 +142,7 @@ each with a `guidance` string for whoever reads the log or CLI output.
 | `AmazonConfigurationError` | Credentials missing, unknown marketplace id, marketplace not in `AMAZON_REGION`, `SP_API_DEFAULT_MARKETPLACE` set, or the library reports missing credentials | No |
 | `AmazonAuthError` | Login with Amazon rejected the refresh token or client credentials (`sp_api.auth.exceptions.AuthorizationError`) | **Never** — the same credentials give the same answer |
 | `AmazonRateLimited` | 429 on every attempt. Carries `retry_after_seconds` if Amazon sent one | Was retried; this is the exhausted result |
-| `AmazonTransientError` | 500 / 503 / 504 on every attempt. Carries `status_code` | Was retried; this is the exhausted result |
+| `AmazonTransientError` | 500 / 503 / 504 or an HTTP transport failure on every attempt. Carries `status_code` for HTTP responses | Was retried; this is the exhausted result |
 | `AmazonReportFailed` | `fetch_report` saw `CANCELLED` or `FATAL`, `DONE` without a document id, or ran out of time. Carries `report_id`, `processing_status`, `timed_out` | No |
 | `AmazonError` (base) | Any other definite answer — a 400 for a bad report type, a 404, a payload without a required field | No |
 
@@ -152,8 +157,8 @@ Applied to every library call by `AmazonClient._call_response`:
 
 - **Retried:** the library's `SellingApiRequestThrottledException` (429),
   `SellingApiServerException` (500), `SellingApiTemporarilyUnavailableException`
-  (503) and `SellingApiGatewayTimeoutException` (504) — the four
-  `RETRYABLE_EXCEPTIONS`.
+  (503), `SellingApiGatewayTimeoutException` (504), and `httpx.TransportError`
+  failures such as a remote disconnect.
 - **Not retried:** everything else. An LWA failure, a 400, a 403, a 404, a 409
   are definite answers; repeating them only repeats the mistake more slowly.
 - **Attempts:** `AMAZON_MAX_ATTEMPTS` (default 5) in total, so at most four
@@ -165,7 +170,10 @@ Applied to every library call by `AmazonClient._call_response`:
   instants.
 - **Pagination and retries compose:** a throttled page of inventory summaries
   is re-requested with the same `nextToken`, so a retry never skips or repeats
-  a page.
+  a page. Amazon's tokens expire after 30 seconds, so inventory page attempts
+  are capped at 20 seconds even when `AMAZON_TIMEOUT_SECONDS` is higher. If
+  Amazon still invalidates a token, one buffered traversal restart prevents
+  partial or duplicate snapshots.
 - **Polling is not retrying:** `fetch_report` waits `poll_interval_s` between
   status checks regardless of outcome; the retry policy applies to each
   individual status call inside that loop.
