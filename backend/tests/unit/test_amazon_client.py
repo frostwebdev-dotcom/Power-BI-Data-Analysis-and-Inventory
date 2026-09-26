@@ -604,6 +604,22 @@ class TestInventoryPagination:
         # details and the marketplace go on every page.
         assert all(kwargs["details"] is True for _, _, kwargs in recorder.calls)
         assert all(kwargs["marketplaceIds"] == ["ATVPDKIKX0DER"] for _, _, kwargs in recorder.calls)
+        # One authenticated API object is reused so a large traversal does not
+        # repeat LWA setup on every page and outlive Amazon's pagination token.
+        assert len(recorder.constructions) == 1
+
+    def test_a_repeated_next_token_is_rejected(
+        self, client: AmazonClient, recorder: Recorder
+    ) -> None:
+        recorder.script = [
+            lambda: inventory_page([INVENTORY_ITEM_MINIMAL], "same-token"),
+            lambda: inventory_page([INVENTORY_ITEM_FULL], "same-token"),
+        ]
+
+        with pytest.raises(AmazonError, match="repeated nextToken"):
+            list(client.iter_inventory_summaries())
+
+        assert len(recorder.calls) == 2
 
     def test_a_page_delay_is_slept_between_pages_only(
         self, client: AmazonClient, recorder: Recorder, clock: FakeClock

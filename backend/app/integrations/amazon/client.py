@@ -377,7 +377,12 @@ class AmazonClient:
         """
         if page_delay_s < 0:
             raise ValueError("page_delay_s must not be negative")
+        # Keep one library client for the whole traversal. Constructing one per
+        # page repeats LWA setup and can make a large account slow enough for
+        # Amazon's opaque pagination token to expire before the last page.
+        inventories_api = self._api(self._inventories_class)
         next_token: str | None = None
+        seen_tokens: set[str] = set()
         page = 0
         while True:
             page += 1
@@ -393,7 +398,7 @@ class AmazonClient:
             token_for_call = next_token
             response = self._call_response(
                 f"getInventorySummaries page {page}",
-                self._inventory_page_call(params),
+                self._inventory_page_call(inventories_api, params),
             )
             payload = response.payload if isinstance(response.payload, Mapping) else {}
             items = payload.get("inventorySummaries")
@@ -415,13 +420,21 @@ class AmazonClient:
             next_token = response.next_token if isinstance(response.next_token, str) else None
             if not next_token:
                 return
+            if next_token in seen_tokens:
+                raise AmazonError(
+                    f"getInventorySummaries page {page}: Amazon returned a repeated "
+                    "nextToken; refusing to loop indefinitely"
+                )
+            seen_tokens.add(next_token)
 
-    def _inventory_page_call(self, params: Mapping[str, Any]) -> Callable[[], Any]:
+    def _inventory_page_call(
+        self, inventories_api: Inventories, params: Mapping[str, Any]
+    ) -> Callable[[], Any]:
         """Bind one page's parameters so the retry loop re-sends the same page."""
         frozen = dict(params)
 
         def call() -> Any:
-            return self._api(self._inventories_class).get_inventory_summary_marketplace(**frozen)
+            return inventories_api.get_inventory_summary_marketplace(**frozen)
 
         return call
 
