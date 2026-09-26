@@ -129,7 +129,9 @@ export function Pager({
 export function fmtDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString(undefined, { timeZoneName: "short" });
 }
 
 export function fmtNumber(value: string | number | null | undefined): string {

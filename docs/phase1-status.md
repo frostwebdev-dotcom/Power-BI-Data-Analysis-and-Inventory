@@ -1700,7 +1700,7 @@ Tally: **58 ✅ · 13 🟨 · 14 ⬜** of 85 criteria.
 | AC-13.3 | ⬜ | `frontend/src/lib/types.ts` is hand-written from `app/schemas`; nothing generates it from OpenAPI and CI does not check staleness. |
 | AC-13.4 | 🟨 | `frontend/e2e/milestone-1.spec.ts` covers the full path and more (watch, availability, audit); passed twice locally (12.1 s, 9.1 s). **Not yet run in CI** — wired into `compose-smoke`, awaiting the push. |
 | AC-13.5 | ✅ | `test_exception_api::TestAccessControl::test_viewers_and_operators_read_but_do_not_decide`, `::test_admin_can_decide`; `test_availability_api::TestWatchlistApi` (VIEWER 403). The UI additionally hides the actions by `hasRole`; that is not tested. |
-| AC-13.6 [A+M] | ⬜ | `fmtDate` in `frontend/src/components/ui.tsx` renders `toLocaleString()` — the browser's local time **without** naming the zone. Stored values are UTC (AC-1.3); the presentation does not make the zone explicit. A one-line change (`timeZoneName: "short"`) and a check in the walk-through. |
+| AC-13.6 [A+M] | 🟨 | [A] `fmtDate` in `frontend/src/components/ui.tsx` renders every valid timestamp with `timeZoneName: "short"`, making the browser's display zone explicit; invalid and missing values retain their safe fallbacks. [M] visual confirmation in the real-data walkthrough remains pending B4. |
 
 ### What the tally means
 
@@ -1711,5 +1711,5 @@ with one owner: **Nineyard** (AC-2.3–2.5, AC-3, the products screen, product
 search — the client, B1); **the real-data walkthrough** (every [M] — the
 client, B4); **the CI run** (gate 1, AC-0.4, AC-13.4 — a push); and **four
 engineering items** with no external dependency (AC-5.7 worker, AC-9.3
-report row, AC-13.3 generated types, AC-13.6 timezone), plus two wording
+report row, AC-13.3 generated types), plus two wording
 deviations to settle with the client (AC-5.6 confirmation, AC-9.5 export).
