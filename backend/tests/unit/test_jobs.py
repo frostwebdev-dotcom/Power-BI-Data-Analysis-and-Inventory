@@ -17,6 +17,7 @@ from app.jobs.amazon import (
     orders_windows,
     register_amazon_jobs,
 )
+from app.jobs.nineyard import JOB_NINEYARD_CATALOG, register_nineyard_jobs
 from app.jobs.runner import (
     COALESCE,
     MAX_INSTANCES,
@@ -81,6 +82,15 @@ class TestProtocol:
 
 
 class TestRegistration:
+    def test_nineyard_catalog_job_uses_its_configured_interval(self) -> None:
+        runner = FakeRunner()
+
+        register_nineyard_jobs(runner, Settings(nineyard_sync_interval_minutes=360))
+
+        assert [(job.job_id, job.interval_minutes) for job in runner.jobs] == [
+            (JOB_NINEYARD_CATALOG, 360)
+        ]
+
     def test_the_three_jobs_are_registered_with_settings_intervals(self) -> None:
         runner = FakeRunner()
         settings = Settings(

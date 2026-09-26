@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     # token in exchange for an email/password/companyId triple, so there is no
     # API key. Credentials are unset by default; the diagnostic tool refuses to
     # run without them rather than inventing a fallback.
+    nineyard_enabled: bool = False
     nineyard_base_url: str = "https://backyard.nineyard.com"
     nineyard_email: str | None = None
     nineyard_password: SecretStr | None = None
@@ -103,6 +104,8 @@ class Settings(BaseSettings):
     nineyard_timeout_seconds: float = 30.0
     # Applies to transient failures only — see integrations/nineyard/client.py.
     nineyard_max_attempts: int = 3
+    nineyard_sync_interval_minutes: int = 1440
+    nineyard_organization_slug: str | None = None
 
     @property
     def has_nineyard_credentials(self) -> bool:
@@ -287,13 +290,17 @@ class Settings(BaseSettings):
         mistake wherever it happens, and the message names exactly what is
         missing so the fix does not need a debugger.
         """
-        if not self.amazon_enabled:
-            return self
-        missing = self._missing_amazon_settings()
-        if missing:
+        if self.amazon_enabled:
+            missing = self._missing_amazon_settings()
+            if missing:
+                raise ValueError(
+                    "Refusing to start: AMAZON_ENABLED is true but the integration is not "
+                    "configured; missing " + ", ".join(missing)
+                )
+        if self.nineyard_enabled and not self.has_nineyard_credentials:
             raise ValueError(
-                "Refusing to start: AMAZON_ENABLED is true but the integration is not "
-                "configured; missing " + ", ".join(missing)
+                "Refusing to start: NINEYARD_ENABLED is true but the integration is not "
+                "configured; set NINEYARD_EMAIL, NINEYARD_PASSWORD and NINEYARD_COMPANY_ID"
             )
         return self
 

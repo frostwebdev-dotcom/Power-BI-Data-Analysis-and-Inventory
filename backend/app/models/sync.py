@@ -1,8 +1,8 @@
 """Source-system synchronisation bookkeeping and raw payload retention.
 
-Tables only — no Nineyard client, no HTTP, no parsing. Phase 3 is still blocked
-on blocking question B1 (the API specification), and the schema is deliberately
-shaped so that resolving B1 changes the client, not the tables.
+Tables only — no Nineyard client, HTTP or parsing. The integration and service
+depend on these source-neutral records, so upstream field names never leak into
+the persistence model.
 
 ``source_records`` is the general retention mechanism for source-system
 references: it keeps the raw payload, its hash, and the link between an external

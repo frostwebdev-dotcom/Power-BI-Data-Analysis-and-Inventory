@@ -197,3 +197,27 @@ class TestAmazonSettings:
     def test_an_unknown_region_is_refused(self) -> None:
         with pytest.raises(ValidationError, match="AMAZON_REGION must be one of"):
             Settings(amazon_region="us-east-1")
+
+
+class TestNineyardSettings:
+    def test_defaults_are_disabled_and_unconfigured(self) -> None:
+        settings = Settings()
+
+        assert settings.nineyard_enabled is False
+        assert settings.has_nineyard_credentials is False
+        assert settings.nineyard_sync_interval_minutes == 1440
+
+    def test_enabled_without_credentials_refuses_to_start(self) -> None:
+        with pytest.raises(ValidationError, match="NINEYARD_ENABLED is true"):
+            Settings(nineyard_enabled=True)
+
+    def test_enabled_with_all_credentials_starts(self) -> None:
+        settings = Settings(
+            nineyard_enabled=True,
+            nineyard_email="catalog@example.test",
+            nineyard_password="secret",
+            nineyard_company_id=1234,
+        )
+
+        assert settings.nineyard_enabled is True
+        assert settings.has_nineyard_credentials is True

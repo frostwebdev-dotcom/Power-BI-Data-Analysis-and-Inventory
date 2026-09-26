@@ -290,16 +290,29 @@ Two conventions keep it honest:
 
 ---
 
-## 6. After the probe runs
+## 6. Catalog synchronization
 
-1. Fill in [nineyard-field-mapping.md](nineyard-field-mapping.md), replacing
-   `UNVERIFIED` with observed field names.
-2. Answer the open questions in §7 of that document — several need more than one
-   probe run, and one needs a person at Nineyard.
-3. Only then write the anti-corruption layer (ADR 0007): Nineyard DTOs and a
-   mapper into domain models, with no Nineyard field name reaching `app/models/`.
-4. Then the sync service, `nineyard_sync_runs`, and `source_records` payload
-   retention.
+The published OpenAPI contract is implemented by
+`NineyardCatalogReader`: `/api/Items` is followed by `Page`/`PerPage`, while
+the bare-array `/api/Skus` feed is followed by `PageNumber` and joined through
+`/api/Skus/GetSkuMappings`. Repeated pages are rejected rather than looping.
+
+`run_nineyard_sync` materializes the complete remote snapshot before opening
+the catalog-write transaction. It upserts products by the documented `itemId`,
+normalizes valid vendor UPCs, stores content-addressed raw payloads, and creates
+`AMAZON_SKU` identifiers for one-item SKU mappings. Multi-item bundles are
+reported as skipped because the Milestone 1 listing model is one product per
+SKU and must not guess.
+
+Run manually inside Docker:
+
+```bash
+python -m app.cli.nineyard_sync
+```
+
+Set `NINEYARD_ENABLED=true` to schedule the same service; the default interval
+is 1,440 minutes. A live probe is still required to confirm that the deployed
+Nineyard account behaves like the published contract.
 
 The probe is not a prototype of the client. It is throwaway instrumentation, and
 the real client should be written against evidence rather than by promoting this
@@ -316,6 +329,10 @@ code.
 | [`app/integrations/nineyard/sanitize.py`](../backend/app/integrations/nineyard/sanitize.py) | Structure-preserving value redaction |
 | [`app/integrations/nineyard/errors.py`](../backend/app/integrations/nineyard/errors.py) | Error taxonomy with guidance |
 | [`app/cli/nineyard_probe.py`](../backend/app/cli/nineyard_probe.py) | CLI entry point |
-| `tests/unit/test_nineyard_*.py` | 85 tests, all against mocked transports |
+| [`app/integrations/nineyard/catalog.py`](../backend/app/integrations/nineyard/catalog.py) | Catalog pagination and SKU relationship reader |
+| [`app/services/nineyard_sync.py`](../backend/app/services/nineyard_sync.py) | Atomic product, identifier and payload synchronization |
+| [`app/cli/nineyard_sync.py`](../backend/app/cli/nineyard_sync.py) | Manual synchronization entry point |
+| `tests/unit/test_nineyard_*.py` | Client, probe, sanitization and catalog-reader tests against mocked transports |
+| `tests/integration/test_nineyard_sync.py` | PostgreSQL upsert, idempotency, raw retention and rollback proof |
 
 No test in the suite makes a network request.
