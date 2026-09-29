@@ -13,7 +13,9 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
-    "sqlalchemy>=2.0.36",
+    # SQLAlchemy 2.1 changes typed Result inference and is not yet supported by
+    # the repository's strict mypy configuration.
+    "sqlalchemy>=2.0.36,<2.1",
     "alembic>=1.14",
     "psycopg[binary]>=3.2",
     "structlog>=24.4",
@@ -21,6 +23,10 @@ dependencies = [
     # Also used by starlette's TestClient, so the project has one HTTP library
     # rather than httpx and httpx2 side by side.
     "httpx2>=2.12",
+    # httpx2 honours proxy variables from the host. Secured developer and CI
+    # environments commonly expose a SOCKS proxy, so the optional transport
+    # dependency must be installed for the client to start there.
+    "socksio>=1.0",
     # Amazon SP-API (ADR 0011). Wrapped by app/integrations/amazon; its types
     # stop at that boundary.
     "python-amazon-sp-api>=1.9",
@@ -43,7 +49,9 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.8",
-    "mypy>=1.13",
+    # SQLAlchemy's plugin/type surface in this codebase is validated against
+    # this release; newer mypy versions infer ORM result rows as ``object``.
+    "mypy==1.13.0",
     "types-openpyxl>=3.1",
 ]
 

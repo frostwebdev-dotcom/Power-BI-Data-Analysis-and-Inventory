@@ -396,7 +396,6 @@ class AmazonClient:
         """
         if page_delay_s < 0:
             raise ValueError("page_delay_s must not be negative")
-
         for traversal_attempt in range(1, MAX_INVENTORY_TRAVERSAL_ATTEMPTS + 1):
             try:
                 summaries = self._load_inventory_summaries(
@@ -421,7 +420,13 @@ class AmazonClient:
         self, *, details: bool, page_delay_s: float
     ) -> list[InventorySummary]:
         """Buffer one traversal so a restart never yields duplicate pages."""
+        # Keep one library client for the whole traversal. Constructing one per
+        # page repeats LWA setup and can make a large account slow enough for
+        # Amazon's opaque pagination token to expire before the last page.
+        timeout = min(self._config.timeout_seconds, INVENTORY_REQUEST_TIMEOUT_SECONDS)
+        inventories_api = self._api(self._inventories_class, timeout_seconds=timeout)
         next_token: str | None = None
+        seen_tokens: set[str] = set()
         page = 0
         summaries: list[InventorySummary] = []
         while True:
@@ -438,7 +443,7 @@ class AmazonClient:
             token_for_call = next_token
             response = self._call_response(
                 f"getInventorySummaries page {page}",
-                self._inventory_page_call(params),
+                self._inventory_page_call(inventories_api, params),
             )
             payload = response.payload if isinstance(response.payload, Mapping) else {}
             items = payload.get("inventorySummaries")
@@ -460,16 +465,21 @@ class AmazonClient:
             next_token = response.next_token if isinstance(response.next_token, str) else None
             if not next_token:
                 return summaries
+            if next_token in seen_tokens:
+                raise AmazonError(
+                    f"getInventorySummaries page {page}: Amazon returned a repeated "
+                    "nextToken; refusing to loop indefinitely"
+                )
+            seen_tokens.add(next_token)
 
-    def _inventory_page_call(self, params: Mapping[str, Any]) -> Callable[[], Any]:
+    def _inventory_page_call(
+        self, inventories_api: Inventories, params: Mapping[str, Any]
+    ) -> Callable[[], Any]:
         """Bind one page's parameters so the retry loop re-sends the same page."""
         frozen = dict(params)
 
         def call() -> Any:
-            timeout = min(self._config.timeout_seconds, INVENTORY_REQUEST_TIMEOUT_SECONDS)
-            return self._api(
-                self._inventories_class, timeout_seconds=timeout
-            ).get_inventory_summary_marketplace(**frozen)
+            return inventories_api.get_inventory_summary_marketplace(**frozen)
 
         return call
 

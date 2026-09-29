@@ -103,7 +103,8 @@ the known names in logs, but that is a backstop, not a licence.
 
 ## 5. Rotating Nineyard credentials
 
-`NINEYARD_EMAIL`, `NINEYARD_PASSWORD`, `NINEYARD_COMPANY_ID`. Same procedure
+`NINEYARD_EMAIL`, `NINEYARD_PASSWORD`, `NINEYARD_COMPANY_ID`, and the exact
+seller account name in `NINEYARD_ACCOUNT`. Same procedure
 as §4; verify with `python -m app.cli.nineyard_probe` (read-only). The
 catalogue sync itself does not exist yet (phase 3, blocked on B1), so today a
 rotation affects only the probe.

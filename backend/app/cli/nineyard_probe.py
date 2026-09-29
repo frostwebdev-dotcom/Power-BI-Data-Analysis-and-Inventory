@@ -27,7 +27,12 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.integrations.nineyard.client import AUTH_PATH, NineyardClient, NineyardConfig
 from app.integrations.nineyard.errors import NineyardConfigurationError
-from app.integrations.nineyard.probe import READ_ONLY_ENDPOINTS, ProbeReport, run_probe
+from app.integrations.nineyard.probe import (
+    READ_ONLY_ENDPOINT_DEFAULT_PARAMS,
+    READ_ONLY_ENDPOINTS,
+    ProbeReport,
+    run_probe,
+)
 from app.integrations.nineyard.sanitize import DEFAULT_SAMPLE_SIZE
 
 #: Under storage/, which .gitignore excludes wholesale. Samples are sanitised
@@ -158,7 +163,13 @@ def print_dry_run(settings: Settings, endpoints: dict[str, str], params: dict[st
     print(f"  1. POST {base}{AUTH_PATH}")
     print("     body: email, password, companyId   (never logged or printed)")
     for index, (name, path) in enumerate(endpoints.items(), start=2):
-        query = f"?{'&'.join(f'{k}={v}' for k, v in params.items())}" if params else ""
+        endpoint_params = dict(READ_ONLY_ENDPOINT_DEFAULT_PARAMS.get(name, {}))
+        endpoint_params.update(params)
+        query = (
+            f"?{'&'.join(f'{k}={v}' for k, v in endpoint_params.items())}"
+            if endpoint_params
+            else ""
+        )
         print(f"  {index}. GET  {base}{path}{query}   [{name}]")
     print("\nNo other request is possible: the client exposes no mutating verb.")
 

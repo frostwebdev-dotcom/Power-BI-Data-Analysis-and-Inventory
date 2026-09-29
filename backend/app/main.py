@@ -38,10 +38,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_prefix=settings.api_v1_prefix,
     )
     runner = None
-    if settings.amazon_enabled and settings.app_env.strip().lower() != "test":
-        from app.jobs.amazon import build_amazon_runner
+    integrations_enabled = settings.amazon_enabled or settings.nineyard_enabled
+    if integrations_enabled and settings.app_env.strip().lower() != "test":
+        from app.jobs.runner import APSchedulerRunner
 
-        runner = build_amazon_runner(settings)
+        runner = APSchedulerRunner()
+        if settings.amazon_enabled:
+            from app.jobs.amazon import register_amazon_jobs
+
+            register_amazon_jobs(runner, settings)
+        if settings.nineyard_enabled:
+            from app.jobs.nineyard import register_nineyard_jobs
+
+            register_nineyard_jobs(runner, settings)
         runner.start()
         app.state.job_runner = runner
         logger.info("app.scheduler_started")

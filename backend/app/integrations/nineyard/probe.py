@@ -43,6 +43,18 @@ READ_ONLY_ENDPOINTS: Final[dict[str, str]] = {
     "PurchaseOrders": "/api/PurchaseOrders",
 }
 
+# These parameters are required by the observed Nineyard contract. In
+# particular, omitting Page/PerPage from Items returns HTTP 400 and omitting
+# PageNumber from Skus returns HTTP 500 for the client account. Keeping the
+# defaults here makes the normal probe command useful without requiring users
+# to know endpoint-specific pagination details.
+READ_ONLY_ENDPOINT_DEFAULT_PARAMS: Final[dict[str, dict[str, Any]]] = {
+    "Items": {"Page": 1, "PerPage": DEFAULT_SAMPLE_SIZE},
+    "Skus": {"PageNumber": 1},
+    "Vendors": {"Page": 1, "PerPage": DEFAULT_SAMPLE_SIZE},
+    "PurchaseOrders": {"Page": 1, "PerPage": DEFAULT_SAMPLE_SIZE},
+}
+
 #: Key names that *often* carry paging information. Presence is reported; meaning
 #: is not assumed. Nineyard may use none of these, or use one of them for
 #: something else entirely.
@@ -313,8 +325,16 @@ def run_probe(
     report.token_response_keys = list(token.response_keys)
 
     for name, path in (endpoints or READ_ONLY_ENDPOINTS).items():
+        endpoint_params = dict(READ_ONLY_ENDPOINT_DEFAULT_PARAMS.get(name, {}))
+        endpoint_params.update(params or {})
         report.endpoints.append(
-            probe_endpoint(client, name, path, params=params, sample_size=sample_size)
+            probe_endpoint(
+                client,
+                name,
+                path,
+                params=endpoint_params or None,
+                sample_size=sample_size,
+            )
         )
 
     return report
