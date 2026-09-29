@@ -24,6 +24,7 @@ from app.models.catalog import MarketplaceListing, Product, ProductIdentifier
 from app.models.enums import (
     ActorType,
     IdentifierType,
+    ListingStatus,
     Marketplace,
     ProductStatus,
     SourceSystem,
@@ -60,6 +61,7 @@ def amazon_listing_skus(session: Session, organization_id: uuid.UUID) -> tuple[s
         .where(
             MarketplaceListing.marketplace == Marketplace.AMAZON,
             MarketplaceListing.is_active.is_(True),
+            MarketplaceListing.listing_status == ListingStatus.ACTIVE,
         )
         .distinct()
         .order_by(MarketplaceListing.seller_sku)

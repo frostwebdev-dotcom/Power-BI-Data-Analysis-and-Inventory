@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.integrations.nineyard.catalog import SkuProductMapping
 from app.models import NineyardSyncRun, Product, ProductIdentifier, SourceRecord
-from app.models.enums import IdentifierType, SourceSystem, SyncStatus, TriggerType
+from app.models.enums import IdentifierType, ListingStatus, SourceSystem, SyncStatus, TriggerType
 from app.services.nineyard_sync import amazon_listing_skus, run_nineyard_sync
 from tests.integration import factories
 
@@ -52,6 +52,7 @@ def test_only_active_tenant_amazon_skus_are_selected(db_session: Session) -> Non
         organization,
         None,
         seller_sku="ACTIVE-SKU",
+        listing_status=ListingStatus.ACTIVE,
     )
     factories.make_marketplace_listing(
         db_session,
@@ -59,12 +60,21 @@ def test_only_active_tenant_amazon_skus_are_selected(db_session: Session) -> Non
         None,
         seller_sku="INACTIVE-SKU",
         is_active=False,
+        listing_status=ListingStatus.ACTIVE,
+    )
+    factories.make_marketplace_listing(
+        db_session,
+        organization,
+        None,
+        seller_sku="AMAZON-INACTIVE-SKU",
+        listing_status=ListingStatus.INACTIVE,
     )
     factories.make_marketplace_listing(
         db_session,
         other,
         None,
         seller_sku="OTHER-TENANT-SKU",
+        listing_status=ListingStatus.ACTIVE,
     )
 
     assert amazon_listing_skus(db_session, organization.id) == ("ACTIVE-SKU",)
