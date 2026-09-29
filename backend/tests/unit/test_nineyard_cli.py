@@ -71,6 +71,8 @@ class TestDryRun:
         assert "POST https://backyard.nineyard.test/api/OAuth/UsernameToken" in output
         for path in ("/api/Items", "/api/Skus", "/api/Vendors", "/api/PurchaseOrders"):
             assert f"GET  https://backyard.nineyard.test{path}" in output
+        assert "/api/Items?Page=1&PerPage=3" in output
+        assert "/api/Skus?PageNumber=1" in output
 
     def test_it_never_prints_the_credentials(
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch

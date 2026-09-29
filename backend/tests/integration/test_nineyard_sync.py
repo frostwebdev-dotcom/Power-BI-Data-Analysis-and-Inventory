@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.integrations.nineyard.catalog import SkuProductMapping
 from app.models import NineyardSyncRun, Product, ProductIdentifier, SourceRecord
 from app.models.enums import IdentifierType, SourceSystem, SyncStatus, TriggerType
-from app.services.nineyard_sync import run_nineyard_sync
+from app.services.nineyard_sync import amazon_listing_skus, run_nineyard_sync
 from tests.integration import factories
 
 NOW = datetime(2026, 9, 26, 20, 0, tzinfo=UTC)
@@ -42,6 +42,32 @@ class FakeSource:
 
     def iter_sku_mappings(self) -> list[SkuProductMapping]:
         return self.mappings
+
+
+def test_only_active_tenant_amazon_skus_are_selected(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    other = factories.make_organization(db_session)
+    factories.make_marketplace_listing(
+        db_session,
+        organization,
+        None,
+        seller_sku="ACTIVE-SKU",
+    )
+    factories.make_marketplace_listing(
+        db_session,
+        organization,
+        None,
+        seller_sku="INACTIVE-SKU",
+        is_active=False,
+    )
+    factories.make_marketplace_listing(
+        db_session,
+        other,
+        None,
+        seller_sku="OTHER-TENANT-SKU",
+    )
+
+    assert amazon_listing_skus(db_session, organization.id) == ("ACTIVE-SKU",)
 
 
 def test_sync_creates_catalog_identifiers_and_raw_payload(db_session: Session) -> None:

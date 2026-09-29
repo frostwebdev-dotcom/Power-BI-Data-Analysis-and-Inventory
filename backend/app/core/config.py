@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     nineyard_email: str | None = None
     nineyard_password: SecretStr | None = None
     nineyard_company_id: int | None = None
+    # Exact value of the Nineyard SKU ``account`` field to synchronize. The
+    # unfiltered SKU endpoint contains tenant-wide history and is too broad for
+    # a seller-specific catalog sync.
+    nineyard_account: str | None = None
     nineyard_timeout_seconds: float = 30.0
     # Applies to transient failures only — see integrations/nineyard/client.py.
     nineyard_max_attempts: int = 3
@@ -297,11 +301,17 @@ class Settings(BaseSettings):
                     "Refusing to start: AMAZON_ENABLED is true but the integration is not "
                     "configured; missing " + ", ".join(missing)
                 )
-        if self.nineyard_enabled and not self.has_nineyard_credentials:
-            raise ValueError(
-                "Refusing to start: NINEYARD_ENABLED is true but the integration is not "
-                "configured; set NINEYARD_EMAIL, NINEYARD_PASSWORD and NINEYARD_COMPANY_ID"
-            )
+        if self.nineyard_enabled:
+            missing = []
+            if not self.has_nineyard_credentials:
+                missing.extend(["NINEYARD_EMAIL", "NINEYARD_PASSWORD", "NINEYARD_COMPANY_ID"])
+            if not self.nineyard_account:
+                missing.append("NINEYARD_ACCOUNT")
+            if missing:
+                raise ValueError(
+                    "Refusing to start: NINEYARD_ENABLED is true but the integration is not "
+                    "configured; set " + ", ".join(missing)
+                )
         return self
 
     def safe_dump(self) -> dict[str, Any]:

@@ -16,6 +16,7 @@ from pydantic import SecretStr
 
 from app.integrations.nineyard.client import AUTH_PATH, NineyardClient, NineyardConfig
 from app.integrations.nineyard.probe import (
+    READ_ONLY_ENDPOINT_DEFAULT_PARAMS,
     READ_ONLY_ENDPOINTS,
     probe_endpoint,
     run_probe,
@@ -193,6 +194,24 @@ class TestErrorReporting:
         assert len(report.endpoints) == len(READ_ONLY_ENDPOINTS)
         failed = [e for e in report.endpoints if not e.succeeded]
         assert [e.name for e in failed] == ["Vendors"]
+
+    def test_the_run_uses_the_observed_pagination_parameters(self) -> None:
+        seen: dict[str, dict[str, str]] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == AUTH_PATH:
+                return token_response()
+            seen[request.url.path] = dict(request.url.params)
+            return httpx.Response(200, json=[])
+
+        with make_client(handler) as client:
+            report = run_probe(client)
+
+        assert all(endpoint.succeeded for endpoint in report.endpoints)
+        for name, path in READ_ONLY_ENDPOINTS.items():
+            assert seen[path] == {
+                key: str(value) for key, value in READ_ONLY_ENDPOINT_DEFAULT_PARAMS[name].items()
+            }
 
     def test_authentication_failure_aborts_the_run(self) -> None:
         """Four identical 401s would be noise, not data."""

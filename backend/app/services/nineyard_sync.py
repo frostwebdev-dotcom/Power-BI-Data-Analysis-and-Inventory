@@ -20,10 +20,11 @@ from app.core.logging import get_logger
 from app.db.transaction import transaction
 from app.integrations.nineyard.catalog import SkuProductMapping
 from app.matching.normalize import normalize_gtin
-from app.models.catalog import Product, ProductIdentifier
+from app.models.catalog import MarketplaceListing, Product, ProductIdentifier
 from app.models.enums import (
     ActorType,
     IdentifierType,
+    Marketplace,
     ProductStatus,
     SourceSystem,
     SyncStatus,
@@ -44,6 +45,26 @@ class CatalogSource(Protocol):
     def iter_items(self) -> Iterable[dict[str, Any]]: ...
 
     def iter_sku_mappings(self) -> Iterable[SkuProductMapping]: ...
+
+
+def amazon_listing_skus(session: Session, organization_id: uuid.UUID) -> tuple[str, ...]:
+    """Return the active Amazon SKUs that Nineyard should resolve.
+
+    The unfiltered Nineyard SKU feed contains hundreds of thousands of
+    historical rows. Targeting the listings already imported from Amazon keeps
+    the read bounded and ensures every mapping is relevant to this tenant.
+    """
+    statement = (
+        TenantScope(organization_id)
+        .select(MarketplaceListing, MarketplaceListing.seller_sku)
+        .where(
+            MarketplaceListing.marketplace == Marketplace.AMAZON,
+            MarketplaceListing.is_active.is_(True),
+        )
+        .distinct()
+        .order_by(MarketplaceListing.seller_sku)
+    )
+    return tuple(session.scalars(statement).all())
 
 
 def run_nineyard_sync(

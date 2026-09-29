@@ -13,7 +13,7 @@ from app.integrations.nineyard import NineyardCatalogReader, NineyardClient, Nin
 from app.jobs.runner import JobRunner
 from app.models.enums import TriggerType
 from app.services.amazon_runs import resolve_amazon_organization
-from app.services.nineyard_sync import run_nineyard_sync
+from app.services.nineyard_sync import amazon_listing_skus, run_nineyard_sync
 
 _logger = get_logger(__name__)
 JOB_NINEYARD_CATALOG: Final = "nineyard.catalog"
@@ -31,12 +31,21 @@ def run_nineyard_job(settings: Settings | None = None, *, now: Clock = _utc_now)
             organization_id = resolve_amazon_organization(
                 session, settings.nineyard_organization_slug
             )
+            seller_skus = amazon_listing_skus(session, organization_id)
+            if not seller_skus:
+                raise RuntimeError(
+                    "No active Amazon listings are available; run the listings sync first"
+                )
             with NineyardClient(NineyardConfig.from_settings(settings)) as client:
                 client.authenticate()
                 run = run_nineyard_sync(
                     session,
                     organization_id,
-                    NineyardCatalogReader(client),
+                    NineyardCatalogReader(
+                        client,
+                        sku_account=settings.nineyard_account,
+                        seller_skus=seller_skus,
+                    ),
                     TriggerType.SCHEDULED,
                     now=now,
                 )

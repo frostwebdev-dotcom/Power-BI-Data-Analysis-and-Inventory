@@ -85,8 +85,10 @@ This is the single most operationally awkward finding.
 total, so the only way to know a SKU page is the last one is to receive fewer
 records than the (undocumented) page size — or an empty page.
 
-**Still `UNVERIFIED`:** default and maximum page size; whether `Page` is 0- or
-1-based; the page size `/api/Skus` actually uses.
+**Live verification (2026-09-29):** `/api/Items` accepts `PerPage` values of
+50, 100, and 200, but rejects 250 and 500 with HTTP 400. The synchronization
+reader therefore uses 200. `Page=1` is the first page. `/api/Skus` returns 100
+records for `PageNumber=1`; its maximum/default page size remains undocumented.
 
 ---
 

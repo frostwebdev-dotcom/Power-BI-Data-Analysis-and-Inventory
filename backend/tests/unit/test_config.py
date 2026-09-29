@@ -217,7 +217,17 @@ class TestNineyardSettings:
             nineyard_email="catalog@example.test",
             nineyard_password="secret",
             nineyard_company_id=1234,
+            nineyard_account="Seller Account",
         )
 
         assert settings.nineyard_enabled is True
         assert settings.has_nineyard_credentials is True
+
+    def test_enabled_without_a_sku_account_refuses_to_start(self) -> None:
+        with pytest.raises(ValidationError, match="NINEYARD_ACCOUNT"):
+            Settings(
+                nineyard_enabled=True,
+                nineyard_email="catalog@example.test",
+                nineyard_password="secret",
+                nineyard_company_id=1234,
+            )

@@ -71,6 +71,19 @@ def client_with(handler: Any, **config_overrides: Any) -> NineyardClient:
     return NineyardClient(make_config(**config_overrides), transport=httpx.MockTransport(handler))
 
 
+def test_client_supports_a_socks_proxy_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Secured runners may require their outbound SOCKS proxy."""
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("ALL_PROXY", "socks5://127.0.0.1:1080")
+    monkeypatch.setenv("all_proxy", "socks5://127.0.0.1:1080")
+
+    client = NineyardClient(make_config())
+    client.close()
+
+
 class TestReadOnlyByConstruction:
     """The safety property, checked structurally rather than by convention."""
 
