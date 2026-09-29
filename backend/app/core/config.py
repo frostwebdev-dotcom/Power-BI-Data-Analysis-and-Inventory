@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     nineyard_timeout_seconds: float = 30.0
     # Applies to transient failures only — see integrations/nineyard/client.py.
     nineyard_max_attempts: int = 3
+    # The live SKU endpoint rate-limits sustained exact-SKU lookups. Keep the
+    # default below one request per second and make it configurable so an
+    # explicitly documented vendor limit can be adopted without a code change.
+    nineyard_sku_request_interval_seconds: float = Field(default=1.25, ge=0)
     nineyard_sync_interval_minutes: int = 1440
     nineyard_organization_slug: str | None = None
 

@@ -236,6 +236,8 @@ NINEYARD_PASSWORD=your-nineyard-password
 NINEYARD_COMPANY_ID=1234
 # Required by the catalog sync (not by the diagnostic probe):
 NINEYARD_ACCOUNT=Your Exact Seller Account
+# Pace exact-SKU reads below Nineyard's observed rate limit:
+NINEYARD_SKU_REQUEST_INTERVAL_SECONDS=1.25
 ```
 
 **The exact safe command:**
@@ -314,6 +316,11 @@ SKU and must not guess.
 Set `NINEYARD_ACCOUNT` to the exact seller account value shown by Nineyard.
 This is required when `NINEYARD_ENABLED=true`; it is intentionally separate
 from the numeric company ID used for authentication.
+
+The exact-SKU traversal waits 1.25 seconds between requests by default (at
+most 48 requests per minute). This avoids using HTTP 429 retries as ordinary
+flow control. Override `NINEYARD_SKU_REQUEST_INTERVAL_SECONDS` only when
+Nineyard documents a different account-specific limit.
 
 Run manually inside Docker, after Amazon listings have been imported:
 

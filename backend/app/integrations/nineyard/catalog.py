@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Protocol
@@ -22,6 +23,7 @@ ITEMS_PATH: Final = "/api/Items"
 SKUS_PATH: Final = "/api/Skus"
 SKU_MAPPINGS_PATH: Final = "/api/Skus/GetSkuMappings"
 DEFAULT_ITEMS_PER_PAGE: Final = 200
+DEFAULT_SKU_REQUEST_INTERVAL_SECONDS: Final = 1.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,9 +49,12 @@ class NineyardCatalogReader:
         seller_skus: Iterable[str] = (),
         items_per_page: int = DEFAULT_ITEMS_PER_PAGE,
         mapping_batch_size: int = 100,
+        sku_request_interval_seconds: float = DEFAULT_SKU_REQUEST_INTERVAL_SECONDS,
     ) -> None:
         if items_per_page <= 0 or mapping_batch_size <= 0:
             raise ValueError("page and batch sizes must be positive")
+        if sku_request_interval_seconds < 0:
+            raise ValueError("SKU request interval must not be negative")
         if not sku_account or not sku_account.strip():
             raise ValueError(
                 "sku_account is required; refusing to traverse the tenant-wide SKU history"
@@ -59,6 +64,7 @@ class NineyardCatalogReader:
         self._seller_skus = tuple(sorted({sku.strip() for sku in seller_skus if sku.strip()}))
         self._items_per_page = items_per_page
         self._mapping_batch_size = mapping_batch_size
+        self._sku_request_interval_seconds = sku_request_interval_seconds
 
     def iter_items(self) -> Iterator[dict[str, Any]]:
         """Yield every record from ``GET /api/Items`` exactly once."""
@@ -114,6 +120,11 @@ class NineyardCatalogReader:
                         "Sku": seller_sku,
                     },
                 )
+                # Exact-SKU lookups are necessarily one request per seller SKU.
+                # Pace them proactively instead of relying on HTTP 429 retries
+                # after Nineyard has already throttled the whole run.
+                if self._sku_request_interval_seconds:
+                    time.sleep(self._sku_request_interval_seconds)
                 if not isinstance(body, list):
                     raise NineyardProtocolError(
                         f"{SKUS_PATH} page {page} returned {type(body).__name__}, expected array"

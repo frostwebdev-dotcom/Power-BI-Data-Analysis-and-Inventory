@@ -205,6 +205,7 @@ class TestNineyardSettings:
 
         assert settings.nineyard_enabled is False
         assert settings.has_nineyard_credentials is False
+        assert settings.nineyard_sku_request_interval_seconds == 1.25
         assert settings.nineyard_sync_interval_minutes == 1440
 
     def test_enabled_without_credentials_refuses_to_start(self) -> None:

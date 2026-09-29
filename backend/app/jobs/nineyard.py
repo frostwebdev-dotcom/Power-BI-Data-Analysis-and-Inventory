@@ -45,6 +45,9 @@ def run_nineyard_job(settings: Settings | None = None, *, now: Clock = _utc_now)
                         client,
                         sku_account=settings.nineyard_account,
                         seller_skus=seller_skus,
+                        sku_request_interval_seconds=(
+                            settings.nineyard_sku_request_interval_seconds
+                        ),
                     ),
                     TriggerType.SCHEDULED,
                     now=now,

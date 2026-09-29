@@ -9,6 +9,7 @@ import pytest
 
 from app.integrations.nineyard.catalog import (
     DEFAULT_ITEMS_PER_PAGE,
+    DEFAULT_SKU_REQUEST_INTERVAL_SECONDS,
     NineyardCatalogReader,
     SkuProductMapping,
 )
@@ -30,6 +31,7 @@ class FakeClient:
 
 def test_default_item_page_size_matches_the_live_api_limit() -> None:
     assert DEFAULT_ITEMS_PER_PAGE == 200
+    assert DEFAULT_SKU_REQUEST_INTERVAL_SECONDS == 1.25
 
 
 def test_an_account_filter_is_required() -> None:
@@ -77,6 +79,7 @@ def test_sku_pages_are_joined_to_item_mappings_in_batches() -> None:
             sku_account="Seller Account",
             seller_skus=["SKU-A", "SKU-B"],
             mapping_batch_size=10,
+            sku_request_interval_seconds=0,
         ).iter_sku_mappings()
     )
 
@@ -95,6 +98,29 @@ def test_sku_pages_are_joined_to_item_mappings_in_batches() -> None:
         ),
         ("/api/Skus/GetSkuMappings", {"AccountSkuIds": [11, 12]}),
     ]
+
+
+def test_exact_sku_requests_are_proactively_paced(monkeypatch: pytest.MonkeyPatch) -> None:
+    delays: list[float] = []
+    monkeypatch.setattr("app.integrations.nineyard.catalog.time.sleep", delays.append)
+    client = FakeClient(
+        [
+            [{"accountSkuId": 11, "sku": "SKU-A"}],
+            [{"accountSkuId": 11, "mappedItems": [{"itemId": 101}]}],
+        ]
+    )
+
+    rows = list(
+        NineyardCatalogReader(
+            client,
+            sku_account="Seller Account",
+            seller_skus=["SKU-A"],
+            sku_request_interval_seconds=1.25,
+        ).iter_sku_mappings()
+    )
+
+    assert rows == [SkuProductMapping("SKU-A", (101,))]
+    assert delays == [1.25]
 
 
 def test_a_stale_mapping_id_does_not_discard_valid_ids() -> None:
@@ -122,6 +148,7 @@ def test_a_stale_mapping_id_does_not_discard_valid_ids() -> None:
         StaleMappingClient(),
         sku_account="Seller Account",
         seller_skus=["SKU-A", "SKU-B"],
+        sku_request_interval_seconds=0,
     )
 
     assert list(reader.iter_sku_mappings()) == [SkuProductMapping("SKU-A", (101,))]
