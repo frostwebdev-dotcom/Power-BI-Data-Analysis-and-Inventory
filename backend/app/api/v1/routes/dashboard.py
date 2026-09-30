@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
@@ -17,10 +17,12 @@ from app.api.v1.routes.vendors import READ_ROLES
 from app.core.security import Principal
 from app.db.session import get_db
 from app.models.amazon import AmazonSyncRun
+from app.models.catalog import MarketplaceListing
 from app.models.enums import (
     AvailabilityEventType,
     ExceptionStatus,
     ImportJobStatus,
+    ListingStatus,
     OosStatus,
     SyncStatus,
 )
@@ -90,10 +92,19 @@ def dashboard(
         )
 
     open_exceptions = count(
-        repository.select(ProductMappingException).where(
+        repository.select(ProductMappingException)
+        .outerjoin(
+            MarketplaceListing,
+            ProductMappingException.marketplace_listing_id == MarketplaceListing.id,
+        )
+        .where(
             ProductMappingException.status == ExceptionStatus.PENDING,
             (ProductMappingException.deferred_until.is_(None))
             | (ProductMappingException.deferred_until <= now),
+            or_(
+                ProductMappingException.marketplace_listing_id.is_(None),
+                MarketplaceListing.listing_status == ListingStatus.ACTIVE,
+            ),
         )
     )
     watchlist_active = count(

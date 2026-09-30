@@ -5,17 +5,21 @@ One run writes one :class:`AmazonInventorySnapshot` per seller SKU with
 a run never updates an earlier run's rows, so the history of "what did we
 believe was inbound on that date" is a query rather than a reconstruction.
 
-Two reads feed one snapshot per SKU:
+Two reads feed one snapshot per active SKU. The listings report is fetched
+first so its active seller SKUs can bound the FBA request:
 
-1. **FBA Inventory** (``iter_inventory_summaries(details=True)``) — the
+1. **The merchant listings report** (``GET_MERCHANT_LISTINGS_ALL_DATA``) —
+   every listing with its ``fulfillment-channel`` and current status. Active
+   seller SKUs are sent to FBA Inventory in batches of at most 50. Rows whose
+   channel is ``DEFAULT`` are merchant-fulfilled; their ``quantity`` is the
+   FBM quantity.
+2. **FBA Inventory** (``iter_inventory_summaries(details=True)``) — the
    fulfillable, inbound (working / shipped / receiving), reserved,
    unfulfillable and researching quantities. This API does not know about
    merchant-fulfilled stock at all.
-2. **The merchant listings report** (``GET_MERCHANT_LISTINGS_ALL_DATA``) —
-   every listing with its ``fulfillment-channel``. Rows whose channel is
-   ``DEFAULT`` are merchant-fulfilled; their ``quantity`` is the FBM
-   quantity. A SKU that appears only here — FBM-only, never sent to FBA —
-   gets a snapshot with zero FBA quantities and the FBM quantity.
+
+An active SKU that appears only in the report — FBM-only, never sent to FBA
+— gets a snapshot with zero FBA quantities and the FBM quantity.
 
 The listings rows are also what the listings→product mapping needs
 (:mod:`app.services.amazon_listings`), so the same parsed rows feed it in the
@@ -95,7 +99,11 @@ class InventorySource(Protocol):
     """What the sync needs from a client — kept narrow for tests."""
 
     def iter_inventory_summaries(
-        self, *, details: bool = True, page_delay_s: float = 0.0
+        self,
+        *,
+        details: bool = True,
+        page_delay_s: float = 0.0,
+        seller_skus: Sequence[str] | None = None,
     ) -> Iterator[InventorySummary]: ...
 
     def fetch_report(
@@ -450,27 +458,44 @@ def run_inventory_sync(
 
     failure: BaseException | None = None
     try:
-        summaries = list(
-            client.iter_inventory_summaries(
-                details=True, page_delay_s=settings.amazon_inventory_page_delay_s
-            )
-        )
-        _logger.info("amazon.inventory_sync.summaries", run_id=str(run.id), count=len(summaries))
-
         # The listings report has no data window; the times are required by
         # the API but ignored for this report type.
         content = client.fetch_report(LISTINGS_REPORT_TYPE, started_at, started_at)
         listings = parse_listings_report(content)
+        active_listings = [
+            listing
+            for listing in listings.listings
+            if (listing.status or "").strip().lower() == "active"
+        ]
+        active_skus = tuple(dict.fromkeys(listing.seller_sku for listing in active_listings))
         _logger.info(
             "amazon.inventory_sync.listings",
             run_id=str(run.id),
             rows_seen=listings.rows_seen,
             rows_failed=listings.rows_failed,
+            active=len(active_listings),
             fbm=sum(1 for item in listings.listings if item.is_fbm),
             encoding=listings.encoding,
         )
 
-        merged = merge_snapshot_rows(summaries, listings.listings)
+        summaries = list(
+            client.iter_inventory_summaries(
+                details=True,
+                page_delay_s=settings.amazon_inventory_page_delay_s,
+                seller_skus=active_skus,
+            )
+        )
+        _logger.info(
+            "amazon.inventory_sync.summaries",
+            run_id=str(run.id),
+            requested_skus=len(active_skus),
+            count=len(summaries),
+        )
+
+        # Inventory is operational state. Historical inactive listings stay
+        # in marketplace_listings for traceability, but do not create current
+        # inventory snapshots or inflate the exception queue.
+        merged = merge_snapshot_rows(summaries, active_listings)
         rows_failed = listings.rows_failed + merged.rows_failed
         errors = listings.errors + merged.errors
 

@@ -173,7 +173,8 @@ def test_three_rows_resolve_through_the_chain_exactly(db_session: Session) -> No
         "conflicting": 0,
         "already_approved": 0,
         "left_alone": 0,
-        "exceptions_opened": 2,
+        "inactive_skipped": 1,
+        "exceptions_opened": 1,
         "exceptions_resolved": 0,
     }
 
@@ -205,9 +206,10 @@ def test_three_rows_resolve_through_the_chain_exactly(db_session: Session) -> No
     assert unmapped.mapping_method is None
     assert unmapped.listing_status is ListingStatus.INACTIVE
 
-    # Exceptions: exactly one per unresolved listing, none for the approved one.
+    # Exceptions: current unresolved listings only. Historical inactive rows
+    # remain visible as listings but do not inflate the operational queue.
     exceptions = exceptions_by_listing(db_session, organization)
-    assert set(exceptions) == {suggested.id, unmapped.id}
+    assert set(exceptions) == {suggested.id}
 
     [suggestion] = exceptions[suggested.id]
     assert suggestion.reason is ExceptionReason.SUGGESTION_ONLY
@@ -225,21 +227,11 @@ def test_three_rows_resolve_through_the_chain_exactly(db_session: Session) -> No
     ]
     assert suggestion.match_evaluations["evaluated_at"] == NOW.isoformat()
 
-    [no_match] = exceptions[unmapped.id]
-    assert no_match.reason is ExceptionReason.NO_MATCH
-    assert no_match.suggested_product_id is None
-    assert no_match.candidates == {"products": []}
-    assert [(r["rule"], r["outcome"]) for r in no_match.match_evaluations["rules"]] == [
-        ("AMAZON_SKU_MAPPING", "no_match"),
-        ("UPC", "no_match"),
-    ]
-
-    # Audit: one approval, two queue items, all attributed to the system.
+    # Audit: one approval and one queue item, both attributed to the system.
     assert sorted(audit_actions(db_session, organization)) == sorted(
         [
             (AUDIT_MAPPING_APPROVED, mapped.id),
             (AUDIT_EXCEPTION_OPENED, suggestion.id),
-            (AUDIT_EXCEPTION_OPENED, no_match.id),
         ]
     )
     approval = db_session.execute(

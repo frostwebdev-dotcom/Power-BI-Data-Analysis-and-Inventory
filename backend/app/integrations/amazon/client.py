@@ -34,12 +34,11 @@ import hashlib
 import os
 import random
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Final, TypeVar
 
-import httpx
 from pydantic import SecretStr
 from sp_api.api import Inventories, Reports
 from sp_api.auth.exceptions import AuthorizationError
@@ -85,20 +84,6 @@ RETRYABLE_EXCEPTIONS: Final[tuple[type[SellingApiException], ...]] = (
 #: Upper bound on any single backoff wait.
 MAX_BACKOFF_SECONDS: Final = 60.0
 
-# Amazon occasionally invalidates an inventory continuation token during a
-# long full-catalog traversal. Because callers receive nothing until a complete
-# traversal succeeds, one restart from page 1 is safe and cannot duplicate a
-# persisted snapshot.
-MAX_INVENTORY_TRAVERSAL_ATTEMPTS: Final = 2
-INVALID_NEXT_TOKEN_MESSAGE: Final = "next token is invalid or expired"
-
-# Amazon inventory nextTokens expire 30 seconds after they are created. A
-# request timeout longer than that makes retrying the same page guaranteed to
-# fail with an expired token after a slow/broken response. Keep page attempts
-# below the token lifetime; report generation and document downloads continue
-# to use the operator-configured timeout.
-INVENTORY_REQUEST_TIMEOUT_SECONDS: Final = 20.0
-
 #: SP-API region → the AWS region string the library's Marketplaces carry.
 REGION_TO_AWS: Final[Mapping[str, str]] = {
     "NA": "us-east-1",
@@ -108,6 +93,9 @@ REGION_TO_AWS: Final[Mapping[str, str]] = {
 
 #: The environment variable the library would let override our marketplace.
 LIBRARY_MARKETPLACE_OVERRIDE: Final = "SP_API_DEFAULT_MARKETPLACE"
+
+#: Amazon accepts at most 50 seller SKUs in one getInventorySummaries call.
+MAX_INVENTORY_SKUS_PER_REQUEST: Final = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,11 +211,11 @@ class AmazonClient:
             "lwa_client_secret": self._config.lwa_client_secret.get_secret_value(),
         }
 
-    def _api(self, api_class: type[T], *, timeout_seconds: float | None = None) -> T:
+    def _api(self, api_class: type[T]) -> T:
         return api_class(  # type: ignore[call-arg]
             marketplace=self._config.marketplace,
             credentials=self._credentials(),
-            timeout=self._config.timeout_seconds if timeout_seconds is None else timeout_seconds,
+            timeout=self._config.timeout_seconds,
         )
 
     # -- credentials ----------------------------------------------------------
@@ -256,34 +244,30 @@ class AmazonClient:
     def request_report(
         self,
         report_type: str,
-        data_start: datetime | None = None,
-        data_end: datetime | None = None,
+        data_start: datetime,
+        data_end: datetime,
         report_options: Mapping[str, str] | None = None,
     ) -> ReportRequest:
         """Ask Amazon to generate a report. Returns the id to poll."""
-        if (data_start is None) != (data_end is None):
-            raise ValueError("data_start and data_end must be provided together")
-        if data_start is not None and data_end is not None:
-            _require_utc(data_start, "data_start")
-            _require_utc(data_end, "data_end")
-            if data_end < data_start:
-                raise ValueError("data_end must not be before data_start")
+        _require_utc(data_start, "data_start")
+        _require_utc(data_end, "data_end")
+        if data_end < data_start:
+            raise ValueError("data_end must not be before data_start")
 
         body: dict[str, Any] = {
             "reportType": report_type,
+            "dataStartTime": data_start,
+            "dataEndTime": data_end,
             "marketplaceIds": [self._config.marketplace.marketplace_id],
         }
-        if data_start is not None and data_end is not None:
-            body["dataStartTime"] = data_start
-            body["dataEndTime"] = data_end
         if report_options:
             body["reportOptions"] = dict(report_options)
 
         _logger.info(
             "amazon.report.requesting",
             report_type=report_type,
-            data_start=data_start.isoformat() if data_start is not None else None,
-            data_end=data_end.isoformat() if data_end is not None else None,
+            data_start=data_start.isoformat(),
+            data_end=data_end.isoformat(),
             marketplace_id=self._config.marketplace.marketplace_id,
         )
         payload = self._call(
@@ -342,8 +326,8 @@ class AmazonClient:
     def fetch_report(
         self,
         report_type: str,
-        data_start: datetime | None = None,
-        data_end: datetime | None = None,
+        data_start: datetime,
+        data_end: datetime,
         report_options: Mapping[str, str] | None = None,
         *,
         poll_interval_s: float = 15.0,
@@ -381,96 +365,105 @@ class AmazonClient:
     # -- inventory -----------------------------------------------------------
 
     def iter_inventory_summaries(
-        self, *, details: bool = True, page_delay_s: float = 0.0
+        self,
+        *,
+        details: bool = True,
+        page_delay_s: float = 0.0,
+        seller_skus: Sequence[str] | None = None,
     ) -> Iterator[InventorySummary]:
-        """Every FBA inventory summary for the marketplace, following ``nextToken``.
+        """FBA inventory summaries for the marketplace, following ``nextToken``.
+
+        When ``seller_skus`` is supplied, the values are de-duplicated and
+        requested in batches of at most 50 (the SP-API endpoint limit). This
+        is the safe path for accounts with years of historical inventory:
+        an unfiltered traversal can take long enough for Amazon's short-lived
+        pagination token to expire.
 
         ``details=True`` asks for the ``inventoryDetails`` block, which is
         where the inbound quantities live; without it every inbound field is
         ``None``.
 
-        ``page_delay_s`` is slept *between* pages (never before the first or
+        ``page_delay_s`` is slept between requests (never before the first or
         after the last). The retry policy only reacts to throttling after it
-        happens; a small pause keeps a large account under the endpoint's
-        ~2 requests/second in the first place.
+        happens; a small pause keeps the caller under the endpoint's rate
+        limit in the first place.
         """
         if page_delay_s < 0:
             raise ValueError("page_delay_s must not be negative")
-        for traversal_attempt in range(1, MAX_INVENTORY_TRAVERSAL_ATTEMPTS + 1):
-            try:
-                summaries = self._load_inventory_summaries(
-                    details=details, page_delay_s=page_delay_s
-                )
-            except AmazonError as exc:
-                token_expired = INVALID_NEXT_TOKEN_MESSAGE in exc.message.lower()
-                if not token_expired or traversal_attempt == MAX_INVENTORY_TRAVERSAL_ATTEMPTS:
-                    raise
-                _logger.warning(
-                    "amazon.inventory.pagination_restarting",
-                    traversal_attempt=traversal_attempt,
-                    reason="continuation token invalid or expired",
-                )
-                self._sleep(max(page_delay_s, 1.0))
-                continue
 
-            yield from summaries
-            return
+        if seller_skus is None:
+            batches: tuple[tuple[str, ...] | None, ...] = (None,)
+        else:
+            normalized = tuple(dict.fromkeys(sku.strip() for sku in seller_skus if sku.strip()))
+            if not normalized:
+                return
+            batches = tuple(
+                normalized[start : start + MAX_INVENTORY_SKUS_PER_REQUEST]
+                for start in range(0, len(normalized), MAX_INVENTORY_SKUS_PER_REQUEST)
+            )
 
-    def _load_inventory_summaries(
-        self, *, details: bool, page_delay_s: float
-    ) -> list[InventorySummary]:
-        """Buffer one traversal so a restart never yields duplicate pages."""
         # Keep one library client for the whole traversal. Constructing one per
         # page repeats LWA setup and can make a large account slow enough for
         # Amazon's opaque pagination token to expire before the last page.
-        timeout = min(self._config.timeout_seconds, INVENTORY_REQUEST_TIMEOUT_SECONDS)
-        inventories_api = self._api(self._inventories_class, timeout_seconds=timeout)
-        next_token: str | None = None
-        seen_tokens: set[str] = set()
-        page = 0
-        summaries: list[InventorySummary] = []
-        while True:
-            page += 1
-            if page > 1 and page_delay_s:
-                self._sleep(page_delay_s)
-            params: dict[str, Any] = {
-                "details": details,
-                "marketplaceIds": [self._config.marketplace.marketplace_id],
-            }
-            if next_token:
-                params["nextToken"] = next_token
+        inventories_api = self._api(self._inventories_class)
+        request_number = 0
+        for batch_number, batch in enumerate(batches, start=1):
+            next_token: str | None = None
+            seen_tokens: set[str] = set()
+            page = 0
+            while True:
+                page += 1
+                request_number += 1
+                if request_number > 1 and page_delay_s:
+                    self._sleep(page_delay_s)
+                params: dict[str, Any] = {
+                    "details": details,
+                    "marketplaceIds": [self._config.marketplace.marketplace_id],
+                }
+                if batch is not None:
+                    params["sellerSkus"] = list(batch)
+                if next_token:
+                    params["nextToken"] = next_token
 
-            token_for_call = next_token
-            response = self._call_response(
-                f"getInventorySummaries page {page}",
-                self._inventory_page_call(inventories_api, params),
-            )
-            payload = response.payload if isinstance(response.payload, Mapping) else {}
-            items = payload.get("inventorySummaries")
-            if not isinstance(items, list):
-                raise AmazonError(
-                    f"getInventorySummaries page {page}: expected 'inventorySummaries' list; "
-                    f"keys present: {sorted(payload)}"
+                token_for_call = next_token
+                response = self._call_response(
+                    f"getInventorySummaries request {request_number}",
+                    self._inventory_page_call(inventories_api, params),
                 )
-            _logger.info(
-                "amazon.inventory.page", page=page, items=len(items), had_token=bool(token_for_call)
-            )
-            for item in items:
-                if not isinstance(item, Mapping):
+                payload = response.payload if isinstance(response.payload, Mapping) else {}
+                items = payload.get("inventorySummaries")
+                if not isinstance(items, list):
                     raise AmazonError(
-                        f"getInventorySummaries page {page}: item was {type(item).__name__}"
+                        f"getInventorySummaries request {request_number}: expected "
+                        f"'inventorySummaries' list; keys present: {sorted(payload)}"
                     )
-                summaries.append(self._parse(InventorySummary, item, where="inventorySummaries"))
-
-            next_token = response.next_token if isinstance(response.next_token, str) else None
-            if not next_token:
-                return summaries
-            if next_token in seen_tokens:
-                raise AmazonError(
-                    f"getInventorySummaries page {page}: Amazon returned a repeated "
-                    "nextToken; refusing to loop indefinitely"
+                _logger.info(
+                    "amazon.inventory.page",
+                    request=request_number,
+                    batch=batch_number,
+                    batches=len(batches),
+                    page=page,
+                    requested_skus=len(batch) if batch is not None else None,
+                    items=len(items),
+                    had_token=bool(token_for_call),
                 )
-            seen_tokens.add(next_token)
+                for item in items:
+                    if not isinstance(item, Mapping):
+                        raise AmazonError(
+                            f"getInventorySummaries request {request_number}: item was "
+                            f"{type(item).__name__}"
+                        )
+                    yield self._parse(InventorySummary, item, where="inventorySummaries")
+
+                next_token = response.next_token if isinstance(response.next_token, str) else None
+                if not next_token:
+                    break
+                if next_token in seen_tokens:
+                    raise AmazonError(
+                        f"getInventorySummaries request {request_number}: Amazon returned a "
+                        "repeated nextToken; refusing to loop indefinitely"
+                    )
+                seen_tokens.add(next_token)
 
     def _inventory_page_call(
         self, inventories_api: Inventories, params: Mapping[str, Any]
@@ -507,25 +500,7 @@ class AmazonClient:
                 if attempt == attempts:
                     raise _exhausted(describe, exc, attempts) from None
                 self._sleep_before_retry(
-                    attempt,
-                    describe=describe,
-                    reason=f"HTTP {_status(exc)}",
-                    retry_after=_retry_after(exc),
-                )
-            except httpx.TransportError as exc:
-                # python-amazon-sp-api lets httpx transport failures cross its
-                # boundary. These are indeterminate network failures rather
-                # than definite SP-API answers, so retry the same operation.
-                if attempt == attempts:
-                    raise AmazonTransientError(
-                        f"{describe}: {type(exc).__name__} on every one of "
-                        f"{attempts} attempts."
-                    ) from None
-                self._sleep_before_retry(
-                    attempt,
-                    describe=describe,
-                    reason=type(exc).__name__,
-                    retry_after=None,
+                    attempt, describe=describe, exc=exc, retry_after=_retry_after(exc)
                 )
             except SellingApiException as exc:
                 raise AmazonError(
@@ -539,7 +514,7 @@ class AmazonClient:
         attempt: int,
         *,
         describe: str,
-        reason: str,
+        exc: SellingApiException,
         retry_after: float | None,
     ) -> None:
         """Exponential backoff with jitter, or Amazon's own Retry-After, capped."""
@@ -552,7 +527,7 @@ class AmazonClient:
             "amazon.retrying",
             request=describe,
             attempt=attempt,
-            reason=reason,
+            reason=f"HTTP {_status(exc)}",
             delay_seconds=round(delay, 2),
         )
         self._sleep(delay)

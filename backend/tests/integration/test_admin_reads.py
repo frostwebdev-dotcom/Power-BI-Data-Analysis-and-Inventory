@@ -20,13 +20,7 @@ from app.db.session import get_db
 from app.main import create_app
 from app.models import Organization, User
 from app.models.catalog import Product
-from app.models.enums import (
-    AmazonSyncJobType,
-    ExceptionStatus,
-    ImportJobStatus,
-    OosStatus,
-    SyncStatus,
-)
+from app.models.enums import ExceptionStatus, ImportJobStatus, ListingStatus, OosStatus
 from app.services.roles import assign_role, ensure_system_roles
 from tests.integration import factories
 
@@ -139,6 +133,18 @@ class TestDashboard:
         quiet = factories.make_vendor(db_session, organization, code="QUIET", name="Quiet")
         product = factories.make_product(db_session, organization)
         factories.make_mapping_exception(db_session, organization, vendor)
+        inactive_listing = factories.make_marketplace_listing(
+            db_session,
+            organization,
+            None,
+            listing_status=ListingStatus.INACTIVE,
+        )
+        factories.make_mapping_exception(
+            db_session,
+            organization,
+            None,
+            marketplace_listing_id=inactive_listing.id,
+        )
         reviewer = factories.make_user(db_session, organization, email="reviewer@x.test")
         factories.make_mapping_exception(
             db_session,
@@ -191,7 +197,7 @@ class TestDashboard:
 
         body = client.get("/api/v1/dashboard", headers=headers).json()
 
-        assert body["open_exceptions"] == 1  # deferred and rejected excluded
+        assert body["open_exceptions"] == 1  # deferred, rejected, and inactive listings excluded
         assert body["watchlist_active"] == 1 and body["watchlist_in_stock"] == 1
         assert body["watchlist_newly_available_7d"] == 1
         assert body["imports_running"] == 0
@@ -213,32 +219,6 @@ class TestDashboard:
 
         assert len(body["amazon_syncs"]) == 1
         assert body["amazon_syncs"][0]["status"] is not None
-
-    def test_a_failed_run_carries_its_reason(
-        self, client: TestClient, login: Login, db_session: Session, organization: Organization
-    ) -> None:
-        """The dashboard shows why a sync failed, so the reader is not sent to the logs."""
-        headers, _ = login(RoleCode.VIEWER)
-        started = datetime.now(UTC) - timedelta(minutes=5)
-        factories.make_amazon_sync_run(
-            db_session,
-            organization,
-            job_type=AmazonSyncJobType.FBA_INVENTORY,
-            status=SyncStatus.FAILED,
-            started_at=started,
-            completed_at=started + timedelta(seconds=2),
-            error_message="getInventorySummaries page 1: SP-API returned 403: Access denied.",
-        )
-        db_session.flush()
-
-        body = client.get("/api/v1/dashboard", headers=headers).json()
-
-        (summary,) = body["amazon_syncs"]
-        assert summary["status"] == "FAILED"
-        assert summary["error_message"] == (
-            "getInventorySummaries page 1: SP-API returned 403: Access denied."
-        )
-        assert summary["started_at"] is not None and summary["completed_at"] is not None
 
 
 class TestSeed:

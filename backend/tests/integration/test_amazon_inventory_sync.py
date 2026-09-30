@@ -54,13 +54,19 @@ class FakeClient:
         self.raise_in_summaries = raise_in_summaries
         self.raise_in_report = raise_in_report
         self.page_delays: list[float] = []
+        self.seller_sku_batches: list[tuple[str, ...] | None] = []
         self.report_requests: list[str] = []
 
     def iter_inventory_summaries(
-        self, *, details: bool = True, page_delay_s: float = 0.0
+        self,
+        *,
+        details: bool = True,
+        page_delay_s: float = 0.0,
+        seller_skus: Sequence[str] | None = None,
     ) -> Iterator[InventorySummary]:
         assert details is True
         self.page_delays.append(page_delay_s)
+        self.seller_sku_batches.append(tuple(seller_skus) if seller_skus is not None else None)
         for index, item in enumerate(self.summaries):
             if self.raise_in_summaries is not None and index == 1:
                 raise self.raise_in_summaries
@@ -143,6 +149,9 @@ def test_one_snapshot_per_sku_with_fba_and_fbm_merged(db_session: Session) -> No
     assert run.error_details["fbm_only"] == 4
     assert run.error_details["listings_mapping"]["listings_seen"] == 6
     assert client.report_requests == [LISTINGS_REPORT_TYPE]
+    assert client.seller_sku_batches == [
+        ("WIDGET-12", "GADGET-1", "BLANK-1", "ODD-1", "UPC-1", "CAFE-1")
+    ]
 
     snapshots = snapshots_for(db_session, run)
     assert set(snapshots) == EXPECTED_SKUS
@@ -165,6 +174,24 @@ def test_the_page_delay_from_settings_reaches_the_client(db_session: Session) ->
     sync(db_session, organization.id, client)
 
     assert client.page_delays == [0.6]
+
+
+def test_inactive_listings_are_not_requested_or_snapshotted(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    content = (
+        HEADER
+        + "\n"
+        + row("ACTIVE-1", channel="DEFAULT", status="Active")
+        + "\n"
+        + row("OLD-1", channel="DEFAULT", status="Inactive")
+    ).encode()
+    client = FakeClient([summary("ACTIVE-1")], listings=content)
+
+    run = sync(db_session, organization.id, client)
+
+    assert client.seller_sku_batches == [("ACTIVE-1",)]
+    assert set(snapshots_for(db_session, run)) == {"ACTIVE-1"}
+    assert run.error_details["listings_mapping"]["inactive_skipped"] == 1
 
 
 def test_a_completed_run_is_audited_as_system(db_session: Session) -> None:
@@ -268,7 +295,7 @@ def test_a_failure_while_paging_leaves_one_failed_run_and_no_snapshots(
         "message": "throttled beyond retries",
     }
     assert snapshots_for(db_session, runs[0]) == {}
-    assert client.report_requests == []  # never got as far as the report
+    assert client.report_requests == [LISTINGS_REPORT_TYPE]
     [event] = audit_events_for(db_session, runs[0])
     assert event.action == AUDIT_ACTION_FAILED
 
@@ -317,6 +344,7 @@ def test_a_second_concurrent_run_is_refused(db_session: Session) -> None:
         sync(db_session, organization.id, client)
 
     assert client.page_delays == []  # nothing was read
+    assert client.seller_sku_batches == []
     assert [r.status for r in runs_for(db_session, organization.id)] == [SyncStatus.RUNNING]
 
 

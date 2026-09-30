@@ -14,7 +14,6 @@ from dataclasses import fields
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-import httpx
 import pytest
 from pydantic import SecretStr
 from sp_api.auth.exceptions import AuthorizationError
@@ -41,7 +40,10 @@ from app.integrations.amazon import (
     ReportStatus,
     resolve_marketplace,
 )
-from app.integrations.amazon.client import LIBRARY_MARKETPLACE_OVERRIDE
+from app.integrations.amazon.client import (
+    LIBRARY_MARKETPLACE_OVERRIDE,
+    MAX_INVENTORY_SKUS_PER_REQUEST,
+)
 
 CLIENT_ID = "amzn1.application-oa2-client.test"
 CLIENT_SECRET = "amzn1.oa2-cs.v1.d0-not-leak-this-client-secret"
@@ -471,22 +473,6 @@ class TestReportRequest:
 
         assert "reportOptions" not in recorder.calls[0][2]
 
-    def test_snapshot_report_can_omit_a_data_window(
-        self, client: AmazonClient, recorder: Recorder
-    ) -> None:
-        recorder.script = [returns(CREATE_REPORT_PAYLOAD)]
-
-        client.request_report("GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA")
-
-        assert recorder.calls[0][2] == {
-            "reportType": "GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA",
-            "marketplaceIds": ["ATVPDKIKX0DER"],
-        }
-
-    def test_a_partial_data_window_is_refused(self, client: AmazonClient) -> None:
-        with pytest.raises(ValueError, match="provided together"):
-            client.request_report("X", START)
-
     def test_naive_datetimes_are_refused(self, client: AmazonClient) -> None:
         with pytest.raises(ValueError, match="timezone-aware UTC"):
             client.request_report("X", datetime(2026, 8, 1), END)
@@ -601,33 +587,6 @@ class TestInventorySummaryMapping:
 
 
 class TestInventoryPagination:
-    def test_inventory_page_timeout_stays_below_next_token_lifetime(
-        self, config: AmazonConfig, recorder: Recorder, clock: FakeClock
-    ) -> None:
-        reports, inventories = make_fakes(recorder)
-        long_timeout = AmazonConfig(
-            lwa_client_id=config.lwa_client_id,
-            lwa_client_secret=config.lwa_client_secret,
-            lwa_refresh_token=config.lwa_refresh_token,
-            seller_id=config.seller_id,
-            marketplace=config.marketplace,
-            region=config.region,
-            timeout_seconds=60.0,
-            max_attempts=config.max_attempts,
-        )
-        client = AmazonClient(
-            long_timeout,
-            reports_class=reports,
-            inventories_class=inventories,
-            sleep=clock.sleep,
-            clock=clock,
-        )
-        recorder.script = [lambda: inventory_page([])]
-
-        list(client.iter_inventory_summaries())
-
-        assert recorder.constructions[0]["timeout"] == 20.0
-
     def test_three_pages_are_followed_and_each_item_yielded_once(
         self, client: AmazonClient, recorder: Recorder
     ) -> None:
@@ -724,33 +683,51 @@ class TestInventoryPagination:
         assert [k.get("nextToken") for _, _, k in recorder.calls] == [None, "tok-2", "tok-2"]
         assert len(clock.sleeps) == 1
 
-    def test_an_expired_next_token_restarts_once_without_duplicate_items(
+    def test_requested_skus_are_deduplicated_and_batched_at_fifty(
         self, client: AmazonClient, recorder: Recorder, clock: FakeClock
     ) -> None:
-        expired = SellingApiBadRequestException(
-            [{"code": "InvalidInput", "message": "Next token is invalid or expired"}], {}
+        skus = [f"SKU-{index}" for index in range(MAX_INVENTORY_SKUS_PER_REQUEST + 1)]
+        recorder.script = [lambda: inventory_page([]), lambda: inventory_page([])]
+
+        assert (
+            list(
+                client.iter_inventory_summaries(
+                    seller_skus=[*skus, " SKU-0 ", ""], page_delay_s=0.6
+                )
+            )
+            == []
         )
+
+        calls = [kwargs for _, _, kwargs in recorder.calls]
+        assert calls[0]["sellerSkus"] == skus[:50]
+        assert calls[1]["sellerSkus"] == skus[50:]
+        assert [len(call["sellerSkus"]) for call in calls] == [50, 1]
+        assert clock.sleeps == [0.6]
+        assert len(recorder.constructions) == 1
+
+    def test_pagination_keeps_the_same_sku_batch(
+        self, client: AmazonClient, recorder: Recorder
+    ) -> None:
         recorder.script = [
-            lambda: inventory_page(
-                [{**INVENTORY_ITEM_MINIMAL, "sellerSku": "STALE-PAGE"}], "old-token"
-            ),
-            raises(expired),
-            lambda: inventory_page(
-                [{**INVENTORY_ITEM_MINIMAL, "sellerSku": "FRESH-1"}], "new-token"
-            ),
-            lambda: inventory_page([{**INVENTORY_ITEM_MINIMAL, "sellerSku": "FRESH-2"}]),
+            lambda: inventory_page([INVENTORY_ITEM_MINIMAL], "tok-2"),
+            lambda: inventory_page([INVENTORY_ITEM_FULL]),
         ]
 
-        skus = [summary.seller_sku for summary in client.iter_inventory_summaries()]
+        list(client.iter_inventory_summaries(seller_skus=["GADGET-1", "WIDGET-12"]))
 
-        assert skus == ["FRESH-1", "FRESH-2"]
-        assert [kwargs.get("nextToken") for _, _, kwargs in recorder.calls] == [
-            None,
-            "old-token",
-            None,
-            "new-token",
+        calls = [kwargs for _, _, kwargs in recorder.calls]
+        assert [call["sellerSkus"] for call in calls] == [
+            ["GADGET-1", "WIDGET-12"],
+            ["GADGET-1", "WIDGET-12"],
         ]
-        assert clock.sleeps == [1.0]
+        assert [call.get("nextToken") for call in calls] == [None, "tok-2"]
+
+    def test_an_empty_sku_filter_makes_no_api_call(
+        self, client: AmazonClient, recorder: Recorder
+    ) -> None:
+        assert list(client.iter_inventory_summaries(seller_skus=[])) == []
+        assert recorder.calls == []
+        assert recorder.constructions == []
 
 
 # --- retry policy --------------------------------------------------------------
@@ -775,18 +752,6 @@ class TestRetryPolicy:
         recorder.script = [raises(server_error()), returns(GET_REPORT_DONE)]
 
         assert client.get_report_status("r").is_done
-        assert len(clock.sleeps) == 1
-
-    def test_transport_disconnect_then_success(
-        self, client: AmazonClient, recorder: Recorder, clock: FakeClock
-    ) -> None:
-        recorder.script = [
-            raises(httpx.RemoteProtocolError("server disconnected")),
-            returns(GET_REPORT_DONE),
-        ]
-
-        assert client.get_report_status("r").is_done
-        assert len(recorder.calls) == 2
         assert len(clock.sleeps) == 1
 
     def test_retry_after_is_honoured_and_capped(
@@ -844,19 +809,6 @@ class TestRetryPolicy:
             client.get_report_status("r")
 
         assert excinfo.value.status_code == 500
-
-    def test_transport_disconnect_exhausts_into_transient_error(
-        self, client: AmazonClient, recorder: Recorder, clock: FakeClock
-    ) -> None:
-        recorder.script = [
-            raises(httpx.RemoteProtocolError("server disconnected")) for _ in range(3)
-        ]
-
-        with pytest.raises(AmazonTransientError, match="RemoteProtocolError"):
-            client.get_report_status("r")
-
-        assert len(recorder.calls) == 3
-        assert len(clock.sleeps) == 2
 
     def test_auth_errors_are_never_retried(
         self, client: AmazonClient, recorder: Recorder, clock: FakeClock

@@ -293,6 +293,7 @@ class MappingSummary:
     conflicting: int = 0
     already_approved: int = 0
     left_alone: int = 0
+    inactive_skipped: int = 0
     exceptions_opened: int = 0
     exceptions_resolved: int = 0
     details: list[dict[str, Any]] = field(default_factory=list)
@@ -309,6 +310,7 @@ class MappingSummary:
             "conflicting": self.conflicting,
             "already_approved": self.already_approved,
             "left_alone": self.left_alone,
+            "inactive_skipped": self.inactive_skipped,
             "exceptions_opened": self.exceptions_opened,
             "exceptions_resolved": self.exceptions_resolved,
         }
@@ -348,6 +350,13 @@ def map_listings(
             # would re-queue a rejected suggestion unchanged (AC-8.5). Phase 8
             # owns what happens next.
             summary.left_alone += 1
+            continue
+
+        if listing.listing_status is not ListingStatus.ACTIVE:
+            # Keep the row and its source status for history, but current
+            # purchasing decisions and the exception queue concern only live
+            # listings. If Amazon reactivates it, a later run evaluates it.
+            summary.inactive_skipped += 1
             continue
 
         resolution = resolve_listing(parsed, catalog)

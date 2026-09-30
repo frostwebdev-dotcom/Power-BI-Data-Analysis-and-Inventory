@@ -26,7 +26,7 @@ from app.core.security import RoleCode
 from app.db.session import get_db
 from app.main import create_app
 from app.models import AuditEvent, Organization, User, Vendor
-from app.models.enums import MappingStatus
+from app.models.enums import ListingStatus, MappingStatus
 from app.models.ingestion import ImportJob, ImportJobRow
 from app.models.matching import ProductMappingException
 from app.models.vendor import VendorProduct
@@ -294,6 +294,36 @@ class TestReimportAfterApproval:
         # The approval is still the only mapping and still approved by the same person.
         db_session.refresh(line)
         assert line.mapping_approved_by_user_id == approver.id
+
+
+# --- current marketplace queue --------------------------------------------------------------
+
+
+def test_pending_exceptions_for_inactive_marketplace_listings_are_hidden(
+    client: TestClient,
+    manager: tuple[Headers, User],
+    db_session: Session,
+    organization: Organization,
+) -> None:
+    headers, _ = manager
+    active = factories.make_marketplace_listing(
+        db_session, organization, None, listing_status=ListingStatus.ACTIVE
+    )
+    inactive = factories.make_marketplace_listing(
+        db_session, organization, None, listing_status=ListingStatus.INACTIVE
+    )
+    visible = factories.make_mapping_exception(
+        db_session, organization, None, marketplace_listing_id=active.id
+    )
+    factories.make_mapping_exception(
+        db_session, organization, None, marketplace_listing_id=inactive.id
+    )
+    db_session.flush()
+
+    body = queue(client, headers)
+
+    assert body["total"] == 1
+    assert [item["id"] for item in body["items"]] == [str(visible.id)]
 
 
 # --- access control -------------------------------------------------------------------------

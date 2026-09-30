@@ -10,8 +10,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.models.catalog import Product
-from app.models.enums import ExceptionReason, ExceptionStatus
+from app.models.catalog import MarketplaceListing, Product
+from app.models.enums import ExceptionReason, ExceptionStatus, ListingStatus
 from app.models.matching import ProductMappingException
 from app.repositories.scoping import ScopedRepository
 
@@ -48,6 +48,16 @@ class ExceptionRepository(ScopedRepository):
         statement = self.select(ProductMappingException)
         if status is not None:
             statement = statement.where(ProductMappingException.status == status)
+        if status is ExceptionStatus.PENDING:
+            statement = statement.outerjoin(
+                MarketplaceListing,
+                ProductMappingException.marketplace_listing_id == MarketplaceListing.id,
+            ).where(
+                or_(
+                    ProductMappingException.marketplace_listing_id.is_(None),
+                    MarketplaceListing.listing_status == ListingStatus.ACTIVE,
+                )
+            )
         if reason is not None:
             statement = statement.where(ProductMappingException.reason == reason)
         if vendor_id is not None:
