@@ -168,7 +168,7 @@ def test_three_rows_resolve_through_the_chain_exactly(db_session: Session) -> No
         "listings_updated": 0,
         "approved": 1,
         "suggested": 1,
-        "unmapped": 1,
+        "unmapped": 0,
         "ambiguous": 0,
         "conflicting": 0,
         "already_approved": 0,
@@ -260,13 +260,13 @@ def test_a_second_run_changes_nothing_and_opens_nothing(db_session: Session) -> 
 
     assert summary.listings_created == 0 and summary.listings_updated == 3
     assert summary.already_approved == 1
-    assert summary.exceptions_opened == 0  # the two open items are refreshed, not duplicated
+    assert summary.exceptions_opened == 0  # the open suggestion is refreshed, not duplicated
     after = {
         k: (v.mapping_status, v.product_id)
         for k, v in listings_by_sku(db_session, organization).items()
     }
     assert after == before_listings
-    assert sum(len(v) for v in exceptions_by_listing(db_session, organization).values()) == 2
+    assert sum(len(v) for v in exceptions_by_listing(db_session, organization).values()) == 1
     assert audit_actions(db_session, organization) == before_audit
 
 
@@ -411,7 +411,7 @@ def test_mapping_is_scoped_to_the_organization(db_session: Session) -> None:
 
     summary = run_mapping(db_session, organization)
 
-    assert summary.approved == 0 and summary.suggested == 0 and summary.unmapped == 3
+    assert summary.approved == 0 and summary.suggested == 0 and summary.unmapped == 2\n    assert summary.inactive_skipped == 1
     assert all(
         listing.product_id is None for listing in listings_by_sku(db_session, organization).values()
     )
