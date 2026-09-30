@@ -411,7 +411,8 @@ def test_mapping_is_scoped_to_the_organization(db_session: Session) -> None:
 
     summary = run_mapping(db_session, organization)
 
-    assert summary.approved == 0 and summary.suggested == 0 and summary.unmapped == 2\n    assert summary.inactive_skipped == 1
+    assert summary.approved == 0 and summary.suggested == 0 and summary.unmapped == 2
+    assert summary.inactive_skipped == 1
     assert all(
         listing.product_id is None for listing in listings_by_sku(db_session, organization).values()
     )
