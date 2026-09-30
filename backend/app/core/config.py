@@ -241,6 +241,19 @@ class Settings(BaseSettings):
 
         return value
 
+    @field_validator("nineyard_company_id", mode="before")
+    @classmethod
+    def _empty_nineyard_company_id_is_unset(cls, value: object) -> object:
+        """Treat Compose's empty optional value as absent.
+
+        Docker Compose expands an unset ``NINEYARD_COMPANY_ID`` to an empty
+        string.  The integration remains disabled in that configuration, so
+        the empty value is semantically ``None`` rather than a malformed ID.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalize_log_level(cls, value: object) -> object:

@@ -208,6 +208,14 @@ class TestNineyardSettings:
         assert settings.nineyard_sku_request_interval_seconds == 1.25
         assert settings.nineyard_sync_interval_minutes == 1440
 
+    def test_empty_company_id_from_compose_is_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NINEYARD_COMPANY_ID", "")
+
+        settings = Settings()
+
+        assert settings.nineyard_company_id is None
+        assert settings.has_nineyard_credentials is False
+
     def test_enabled_without_credentials_refuses_to_start(self) -> None:
         with pytest.raises(ValidationError, match="NINEYARD_ENABLED is true"):
             Settings(nineyard_enabled=True)

@@ -284,9 +284,7 @@ class TestAmazonRedaction:
         assert "temporary-signature" not in masked
         assert masked.count(REDACTED) == 3
 
-    def test_http_client_info_urls_are_not_logged(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_http_client_info_urls_are_not_logged(self, capsys: pytest.CaptureFixture[str]) -> None:
         configure_logging(Settings(log_level="INFO", log_format="json"))
 
         logging.getLogger("httpx").info(
