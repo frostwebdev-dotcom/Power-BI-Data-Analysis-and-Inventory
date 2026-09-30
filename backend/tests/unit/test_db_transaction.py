@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
+from sqlalchemy.orm import Session
 
 from app.db.transaction import session_lifecycle
 
@@ -20,7 +23,7 @@ def test_session_lifecycle_only_closes_the_session(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("app.db.transaction.get_session_factory", lambda: lambda: session)
 
     with session_lifecycle() as opened:
-        assert opened is session
+        assert opened is cast(Session, session)
         assert session.closed is False
 
     assert session.closed is True
