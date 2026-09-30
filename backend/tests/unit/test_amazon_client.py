@@ -722,6 +722,40 @@ class TestInventoryPagination:
         ]
         assert [call.get("nextToken") for call in calls] == [None, "tok-2"]
 
+    def test_a_comma_sku_uses_the_unambiguous_singular_parameter(
+        self, client: AmazonClient, recorder: Recorder
+    ) -> None:
+        recorder.script = [lambda: inventory_page([]), lambda: inventory_page([])]
+
+        assert (
+            list(
+                client.iter_inventory_summaries(
+                    seller_skus=["ORDINARY-1", "PACK,BLUE", "ORDINARY-2"]
+                )
+            )
+            == []
+        )
+
+        calls = [kwargs for _, _, kwargs in recorder.calls]
+        assert calls[0]["sellerSkus"] == ["ORDINARY-1", "ORDINARY-2"]
+        assert "sellerSku" not in calls[0]
+        assert calls[1]["sellerSku"] == "PACK,BLUE"
+        assert "sellerSkus" not in calls[1]
+
+    def test_a_comma_sku_stays_singular_during_pagination(
+        self, client: AmazonClient, recorder: Recorder
+    ) -> None:
+        recorder.script = [
+            lambda: inventory_page([INVENTORY_ITEM_MINIMAL], "tok-2"),
+            lambda: inventory_page([INVENTORY_ITEM_FULL]),
+        ]
+
+        list(client.iter_inventory_summaries(seller_skus=["PACK,BLUE"]))
+
+        calls = [kwargs for _, _, kwargs in recorder.calls]
+        assert [call["sellerSku"] for call in calls] == ["PACK,BLUE", "PACK,BLUE"]
+        assert [call.get("nextToken") for call in calls] == [None, "tok-2"]
+
     def test_an_empty_sku_filter_makes_no_api_call(
         self, client: AmazonClient, recorder: Recorder
     ) -> None:

@@ -374,10 +374,13 @@ class AmazonClient:
         """FBA inventory summaries for the marketplace, following ``nextToken``.
 
         When ``seller_skus`` is supplied, the values are de-duplicated and
-        requested in batches of at most 50 (the SP-API endpoint limit). This
-        is the safe path for accounts with years of historical inventory:
-        an unfiltered traversal can take long enough for Amazon's short-lived
-        pagination token to expire.
+        requested in batches of at most 50 (the SP-API endpoint limit). SKUs
+        containing commas use the endpoint's singular ``sellerSku`` parameter:
+        Amazon serializes ``sellerSkus`` as a comma-delimited value, so such a
+        SKU would otherwise be split and could make a 50-item batch look larger
+        than the limit. This is the safe path for accounts with years of
+        historical inventory: an unfiltered traversal can take long enough for
+        Amazon's short-lived pagination token to expire.
 
         ``details=True`` asks for the ``inventoryDetails`` block, which is
         where the inbound quantities live; without it every inbound field is
@@ -392,22 +395,28 @@ class AmazonClient:
             raise ValueError("page_delay_s must not be negative")
 
         if seller_skus is None:
-            batches: tuple[tuple[str, ...] | None, ...] = (None,)
+            batches: tuple[tuple[str, tuple[str, ...]] | None, ...] = (None,)
         else:
             normalized = tuple(dict.fromkeys(sku.strip() for sku in seller_skus if sku.strip()))
             if not normalized:
                 return
+            ordinary = tuple(sku for sku in normalized if "," not in sku)
+            comma_skus = tuple(sku for sku in normalized if "," in sku)
             batches = tuple(
-                normalized[start : start + MAX_INVENTORY_SKUS_PER_REQUEST]
-                for start in range(0, len(normalized), MAX_INVENTORY_SKUS_PER_REQUEST)
-            )
+                (
+                    "sellerSkus",
+                    ordinary[start : start + MAX_INVENTORY_SKUS_PER_REQUEST],
+                )
+                for start in range(0, len(ordinary), MAX_INVENTORY_SKUS_PER_REQUEST)
+            ) + tuple(("sellerSku", (sku,)) for sku in comma_skus)
 
         # Keep one library client for the whole traversal. Constructing one per
         # page repeats LWA setup and can make a large account slow enough for
         # Amazon's opaque pagination token to expire before the last page.
         inventories_api = self._api(self._inventories_class)
         request_number = 0
-        for batch_number, batch in enumerate(batches, start=1):
+        for batch_number, batch_filter in enumerate(batches, start=1):
+            parameter, batch = batch_filter if batch_filter is not None else (None, None)
             next_token: str | None = None
             seen_tokens: set[str] = set()
             page = 0
@@ -420,8 +429,10 @@ class AmazonClient:
                     "details": details,
                     "marketplaceIds": [self._config.marketplace.marketplace_id],
                 }
-                if batch is not None:
-                    params["sellerSkus"] = list(batch)
+                if parameter == "sellerSkus" and batch is not None:
+                    params[parameter] = list(batch)
+                elif parameter == "sellerSku" and batch is not None:
+                    params[parameter] = batch[0]
                 if next_token:
                     params["nextToken"] = next_token
 
@@ -444,6 +455,7 @@ class AmazonClient:
                     batches=len(batches),
                     page=page,
                     requested_skus=len(batch) if batch is not None else None,
+                    sku_parameter=parameter,
                     items=len(items),
                     had_token=bool(token_for_call),
                 )
