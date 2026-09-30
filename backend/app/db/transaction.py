@@ -91,6 +91,24 @@ def session_scope() -> Iterator[Session]:
         session.close()
 
 
+@contextmanager
+def session_lifecycle() -> Iterator[Session]:
+    """Open and close a session without owning its transaction boundary.
+
+    Long-running ingestion services commit their RUNNING claim and final state
+    independently so a remote failure can be recorded before it is re-raised.
+    Wrapping those services in :func:`session_scope` adds an outer rollback
+    after the failure record is written and can leave the claim stuck RUNNING.
+    This context manager owns only the session resource; the called service
+    remains responsible for every commit and rollback.
+    """
+    session = get_session_factory()()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
 def run_in_transaction[T](work: Callable[[Session], T]) -> T:
     """Run ``work`` in its own session and transaction, returning its result."""
     with session_scope() as session:

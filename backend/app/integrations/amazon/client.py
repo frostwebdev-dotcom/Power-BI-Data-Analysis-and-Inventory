@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Final, TypeVar
 
+import httpx
 from pydantic import SecretStr
 from sp_api.api import Inventories, Reports
 from sp_api.auth.exceptions import AuthorizationError
@@ -514,6 +515,18 @@ class AmazonClient:
                 self._sleep_before_retry(
                     attempt, describe=describe, exc=exc, retry_after=_retry_after(exc)
                 )
+            except httpx.TransportError as exc:
+                if attempt == attempts:
+                    raise AmazonTransientError(
+                        f"{describe}: transport failed on every one of {attempts} attempts "
+                        f"({type(exc).__name__})."
+                    ) from None
+                self._sleep_before_retry(
+                    attempt,
+                    describe=describe,
+                    exc=exc,
+                    retry_after=None,
+                )
             except SellingApiException as exc:
                 raise AmazonError(
                     f"{describe}: SP-API returned {_status(exc)}: {_message(exc)}",
@@ -526,7 +539,7 @@ class AmazonClient:
         attempt: int,
         *,
         describe: str,
-        exc: SellingApiException,
+        exc: SellingApiException | httpx.TransportError,
         retry_after: float | None,
     ) -> None:
         """Exponential backoff with jitter, or Amazon's own Retry-After, capped."""
@@ -535,11 +548,14 @@ class AmazonClient:
         else:
             delay = min(2.0 ** (attempt - 1), MAX_BACKOFF_SECONDS)
             delay *= 0.5 + random.random() / 2
+        reason = (
+            f"HTTP {_status(exc)}" if isinstance(exc, SellingApiException) else type(exc).__name__
+        )
         _logger.warning(
             "amazon.retrying",
             request=describe,
             attempt=attempt,
-            reason=f"HTTP {_status(exc)}",
+            reason=reason,
             delay_seconds=round(delay, 2),
         )
         self._sleep(delay)

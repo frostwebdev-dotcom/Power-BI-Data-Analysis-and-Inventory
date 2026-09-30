@@ -14,6 +14,7 @@ from dataclasses import fields
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
+import httpx
 import pytest
 from pydantic import SecretStr
 from sp_api.auth.exceptions import AuthorizationError
@@ -788,6 +789,19 @@ class TestRetryPolicy:
         assert client.get_report_status("r").is_done
         assert len(clock.sleeps) == 1
 
+    def test_dropped_connection_is_retried(
+        self, client: AmazonClient, recorder: Recorder, clock: FakeClock
+    ) -> None:
+        request = httpx.Request("GET", "https://sellingpartnerapi-na.amazon.com/test")
+        recorder.script = [
+            raises(httpx.RemoteProtocolError("server disconnected", request=request)),
+            returns(GET_REPORT_DONE),
+        ]
+
+        assert client.get_report_status("r").is_done
+        assert len(recorder.calls) == 2
+        assert len(clock.sleeps) == 1
+
     def test_retry_after_is_honoured_and_capped(
         self, client: AmazonClient, recorder: Recorder, clock: FakeClock
     ) -> None:
@@ -843,6 +857,21 @@ class TestRetryPolicy:
             client.get_report_status("r")
 
         assert excinfo.value.status_code == 500
+
+    def test_transport_errors_exhaust_into_transient_error(
+        self, client: AmazonClient, recorder: Recorder, clock: FakeClock
+    ) -> None:
+        request = httpx.Request("GET", "https://sellingpartnerapi-na.amazon.com/test")
+        recorder.script = [
+            raises(httpx.RemoteProtocolError("server disconnected", request=request))
+            for _ in range(3)
+        ]
+
+        with pytest.raises(AmazonTransientError, match=r"transport failed.*3 attempts"):
+            client.get_report_status("r")
+
+        assert len(recorder.calls) == 3
+        assert len(clock.sleeps) == 2
 
     def test_auth_errors_are_never_retried(
         self, client: AmazonClient, recorder: Recorder, clock: FakeClock

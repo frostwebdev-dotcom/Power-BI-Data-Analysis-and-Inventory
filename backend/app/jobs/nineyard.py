@@ -8,7 +8,7 @@ from typing import Final
 
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
-from app.db.transaction import session_scope
+from app.db.transaction import session_lifecycle
 from app.integrations.nineyard import NineyardCatalogReader, NineyardClient, NineyardConfig
 from app.jobs.runner import JobRunner
 from app.models.enums import TriggerType
@@ -27,7 +27,7 @@ def _utc_now() -> datetime:
 def run_nineyard_job(settings: Settings | None = None, *, now: Clock = _utc_now) -> None:
     settings = settings or get_settings()
     try:
-        with session_scope() as session:
+        with session_lifecycle() as session:
             organization_id = resolve_amazon_organization(
                 session, settings.nineyard_organization_slug
             )

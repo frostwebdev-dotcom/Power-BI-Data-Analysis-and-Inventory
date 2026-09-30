@@ -20,8 +20,11 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "structlog>=24.4",
     "pyjwt>=2.10",
-    # Also used by starlette's TestClient, so the project has one HTTP library
-    # rather than httpx and httpx2 side by side.
+    # python-amazon-sp-api uses httpx for its transport. Import it directly at
+    # our adapter boundary so dropped connections can be retried explicitly.
+    "httpx>=0.27,<1",
+    # The Nineyard adapter uses httpx2; its transport and proxy behavior are
+    # tested separately from the Amazon SDK's standard-httpx transport.
     "httpx2>=2.12",
     # httpx2 honours proxy variables from the host. Secured developer and CI
     # environments commonly expose a SOCKS proxy, so the optional transport

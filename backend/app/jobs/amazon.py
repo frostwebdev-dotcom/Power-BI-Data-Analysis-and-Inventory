@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
-from app.db.transaction import session_scope
+from app.db.transaction import session_lifecycle
 from app.jobs.runner import JobRunner
 from app.models.enums import AmazonSyncJobType, TriggerType
 from app.services.amazon_inventory import run_inventory_sync
@@ -90,7 +90,7 @@ def prepare_run(
 def run_orders_job(settings: Settings | None = None, *, now: Clock = _utc_now) -> None:
     settings = settings or get_settings()
     try:
-        with session_scope() as session:
+        with session_lifecycle() as session:
             at = now()
             organization_id = prepare_run(session, settings, AmazonSyncJobType.ORDERS_REPORT, at)
             for window_start, window_end in orders_windows(
@@ -120,7 +120,7 @@ def run_orders_job(settings: Settings | None = None, *, now: Clock = _utc_now) -
 def run_inventory_job(settings: Settings | None = None, *, now: Clock = _utc_now) -> None:
     settings = settings or get_settings()
     try:
-        with session_scope() as session:
+        with session_lifecycle() as session:
             organization_id = prepare_run(session, settings, AmazonSyncJobType.FBA_INVENTORY, now())
             run = run_inventory_sync(session, organization_id, TriggerType.SCHEDULED, now=now)
             _logger.info("amazon.job.inventory.done", run_id=str(run.id), status=run.status.value)
@@ -131,7 +131,7 @@ def run_inventory_job(settings: Settings | None = None, *, now: Clock = _utc_now
 def run_listings_job(settings: Settings | None = None, *, now: Clock = _utc_now) -> None:
     settings = settings or get_settings()
     try:
-        with session_scope() as session:
+        with session_lifecycle() as session:
             organization_id = prepare_run(
                 session, settings, AmazonSyncJobType.LISTINGS_REPORT, now()
             )

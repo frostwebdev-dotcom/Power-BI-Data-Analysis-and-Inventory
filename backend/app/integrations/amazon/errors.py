@@ -66,11 +66,11 @@ class AmazonRateLimited(AmazonError):  # noqa: N818 — name fixed by ADR 0011's
 
 
 class AmazonTransientError(AmazonError):
-    """A 5xx or transport failure persisted through every retry."""
+    """A 5xx or transport failure persisted through the retry budget."""
 
     guidance = (
         "SP-API returned a server error or the connection failed on every attempt. "
-        "The next scheduled run will try again."
+        "Nothing here can fix it; the next scheduled run will try again."
     )
 
 
