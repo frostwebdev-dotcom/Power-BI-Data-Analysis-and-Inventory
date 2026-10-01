@@ -1,16 +1,19 @@
 # Purchasing & Replenishment Management System
 
-[![CI](https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions/workflows/ci.yml/badge.svg)](https://github.com/cbfriedman/Power-BI-Data-Analysis-and-Inventory/actions/workflows/ci.yml)
+[![CI](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/workflows/ci.yml/badge.svg)](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/workflows/ci.yml)
 
 Milestone 1 — data foundation, Nineyard catalog synchronisation, vendor
 inventory ingestion, and deterministic product matching.
 
-**Current state:** the vendor/import/matching/watchlist workflow and the
-read-only Amazon SP-API ingestion are implemented. The Amazon integration is
-complete against deterministic tests and awaits one live seller-account run.
-The Nineyard client/probe exists, but catalog synchronization remains blocked
-on verified live API fields. See [docs/phase1-status.md](docs/phase1-status.md)
-for the exact evidence and remaining gates.
+**Current state:** Milestone 1 is complete and validated in the local Docker
+environment. Live Amazon authentication, orders, listings, FBA/FBM/inbound
+inventory, Nineyard catalog synchronization, deterministic SKU mapping,
+scheduling, persistence, and failure recovery have all run against the client
+account. The final manual inventory run completed with 8,656 rows seen, 730
+created, and 0 failed. Hosted staging/production deployment is intentionally a
+separate phase. See [the handoff record](docs/milestone-1-handoff.md) for the
+evidence boundary and [the local setup guide](docs/local-docker-setup.md) for a
+clean-room reproduction procedure.
 
 Rules that govern all work in this repository are in [CLAUDE.md](CLAUDE.md).
 
@@ -300,4 +303,10 @@ nobody. `/health` is the only route permitted outside `/api/v1`.
 | [docs/architecture.md](docs/architecture.md) | Structure, entities, plan, risks |
 | [docs/acceptance-criteria.md](docs/acceptance-criteria.md) | Definition of done |
 | [docs/phase1-status.md](docs/phase1-status.md) | Live status, assumptions, blocking questions |
+| [docs/local-docker-setup.md](docs/local-docker-setup.md) | Reproduce the validated local stack from a clean checkout |
+| [docs/configuration-guide.md](docs/configuration-guide.md) | Environment variables and secret-handling rules |
+| [docs/runbook.md](docs/runbook.md) | Operations, backup/restore, rotation, and recovery |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Diagnosing common Docker, Amazon, Nineyard, and scheduler failures |
+| [docs/milestone-1-handoff.md](docs/milestone-1-handoff.md) | Client acceptance checklist and recorded evidence |
+| [docs/hosted-deployment-proposal.md](docs/hosted-deployment-proposal.md) | Separate client-owned hosting phase and acceptance plan |
 | [docs/decisions/](docs/decisions/) | Architecture decision records |

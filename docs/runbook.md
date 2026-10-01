@@ -104,10 +104,11 @@ the known names in logs, but that is a backstop, not a licence.
 ## 5. Rotating Nineyard credentials
 
 `NINEYARD_EMAIL`, `NINEYARD_PASSWORD`, `NINEYARD_COMPANY_ID`, and the exact
-seller account name in `NINEYARD_ACCOUNT`. Same procedure
-as §4; verify with `python -m app.cli.nineyard_probe` (read-only). The
-catalogue sync itself does not exist yet (phase 3, blocked on B1), so today a
-rotation affects only the probe.
+seller account name in `NINEYARD_ACCOUNT`. Use the same procedure as §4. Verify
+authentication with `python -m app.cli.nineyard_probe` (read-only), then verify
+the bounded database synchronization with `python -m app.cli.nineyard_sync`.
+The sync targets active Amazon listing SKUs, so the listings sync must already
+have completed.
 
 ## 6. Re-running a failed sync
 

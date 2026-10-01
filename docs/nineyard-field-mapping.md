@@ -447,7 +447,13 @@ And these need a person at Nineyard, not a probe:
 
 ---
 
-## 17. Before writing any mapping code
+## 17. Historical pre-implementation checklist
+
+This was the discovery checklist used before the live integration was built.
+Milestone 1 subsequently completed a live, read-only catalog synchronization
+and deterministic rematching in the local Docker environment. The remaining
+unchecked questions below are business-semantics or API-contract questions for
+future expansion; they do not invalidate the bounded Milestone 1 mapping.
 
 - [ ] A probe run completed and a sanitised sample saved
 - [ ] §16's probe list answered

@@ -1,13 +1,20 @@
 # Nineyard Integration
 
-Status: **Read-only diagnostic only.** No synchronisation service exists yet,
-and none should be written until this document's open questions are answered
-from observation rather than assumption (ADR 0007).
-Last updated: 2026-09-08
+Status: **Read-only synchronization implemented and validated against the
+client account in the local Docker environment.** Authentication, paginated
+catalog retrieval, bounded retries/rate-limit handling, persistence, Amazon
+listing rematching, scheduler integration, and the `nineyard_sync` CLI are in
+place. Hosted validation is intentionally part of the separate deployment
+phase.
+Last updated: 2026-10-01
+
+> Sections describing the original probe-first discovery process are retained
+> as implementation history. The current acceptance record is
+> [milestone-1-handoff.md](milestone-1-handoff.md).
 
 ---
 
-## 1. Why a probe before a client
+## 1. Why the integration began with a probe
 
 Blocking question **B1** asked for the Nineyard API specification. What arrived
 is the authentication endpoint and four read-only endpoint groups — enough to

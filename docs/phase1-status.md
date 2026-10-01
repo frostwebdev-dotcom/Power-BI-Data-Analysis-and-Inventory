@@ -1,7 +1,15 @@
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
-Last updated: 2026-09-22 (Amazon velocity HTTP endpoint and local verification)
+Last updated: 2026-10-01 (Milestone 1 local Docker close-out)
+
+> **Close-out notice:** Milestone 1 was completed and validated against the
+> client account in the local Docker environment on 2026-09-30. Live Amazon
+> and Nineyard runs, the final completed inventory run, the push to `main`, and
+> the final CI correction supersede older “pending” markers retained below as
+> implementation history. The concise acceptance record is
+> [milestone-1-handoff.md](milestone-1-handoff.md). Hosted deployment remains a
+> separate phase.
 
 ---
 
@@ -10,25 +18,25 @@ Last updated: 2026-09-22 (Amazon velocity HTTP endpoint and local verification)
 | | |
 |---|---|
 | Milestone | 1 — Data foundation, ingestion, matching |
-| **Milestone 1 status** | **Not complete.** The Amazon POC and Nineyard catalog synchronization are implemented and covered by automated tests. Completion still requires a live Nineyard probe/sync with the client's credentials, a clean completed Amazon inventory run on the updated build, and a pushed commit with green CI/deployment validation. The products screen, durable import worker, immutable import-report row and generated frontend API types remain broader Milestone 1 gaps tracked below. |
-| Stage | **Phases 0–2, 4, 6–9 complete; 11 done; A, 5, 10 built with a named gap each; 3 diagnostic only.** Backend is deployed to Railway. |
+| **Milestone 1 status** | **Complete for the agreed local Docker scope.** Live Amazon and Nineyard synchronization passed, the final manual inventory run completed with 8,656 rows seen and 0 failed, source was pushed, and the final CI correction passed. Hosted environment validation is separate. |
+| Stage | **Milestone 1 local Docker acceptance complete.** The repository contains the API, frontend, PostgreSQL schema, imports, matching, Amazon integration, Nineyard synchronization, scheduler, diagnostics, and reproducibility documentation. No hosted deployment is claimed. |
 | Application code | Schema, audit service, auth foundation, error handling, redaction, read-only Nineyard client + CLI probe, tenant scoping helper for repositories (ADR 0012), Amazon SP-API configuration, read-only SP-API client, the three ingestion services, the listings→product mapping, the shared identifier normaliser, the sales-velocity service, an APScheduler runner behind a `JobRunner` protocol, the `amazon_poc` CLI, the vendor database API, versioned import profiles with typed rule shapes, CSV/XLSX readers and a validate-against-sample preview (ADR 0013), file upload with byte-identical raw retention behind a `StorageBackend` (ADR 0004), profile-driven parsing of CSV/XLSX into `import_job_rows` with coded per-row validation and the import report, and the deterministic matching engine (`app/matching/engine.py`) with the import matching step that attributes every row and feeds the exception queue, and the exception-queue API through which a purchasing manager approves (with explicit, audited supersession), rejects or defers an item — an approval is the permanent mapping the next import matches at priority 3; and the snapshot stage that closes an import — append-only inventory snapshots, availability events on every transition, the OOS watchlist and its status history, and the availability feed. **The import lifecycle is complete end to end**: upload → parse → match → snapshot → COMPLETED. The admin interface now has working screens for every one of those steps — sign-in, vendors, import profiles, imports, exception queue, watchlist, availability, audit log, dashboard — and a Playwright walk-through drives the whole Milestone 1 flow through them. Products is the one remaining placeholder (its API is phase 3, B1). Phase 11 made the pipeline fast enough for real files — **50,000 rows in 38.8 s (CSV) and 56.5 s (XLSX) at ~110 MB peak**, down from 15 min 56 s — proved every interface query index-backed, rehearsed backup and restore, and added `docs/runbook.md`, `seed_demo`, `perf_import` and `explain_queries`. |
 | Database schema | 25 tables, 23 enum types, 136 indexes, 82 check constraints, 83 foreign keys, 1 append-only trigger |
 | Migrations | 7 revisions (`506fd0ecc33a`, `3767ee979011`, `3de5c4e5def0`, `44c932e601b0`, `fadb756b1b85`, `fab7311199fc`, `52e787f49770`), applied and reversed against PostgreSQL 16.15; also applied by `pg_restore` of a live dump and confirmed with `alembic current` / `alembic check` (§3, phase 11) |
 | Backend tests | **1111 passed** (`pytest`: 702 unit + 409 integration). Plus one Playwright end-to-end test (`frontend/e2e`), passed twice locally against the running stack. |
-| Quality gates | 8 of 8 passing locally (§4, 2026-09-16); the same gates were green in GitHub Actions on 2026-09-14 and `main` has not been pushed since |
-| Docker stack | **Verified in CI** — full `docker compose up --build` from `.env.example`, API healthy against PostgreSQL, migration applied and checked, web answering (§4, §6 S1). Backend also live on Railway (§6 S2). |
-| Blocking questions open | 9 (see §7); B1 partially answered, B2 narrowed, B3 decided for Milestone 1, B7 partially answered by ADR 0011, B9 new (admin screens need their foundation) |
+| Quality gates | Final main-branch CI passed after the Compose configuration correction; recorded run `36783109641`. |
+| Docker stack | **Validated locally and in CI** — Postgres, API, and web build from the documented Compose configuration; hosted deployment is separate. |
+| Blocking questions open | **None for the agreed Milestone 1 local Docker scope.** Historical discovery questions remain in §7 for future product and hosted-deployment decisions. |
 
-The schema, the audit writer, the security foundation, and a read-only Nineyard
-diagnostic exist and are verified. A vendor file can be uploaded, retained byte for
+The schema, the audit writer, the security foundation, and read-only Nineyard
+synchronization exist and are verified. A vendor file can be uploaded, retained byte for
 byte, parsed through its profile into validated rows, matched to products
 through the priority chain, snapshotted, diffed into availability events that
 reach the watchlist, and reported on; a reviewer can resolve the queue through
-the API or the screens. Nineyard synchronization is now implemented against
-the published contract but has not yet been run with client credentials; that, and the
-products screen it would feed, is what stands between here and the Milestone 1
-exit gate (§11).
+the API or the screens. Nineyard synchronization was run with the client
+account, and its catalog identifiers were used in the Amazon listing rematch.
+The remaining historical gaps below are future-scope notes, not blockers to the
+Milestone 1 local acceptance recorded above.
 
 ---
 
@@ -41,9 +49,9 @@ Phases are defined in [architecture.md §6](architecture.md#6-implementation-ord
 | — | Planning and documentation | ✅ Complete | Scope, architecture, criteria, 13 ADRs |
 | 0 | Scaffolding | ✅ Complete | Backend, frontend, infra, quality gates, GitHub Actions CI (2026-09-14) |
 | 1 | DB foundation + audit | ✅ Complete | Schema, migration, transactional audit writer, transaction utilities, config/security foundation |
-| A | Amazon SP-API read-only ingestion ([ADR 0011](decisions/0011-amazon-sp-api-proof-of-concept-in-milestone-1.md)) | 🟨 Implementation complete; live validation pending | Precedes phase 2 by client request (§10). **Exists:** settings, redaction, the read-only client, the tables, the three ingestions, listings→product mapping, the velocity service, scheduled jobs with stale-run recovery, the `amazon_poc` CLI, and authenticated `GET /api/v1/amazon/velocity` ([amazon-integration.md](amazon-integration.md)). **Not yet done:** a single run against the real seller account (B8) — the remaining client-side proof. |
+| A | Amazon SP-API read-only ingestion ([ADR 0011](decisions/0011-amazon-sp-api-proof-of-concept-in-milestone-1.md)) | ✅ Complete and live-validated locally | Settings, redaction, read-only client, orders/listings/inventory ingestion, product mapping, velocity, scheduled jobs, stale-run recovery, CLI, and API are implemented. Live authentication and ingestion passed; the final manual inventory run completed with 8,656 rows seen and 0 failed. |
 | 2 | Vendor database | ✅ Complete | `GET/POST /api/v1/vendors`, `GET/PATCH /vendors/{id}`, `POST /vendors/{id}/deactivate`, and the same shape under `/vendors/{id}/contacts`. Reads for every role, writes for `DATA_OPERATOR`; every mutation audited in its own transaction; a vendor with active import profiles cannot be deactivated. AC-4.1–4.4 covered by 35 route tests. |
-| 3 | Nineyard integration + sync | 🟨 Live reads verified; DB proof pending | **Exists:** read-only client and probe; live-verified 200-record Items pagination; exact seller-account/SKU resolution bounded by locally imported active Amazon listings; resilient GetSkuMappings batches; atomic catalog service that upserts products, catalog/UPC/Amazon-SKU identifiers and checksummed source payloads; manual CLI and scheduled job; unit and PostgreSQL integration coverage including failure rollback. **Verified live 2026-09-29:** authentication, Items (7,026 reported records), Skus, exact Account+Sku filtering, and GetSkuMappings. **Pending:** run the database sync and listings rematch in the client's Docker environment and record completed counts. See [nineyard-integration.md](nineyard-integration.md). |
+| 3 | Nineyard integration + sync | ✅ Complete and live-validated locally | Read-only client/probe, exact active-Amazon-SKU targeting, resilient GetSkuMappings batches, atomic catalog upsert, identifiers, manual CLI, scheduled job, and rollback coverage are implemented. Authentication and live database synchronization completed against the client account. See [nineyard-integration.md](nineyard-integration.md). |
 | 4 | Import profiles | ✅ Complete | The six JSONB rule columns have fixed Pydantic shapes with JSON Schema export ([ADR 0013](decisions/0013-import-profile-rule-shapes.md)); `GET/POST /vendors/{id}/import-profiles`, `GET/PATCH …/{profile_id}`, `POST …/deactivate`, `POST …/validate` (stored and draft) and `GET /import-profiles/rule-schemas`. Editing creates version n+1 and retires n, audited. AC-6.1–6.4 covered by 46 route tests and 70 rule/reader/mapper tests. Real vendor files (B4) would still sharpen the defaults. |
 | 5 | File ingestion + raw retention | 🟨 Complete in-request; no worker | `StorageBackend` protocol with a local backend; `POST /api/v1/imports` retains the bytes before recording anything, dedupes by SHA-256, creates a `PENDING` job and — when a profile is named and `IMPORT_PROCESS_ON_UPLOAD` is on — parses it in the same request; `GET /imports`, `GET /imports/{id}`, `GET /imports/{id}/raw`. AC-5.1–5.6 and 5.8 covered. **Not built:** the worker claim loop and restart-safe resumption (AC-5.7); the `JobRunner` from the Amazon work is the intended host. |
 | 6 | Parsing + validation + reporting | ✅ Complete (to the matching boundary) | Streaming CSV/XLSX readers with the file's own row numbers; `app/imports/extract.py` applies the profile and raises coded issues (`UPC_INVALID`, `QUANTITY_INVALID`, `QUANTITY_NEGATIVE`, `PRICE_INVALID`, `IDENTIFIER_MISSING`, `AVAILABILITY_UNKNOWN`, `DUPLICATE_IN_FILE`); `process_import_job` writes `import_job_rows` in 1,000-row transactions, fails the job before any row on a missing column or signature mismatch, reconciles counters from the rows, and leaves the job RUNNING at stage MATCHING; `GET /imports/{id}/report` and `GET /imports/{id}/rows`. AC-9.1, 9.2, 9.4, 9.5 covered by 31 tests including 20,000-row CSV and XLSX runs. **Not built:** the immutable `import_report` row (AC-9.3) and the matched-by-rule counts it needs — after phase 7. |

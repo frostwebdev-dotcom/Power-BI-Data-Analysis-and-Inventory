@@ -1,10 +1,12 @@
 # Amazon SP-API Integration
 
-Status: **Implementation complete; live validation pending.** Client, tables,
-the three ingestions, listings→product mapping, scheduler, `amazon_poc` CLI,
-and read-only velocity HTTP endpoint exist and are tested. Nothing has run
-against the real seller account (blocking question **B8**).
-Last updated: 2026-09-22
+Status: **Implemented and validated against the client seller account in the
+local Docker environment.** The client, tables, three ingestions,
+listings→product mapping, scheduler, `amazon_poc` CLI, and read-only velocity
+HTTP endpoint exist and are tested. The final manual FBA inventory run
+completed on 2026-09-30 with 8,656 rows seen and 0 failures. Hosted validation
+is intentionally part of the separate deployment phase.
+Last updated: 2026-10-01
 
 ---
 

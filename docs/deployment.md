@@ -1,37 +1,39 @@
 # Deployment
 
-Status: **Backend deployed to Railway and healthy; frontend service not yet created.** Stack proven in CI — see [Continuous integration](#continuous-integration).
-**Backend image: verified.** Builds clean, and was run with `PORT=7777`
-injected — it listened on that port and answered `/health` with 200. Production
-start-up guards were confirmed in the real image: `DEV_AUTH_ENABLED=true` with
-`APP_ENV=production` refuses to boot.
+Status: **Local Docker stack validated; hosted deployment is a separate phase
+and has not been accepted by this document.** The backend and frontend images
+build in the Compose CI job, and production start-up guards are covered by the
+automated suite. The platform-specific notes below are a deployment reference,
+not evidence that the current Milestone 1 revision is running in a client-owned
+hosted environment.
 
-**Frontend image: unverified locally.** `npm ci` fails inside the container with
-`ECONNRESET`, including with retries. This is a Docker networking fault on the
-development machine, not a defect in the Dockerfile: a single `npm view`
-metadata call takes ~19s inside a container versus instantly on the host, and
-the same `npm ci` succeeds natively. It is expected to build on a platform with
-working container networking, but that remains **unproven** — treat the first
-Railway frontend build as the real test.
-Last updated: 2026-09-08
+Before a hosted environment is accepted, verify the live Amazon and Nineyard
+integrations, scheduler, managed PostgreSQL persistence, backups, logging, and
+controlled failure recovery on that environment. Record those results in a
+separate deployment acceptance report.
+
+The proposed scope, prerequisites, sequence, and acceptance tests are in
+[hosted-deployment-proposal.md](hosted-deployment-proposal.md).
+
+Last updated: 2026-10-01
 
 ---
 
-## Read this first: there is no login yet
+## Read this first: production access control is required
 
-Do not put this on a public URL expecting it to be access-controlled.
+Do not expose this application publicly using the local development sign-in.
+The settings validator correctly refuses `DEV_AUTH_ENABLED=true` when
+`APP_ENV=production`. Milestone 1 now contains operational data and mutation
+endpoints, so a hosted environment must have either:
 
-The development token endpoint is refused in production — the settings validator
-will not let the application start with `DEV_AUTH_ENABLED=true` when
-`APP_ENV=production` — which is correct, and which means **there is currently no
-way to authenticate at all in a production deployment**.
+- the accepted production identity-provider integration; or
+- private platform/network access controls that restrict the whole staging
+  environment to named client and delivery-team users.
 
-Today that is safe: the only endpoints are health probes and auth, there is no
-data, and there are no mutation endpoints. A public demo leaks nothing.
-
-**Before vendor CRUD ships, real authentication has to land first**, or the first
-mutation endpoint is publicly writable. See [security.md §7](security.md) for the
-Microsoft Entra ID plan and blocking question **B2**.
+Publishing the web UI while leaving the API public is not sufficient. Apply
+the protection to both services, permit only the intended health checks, and
+complete an authorization test before adding live credentials. See
+[security.md §7](security.md) for the Microsoft Entra ID design.
 
 ---
 
@@ -41,12 +43,14 @@ Three services, not one:
 
 | Service | Shape | Notes |
 |---|---|---|
-| `backend` | FastAPI, long-running | Needs a real process — not serverless functions |
-| `frontend` | Next.js standalone | All routes currently prerender as static |
-| PostgreSQL 16 | Managed | Needs persistence and backups |
+| `backend` | FastAPI, long-running | Needs a real process — not serverless functions; one scheduler owner initially |
+| `frontend` | Next.js standalone | Public browser URL only after access control is in place |
+| PostgreSQL 16 | Managed | Needs private connectivity, persistence, backups, and restore testing |
+| Retained file storage | Persistent volume or object storage | Must survive application redeploys and match database references |
 
-Later, phase 5 adds a worker process and object storage for retained vendor
-files — that second one is blocking question **B5**, still open.
+A dedicated scheduler/worker service is recommended before scaling the API
+beyond one replica. Until then, run one API process so scheduled jobs are not
+registered more than once.
 
 ---
 
@@ -255,9 +259,8 @@ branch cancels the older run.
 The smoke job matters more than the other two: it is Milestone 1 exit
 criterion #1 ([milestone-1-scope.md §4](milestone-1-scope.md)) — "`docker
 compose up` yields a working Postgres + API + web stack from a clean checkout
-using only `.env` variables" — and the development machine cannot run Docker,
-so CI is the only place it is verified. It also builds the frontend image,
-which could not be built locally (see the note at the top of this document).
+using only `.env` variables." It independently repeats the clean Docker proof
+outside the developer workstation and builds both application images.
 
 The `backend` and `frontend` jobs run the same commands as `.	asks.ps1 check`
 and `make check`; a green local run should mean a green CI run, and a
