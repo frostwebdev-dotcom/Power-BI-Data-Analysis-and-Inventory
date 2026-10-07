@@ -2,9 +2,8 @@
 
 These exist now because audit attribution and mapping approval both need a real
 actor: an approved mapping is permanent and someone has to be accountable for it
-(CLAUDE.md §5.2, §6). Authentication itself is still open — see blocking
-question B2 — so ``password_hash`` is nullable and no credential flow is
-implemented here.
+(CLAUDE.md §5.2, §6). Microsoft Entra authenticates explicitly enrolled users
+(ADR 0016). ``password_hash`` remains nullable and unused; Microsoft owns credentials.
 """
 
 from __future__ import annotations
@@ -35,6 +34,8 @@ class User(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    entra_tenant_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    entra_object_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
 
     organization: Mapped[Organization] = relationship(back_populates="users")
     user_roles: Mapped[list[UserRole]] = relationship(
@@ -47,6 +48,11 @@ class User(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base):
         # Email is unique per tenant, not globally: the same person may hold an
         # account in more than one organization.
         Index("uq_users_organization_id_email", "organization_id", "email", unique=True),
+        Index("uq_users_entra_identity", "entra_tenant_id", "entra_object_id", unique=True),
+        CheckConstraint(
+            "(entra_tenant_id IS NULL) = (entra_object_id IS NULL)",
+            name="entra_identity_complete",
+        ),
         CheckConstraint("email = lower(email)", name="email_is_lowercase"),
         CheckConstraint("position('@' in email) > 1", name="email_looks_like_an_address"),
     )

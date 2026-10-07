@@ -9,7 +9,7 @@
  */
 
 import { apiUrl } from "./config";
-import { clearToken, readToken } from "./auth-storage";
+import { clearToken, getToken } from "./auth-storage";
 
 export class ApiError extends Error {
   constructor(
@@ -42,8 +42,8 @@ async function toError(response: Response): Promise<ApiError> {
   );
 }
 
-function authHeaders(): Record<string, string> {
-  const token = readToken();
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -65,7 +65,7 @@ async function request<T>(method: string, path: string, init: RequestInit = {}):
     ...init,
     method,
     cache: "no-store",
-    headers: { Accept: "application/json", ...authHeaders(), ...(init.headers ?? {}) },
+    headers: { Accept: "application/json", ...(await authHeaders()), ...(init.headers ?? {}) },
   });
   if (response.status === 401) {
     clearToken();
@@ -101,7 +101,7 @@ export const api = {
   },
   /** Raw bytes, for downloads; the caller decides what to do with the blob. */
   async blob(path: string): Promise<{ blob: Blob; filename: string | null }> {
-    const response = await fetch(apiUrl(path), { headers: authHeaders(), cache: "no-store" });
+    const response = await fetch(apiUrl(path), { headers: await authHeaders(), cache: "no-store" });
     if (!response.ok) throw await toError(response);
     const disposition = response.headers.get("content-disposition") ?? "";
     const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/.exec(disposition);

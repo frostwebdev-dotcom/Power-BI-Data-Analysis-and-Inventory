@@ -6,12 +6,11 @@ import type { FormEvent } from "react";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Development sign-in: an email the API already knows. There is no password
- * because the development backend is not a credential system; the production
- * identity provider replaces this screen (phase1-status B2).
+ * Sign-in mode comes from the API. Microsoft owns staging credentials; the
+ * email-only form is available only when local development auth is enabled.
  */
 export function SignIn() {
-  const { signIn } = useAuth();
+  const { signIn, authMode, configurationError } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +20,7 @@ export function SignIn() {
     setBusy(true);
     setError(null);
     try {
-      await signIn(email.trim());
+      await signIn(authMode === "dev" ? email.trim() : undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -34,10 +33,13 @@ export function SignIn() {
       <form className="card signin__card" onSubmit={submit}>
         <h1>Sign in</h1>
         <p className="muted">
-          Development sign-in. Enter the email of a user in this environment; the API issues a
-          short-lived token.
+          {authMode === "entra"
+            ? "Use your approved Microsoft account to access PRMS."
+            : authMode === "dev"
+              ? "Development sign-in. Enter the email of a user in this environment."
+              : "Sign-in is not configured. Contact your administrator."}
         </p>
-        <label className="field">
+        {authMode === "dev" ? <label className="field">
           <span className="field__label">Email</span>
           <input
             type="email"
@@ -48,14 +50,14 @@ export function SignIn() {
             onChange={(event) => setEmail(event.target.value)}
             placeholder="admin@example.test"
           />
-        </label>
-        {error ? (
+        </label> : null}
+        {error || configurationError ? (
           <div className="note note--danger" role="alert">
-            {error}
+            {error || configurationError}
           </div>
         ) : null}
-        <button type="submit" className="button button--primary" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+        <button type="submit" className="button button--primary" disabled={busy || authMode === "disabled"}>
+          {busy ? "Signing in…" : authMode === "entra" ? "Sign in with Microsoft" : "Sign in"}
         </button>
       </form>
     </div>

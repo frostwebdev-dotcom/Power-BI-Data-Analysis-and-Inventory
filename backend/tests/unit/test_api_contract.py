@@ -63,6 +63,7 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/health",
         "/api/v1/health",
         "/api/v1/auth/me",
+        "/api/v1/auth/config",
         "/api/v1/auth/dev-token",
         "/api/v1/amazon/velocity",
         "/api/v1/vendors",

@@ -15,6 +15,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -85,6 +86,12 @@ class Settings(BaseSettings):
     # Gates the development token endpoint. Off by default and refused outright
     # in production, so an unset environment cannot silently expose it.
     dev_auth_enabled: bool = False
+
+    auth_backend: Literal["dev", "entra"] = "dev"
+    entra_tenant_id: UUID | None = None
+    entra_api_client_id: UUID | None = None
+    entra_spa_client_id: UUID | None = None
+    entra_required_scope: str = Field(default="access_as_user", pattern=r"^[A-Za-z0-9_.-]+$")
 
     # --- Errors --------------------------------------------------------------
     # When true, unhandled errors return the exception type and message to the
@@ -200,6 +207,25 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.app_env.strip().lower() in PRODUCTION_ENVIRONMENTS
 
+    @property
+    def allows_development_auth(self) -> bool:
+        return self.app_env.strip().lower() in {"local", "dev", "development", "test", "ci"}
+
+    @model_validator(mode="after")
+    def _validate_authentication(self) -> Settings:
+        if self.dev_auth_enabled and (
+            not self.allows_development_auth or self.auth_backend != "dev"
+        ):
+            raise ValueError("DEV_AUTH_ENABLED is allowed only with the local/CI dev backend")
+        if self.auth_backend == "entra":
+            if not all((self.entra_tenant_id, self.entra_api_client_id, self.entra_spa_client_id)):
+                raise ValueError(
+                    "Entra requires ENTRA_TENANT_ID, ENTRA_API_CLIENT_ID and ENTRA_SPA_CLIENT_ID"
+                )
+            if self.entra_api_client_id == self.entra_spa_client_id:
+                raise ValueError("Entra API and browser registrations must be separate")
+        return self
+
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
@@ -292,7 +318,10 @@ class Settings(BaseSettings):
             return self
 
         problems: list[str] = []
-        if self.auth_jwt_secret.get_secret_value() == INSECURE_DEV_JWT_SECRET:
+        if (
+            self.auth_backend == "dev"
+            and self.auth_jwt_secret.get_secret_value() == INSECURE_DEV_JWT_SECRET
+        ):
             problems.append("AUTH_JWT_SECRET is still the shipped development key")
         if self.dev_auth_enabled:
             problems.append("DEV_AUTH_ENABLED must be false in production")

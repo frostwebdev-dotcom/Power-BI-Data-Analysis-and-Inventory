@@ -1,9 +1,7 @@
 """Authentication routes.
 
-Two endpoints: one to obtain a development token, one to inspect the resulting
-identity. Both disappear or change shape when Microsoft Entra ID is introduced —
-token issuance moves to Entra, and ``/me`` keeps working unchanged because it
-only depends on :class:`~app.core.security.Principal`.
+Public configuration selects Microsoft or local development sign-in. `/me`
+returns the database principal after validation by the selected backend.
 """
 
 from __future__ import annotations
@@ -20,12 +18,34 @@ from app.core.security import DevJwtAuthenticationBackend, Principal, load_princ
 from app.db.session import get_db
 from app.db.transaction import transaction
 from app.models.identity import User
-from app.schemas.auth import DevTokenRequest, PrincipalResponse, TokenResponse
+from app.schemas.auth import (
+    AuthConfigurationResponse,
+    DevTokenRequest,
+    PrincipalResponse,
+    TokenResponse,
+)
 from app.services import audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _logger = get_logger(__name__)
+
+
+@router.get(
+    "/config", response_model=AuthConfigurationResponse, summary="Public sign-in configuration"
+)
+def read_auth_configuration(
+    settings: Settings = Depends(get_app_settings),
+) -> AuthConfigurationResponse:
+    if settings.auth_backend == "entra":
+        return AuthConfigurationResponse(
+            mode="entra",
+            tenant_id=str(settings.entra_tenant_id),
+            client_id=str(settings.entra_spa_client_id),
+            scope=f"api://{settings.entra_api_client_id}/{settings.entra_required_scope}",
+        )
+    enabled = settings.dev_auth_enabled and settings.allows_development_auth
+    return AuthConfigurationResponse(mode="dev" if enabled else "disabled")
 
 
 @router.post(
@@ -51,7 +71,11 @@ def issue_dev_token(
     Disabled, it answers 404 rather than 403 — an endpoint that should not exist
     here should not advertise that it exists elsewhere.
     """
-    if not settings.dev_auth_enabled or settings.is_production:
+    if (
+        not settings.dev_auth_enabled
+        or not settings.allows_development_auth
+        or settings.auth_backend != "dev"
+    ):
         raise NotFoundError("The requested resource does not exist.")
 
     user = session.execute(select(User).where(User.email == payload.email)).scalar_one_or_none()

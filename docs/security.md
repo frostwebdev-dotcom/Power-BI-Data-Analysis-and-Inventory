@@ -3,8 +3,9 @@
 How configuration, secrets, authentication, and auditing work today, and what
 changes when Microsoft Entra ID is introduced.
 
-Status: **Implemented** — configuration and security foundation, phase 1.
-Last updated: 2026-09-08
+Status: **Implemented in source** — security foundation and Entra sign-in.
+Live Entra verification remains pending deployment and app registration.
+Last updated: 2026-10-07
 
 ---
 
@@ -148,18 +149,17 @@ name, and no `.py` path.
 
 ---
 
-## 4. Authentication today: development only
+## 4. Local development authentication
 
-**There is no credential system yet, and that is deliberate.** Building one now
-would be work thrown away when Entra ID arrives, and a half-built credential
-store is worse than none.
+Local development can use the existing email-only token endpoint. Staging and
+production use Microsoft Entra (section 7); PRMS never stores login passwords.
 
 `POST /api/v1/auth/dev-token` issues a short-lived HS256 token for an existing
 active user, **without a password**. It is protected by two independent locks:
 
 1. `DEV_AUTH_ENABLED` must be true — off by default.
-2. The environment must not be production — and production start-up refuses the
-   flag anyway.
+2. The environment must be local/dev/development/test/CI, and AUTH_BACKEND must
+   be dev. Staging and production refuse DEV_AUTH_ENABLED at startup.
 
 Disabled, it answers **404**, not 403: an endpoint that should not exist here
 should not advertise that it exists elsewhere. An unknown or inactive email gets
@@ -252,57 +252,42 @@ The table itself is append-only, enforced by a database trigger that rejects
 
 ---
 
-## 7. Future production authentication: Microsoft Entra ID
+## 7. Staging and production authentication: Microsoft Entra ID
 
-Everything downstream of authentication depends on two things only:
-`Principal` and the `AuthenticationBackend` protocol. Nothing depends on how a
-token was obtained or validated, which is what makes the swap contained.
+[ADR 0016](decisions/0016-entra-sign-in.md) keeps roles in PRMS and requires explicit
+operator enrollment. Entra owns credentials and authentication. Two nullable UUID
+columns bind an approved local user to an immutable `(tid, oid)` pair. Email
+claims are never used to look up or automatically enroll an account. The unique
+identity pair allows one PRMS organization per Entra account in this release.
 
-```python
-class AuthenticationBackend(Protocol):
-    def authenticate(self, token: str, session: Session) -> Principal: ...
-```
+The backend accepts only RS256 v2 delegated access tokens. It checks signature,
+issuer, expiry, not-before, issue time, API audience, tenant, browser client, and
+`access_as_user` scope. ID tokens and app-only tokens are rejected. A JWKS client
+cached per configured tenant retains keys for five minutes and has a five-second
+network timeout. No token-controlled URL is fetched. Unknown accounts, inactive
+users, and inactive organizations are rejected. Roles are reloaded from the
+organization-scoped database assignments on every request.
 
-### What changes
+The browser reads public configuration from `/api/v1/auth/config`, initializes
+MSAL, and signs in through a popup on an explicit click. MSAL owns a sessionStorage
+cache and silently refreshes access tokens for API calls. Microsoft credentials
+are never copied into the application's development localStorage token entry.
+Query caches are cleared on sign-in/out to prevent previous-user data reuse.
 
-| Concern | Today | With Entra ID |
-|---|---|---|
-| Token issuance | `POST /api/v1/auth/dev-token` | Entra; the endpoint is removed |
-| Signing | HS256, shared secret | RS256, validated against Entra's JWKS |
-| Key rotation | Manual | Automatic via the JWKS endpoint |
-| `iss` / `aud` | `prms-dev` / `prms-api` | Tenant issuer / application ID URI |
-| User provisioning | Rows created by hand | Just-in-time on first sign-in, or SCIM |
-| Role source | `user_roles` table | Entra app roles or groups, mapped onto `RoleCode` |
+`AUTH_BACKEND=entra` requires `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID`, and
+`ENTRA_SPA_CLIENT_ID`; the API and browser registrations must be different.
+`DEV_AUTH_ENABLED` must remain false. The browser requires no client secret.
 
-### What does not change
+Provisioning is manual using `python -m app.cli.enroll_entra_user`; enrollment
+and its role grant are audited. Login cannot auto-create an account or assign
+ADMIN. Operator access to this CLI is privileged access to the application DB.
+Entra token claims do not override local grants. Entra account revocation can
+remain subject to token lifetime; local account/organization deactivation is
+checked immediately on the next request.
 
-- `Principal`, `require_roles`, and every route that uses them
-- `GET /api/v1/auth/me`
-- The audit service, which records `Principal.user_id`
-- The `users`, `roles`, and `user_roles` tables
-
-### The work involved
-
-1. Implement `EntraIdAuthenticationBackend.authenticate`: fetch and cache the
-   JWKS, validate RS256 with the tenant issuer and application ID URI, and map
-   the `oid` claim to a local user.
-2. Decide role mapping — Entra app roles are the cleaner fit than group GUIDs.
-   If Entra becomes authoritative, `user_roles` becomes a cache and the local
-   grant path is removed rather than left as a second source of truth.
-3. Decide provisioning: just-in-time creation on first sign-in is simplest;
-   SCIM is correct if deprovisioning must be prompt.
-4. Return `EntraIdAuthenticationBackend` from `build_authentication_backend` —
-   the one-line change the design exists to enable.
-5. Delete the dev-token endpoint and `DEV_AUTH_ENABLED`.
-
-Two decisions are still open and belong with **blocking question B2**: whether
-Entra is authoritative for roles, and whether provisioning is JIT or SCIM.
-
-### MSAL token caches
-
-Entra integration introduces an MSAL token cache on developer machines. Those
-patterns are already in `.gitignore` (`.msal_cache*`, `token_cache*.json`) so
-the protection is in place before the file exists.
+See [the staging sign-in runbook](entra-staging-sign-in.md) for registration,
+consent, migration, enrollment, and deployment steps. Automated tests use signed
+RSA fixture tokens; a successful live Microsoft login is a separate release check.
 
 ---
 
@@ -312,7 +297,7 @@ Honest scope, so nobody assumes protection that is not there:
 
 | Not built | Why |
 |---|---|
-| Password storage and login | Entra will own credentials; `users.password_hash` is nullable and unused |
+| Password storage and login | Entra owns credentials; `users.password_hash` is nullable and unused |
 | Refresh tokens, revocation lists | Entra's concern |
 | Rate limiting / brute-force protection | Belongs at the gateway; no credential endpoint exists to brute-force |
 | MFA | Entra's concern |
@@ -332,6 +317,8 @@ Honest scope, so nobody assumes protection that is not there:
 | Third-party log records redacted | `tests/unit/test_redaction.py` |
 | Protected endpoints reject unauthenticated requests | `tests/unit/test_auth.py` |
 | Forged, expired and `alg: none` tokens rejected | `tests/unit/test_auth.py` |
+| Entra token boundaries and staged dev-auth lock | `tests/unit/test_entra_auth.py` |
+| Entra enrollment, identity conflicts, and immediate local revocation | `tests/integration/test_entra_auth_flow.py` |
 | Untrusted `X-Forwarded-For` cannot reach the database | `tests/unit/test_auth.py` |
 | No stack trace in production responses | `tests/unit/test_error_handling.py` |
 | Audit records written, correlated, and redacted | `tests/integration/test_audit_service.py` |
