@@ -8,6 +8,17 @@
 
 const KEY = "prms.token";
 
+// Entra tokens remain in MSAL's session cache, never our development storage.
+let tokenProvider: (() => Promise<string | null>) | null = null;
+
+export function setTokenProvider(provider: (() => Promise<string | null>) | null): void {
+  tokenProvider = provider;
+}
+
+export async function getToken(): Promise<string | null> {
+  return tokenProvider ? tokenProvider() : readToken();
+}
+
 export function readToken(): string | null {
   if (typeof window === "undefined") return null;
   try {

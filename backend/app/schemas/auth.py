@@ -3,8 +3,18 @@
 from __future__ import annotations
 
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class AuthConfigurationResponse(BaseModel):
+    """Public browser configuration. Never includes secrets or user data."""
+
+    mode: Literal["dev", "entra", "disabled"]
+    tenant_id: str | None = None
+    client_id: str | None = None
+    scope: str | None = None
 
 
 class DevTokenRequest(BaseModel):

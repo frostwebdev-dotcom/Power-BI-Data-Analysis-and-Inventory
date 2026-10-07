@@ -1,3 +1,10 @@
+> 2026-10-07 authentication update: Entra sign-in is implemented in source under
+> [ADR 0016](decisions/0016-entra-sign-in.md): explicit enrollment, local database
+> roles, MSAL browser login, and v2 delegated token validation. Earlier references
+> below to missing production sign-in/B2 describe the historical implementation.
+> Live verification and Azure registration remain pending; see
+> [the staging sign-in runbook](entra-staging-sign-in.md).
+
 # Phase 1 Status
 
 Living document. It reflects **what is true**, not what is intended.
