@@ -18,7 +18,7 @@ test("configuration failures explain why sign-in is unavailable", async ({ page 
     status: 503, json: { error: { code: "unavailable", message: "Sign-in setup unavailable." } },
   }));
   await page.goto("/");
-  await expect(page.getByRole("alert")).toContainText("Sign-in setup unavailable.");
+  await expect(page.getByRole("alert").filter({ hasText: "Sign-in setup unavailable." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeDisabled();
 });
 
@@ -32,7 +32,7 @@ test("local development sign-in preserves email normalization", async ({ page })
   const request = page.waitForRequest("**/api/v1/auth/dev-token");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   expect((await request).postDataJSON()).toEqual({ email: "admin@example.test" });
-  await expect(page.getByRole("alert")).toContainText("No active user with that email");
+  await expect(page.getByRole("alert").filter({ hasText: "No active user with that email" })).toBeVisible();
 });
 
 test("Microsoft sign-in launches PKCE for the API and never calls dev-token", async ({ page, context }) => {
