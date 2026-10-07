@@ -1,0 +1,49 @@
+name: Azure staging connection check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Azure login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check registry configuration access
+        run: |
+          az acr show \
+            --name acrprmsstaginggs \
+            --resource-group rg-prms-staging \
+            --query "{Name:name,LoginServer:loginServer}" \
+            --output json
+
+      - name: Check Container App read access
+        run: |
+          az containerapp show \
+            --name ca-prms-api-staging \
+            --resource-group rg-prms-staging \
+            --query "{Name:name,Revision:properties.latestRevisionName}" \
+            --output json
+
+      - name: Log in to container registry
+        run: az acr login --name acrprmsstaginggs
+
+      - name: Check image pull permission
+        run: |
+          docker pull \
+            acrprmsstaginggs-hcgmemete9fshacj.azurecr.io/prms-api:staging-20261007-1
