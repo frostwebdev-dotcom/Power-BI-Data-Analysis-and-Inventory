@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import ExceptionReason, ExceptionStatus, MappingStatus
+from app.schemas.products import ListingResponse
 
 
 class ProductSummary(BaseModel):
@@ -36,14 +37,8 @@ class VendorLineSummary(BaseModel):
     mapping_status: MappingStatus
 
 
-class ListingSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    seller_sku: str
-    asin: str | None
-    product_id: uuid.UUID | None
-    mapping_status: MappingStatus
+class ListingSummary(ListingResponse):
+    """Source listing with identity, mapping provenance and display name."""
 
 
 class SourceRow(BaseModel):
@@ -99,6 +94,8 @@ class ExceptionSummary(BaseModel):
     updated_at: datetime
     #: Denormalised for the queue list: what the reviewer scans by.
     vendor_sku: str | None = None
+    seller_sku: str | None = None
+    source: str = "vendor"
     description: str | None = None
     row_number: int | None = None
     age_hours: float | None = None

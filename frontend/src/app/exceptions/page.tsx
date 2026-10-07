@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
+import { ProductPicker } from "@/components/ProductPicker";
+
 import { Drawer, EmptyState, ErrorNote, JsonBlock, KeyValues, Loading, Note, PageHeader, Pager, StatusBadge, fmtDate } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -62,7 +64,8 @@ export default function ExceptionsPage() {
           <table className="table" data-testid="exception-queue">
             <thead>
               <tr>
-                <th>Vendor SKU</th>
+                <th>Source</th>
+                <th>SKU</th>
                 <th>Description</th>
                 <th>Reason</th>
                 <th>Status</th>
@@ -74,8 +77,9 @@ export default function ExceptionsPage() {
             </thead>
             <tbody>
               {queue.data.items.map((item) => (
-                <tr key={item.id} data-testid={`exception-row-${item.vendor_sku ?? item.id}`}>
-                  <td className="mono">{item.vendor_sku ?? "—"}</td>
+                <tr key={item.id} data-testid={`exception-row-${item.seller_sku ?? item.vendor_sku ?? item.id}`}>
+                  <td>{item.source}</td>
+                  <td className="mono">{item.seller_sku ?? item.vendor_sku ?? "—"}</td>
                   <td>{item.description ?? "—"}</td>
                   <td>
                     <StatusBadge value={item.reason} />
@@ -98,7 +102,7 @@ export default function ExceptionsPage() {
           <Pager page={queue.data.page} pageSize={queue.data.page_size} total={queue.data.total} onPage={setPage} />
         </div>
       ) : null}
-      {selected ? <ExceptionDrawer id={selected} canDecide={canDecide} onClose={() => setSelected(null)} /> : null}
+      {selected ? <ExceptionDrawer key={selected} id={selected} canDecide={canDecide} onClose={() => setSelected(null)} /> : null}
     </>
   );
 }
@@ -116,6 +120,7 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
     await queryClient.invalidateQueries({ queryKey: ["exceptions"] });
     await queryClient.invalidateQueries({ queryKey: ["imports"] });
     await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    await queryClient.invalidateQueries({ queryKey: ["products"] });
   };
 
   const approve = useMutation({
@@ -125,7 +130,7 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
       setOutcome(
         result.superseded_product_id
           ? `Approved; the previous mapping (${result.superseded_product_id.slice(0, 8)}…) was superseded.`
-          : "Approved. This vendor SKU now maps to the product on every later import.",
+          : "Approved. This SKU now has a permanent product mapping.",
       );
       await refresh();
     },
@@ -164,10 +169,20 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
   const needsSupersede = approve.error instanceof ApiError && approve.error.code === "mapping_supersession_required";
 
   return (
-    <Drawer title={`${item.vendor_sku ?? "Row"} — ${item.reason.replaceAll("_", " ").toLowerCase()}`} onClose={onClose} wide>
+    <Drawer title={`${item.seller_sku ?? item.vendor_sku ?? "Row"} — ${item.reason.replaceAll("_", " ").toLowerCase()}`} onClose={onClose} wide>
       <div className="grid grid--2">
         <section className="card">
-          <h3 className="card__title">The row as imported</h3>
+          <h3 className="card__title">{item.listing ? "Source listing" : "The row as imported"}</h3>
+          {item.listing ? <KeyValues rows={[
+            ["Marketplace", `${item.listing.marketplace} · ${item.listing.marketplace_id}`],
+            ["Seller SKU", item.listing.seller_sku], ["ASIN", item.listing.asin ?? "—"],
+            ["Title", item.listing.name ?? "—"], ["Listing status", <StatusBadge key="ls" value={item.listing.listing_status} />],
+            ["Mapping", <StatusBadge key="ms" value={item.listing.mapping_status} />],
+            ["Mapped product", item.listing.product_id ? <Link key="mp" href={`/products?product_id=${item.listing.product_id}`}>Product details</Link> : "—"],
+            ["Mapping method", item.listing.mapping_method ?? "—"],
+            ["Approved at", fmtDate(item.listing.approved_at)],
+            ["Approved by", item.listing.approved_by_user_id ?? "—"],
+          ]} /> : null}
           {item.source_row ? (
             <>
               <KeyValues rows={Object.entries(item.source_row.raw_data).map(([k, v]) => [k, <span key={k} className="mono">{v}</span>])} />
@@ -177,9 +192,9 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
                 <span className="mono">{item.source_row.normalized_upc ?? "—"}</span>
               </p>
             </>
-          ) : (
+          ) : !item.listing ? (
             <p className="muted">No source row (a listing or a line without an import row).</p>
-          )}
+          ) : null}
           {item.vendor_line ? (
             <KeyValues
               rows={[
@@ -213,14 +228,14 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
           ))}
           {decidable ? (
             <div className="field">
-              <span className="field__label">Or another product (id)</span>
+              <span className="field__label">Choose another product</span>
+              <ProductPicker value={productId} onChange={setProductId} disabled={approve.isPending} />
               <div className="toolbar">
-                <input value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="product UUID" className="mono" />
-                <button type="button" className="button" disabled={!productId || approve.isPending} onClick={() => approve.mutate(productId.trim())}>
-                  Approve
+                <button type="button" className="button" disabled={!productId || approve.isPending} onClick={() => approve.mutate(productId)} data-testid="approve-selected-product">
+                  Approve selected product
                 </button>
               </div>
-              <span className="field__hint">Product search by catalog number, UPC or name arrives with the products screen (B9).</span>
+              <span className="field__hint">Check the source listing and product details before approving.</span>
             </div>
           ) : null}
         </section>
@@ -265,7 +280,7 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
           </label>
           {needsSupersede ? (
             <Note tone="warn">
-              This vendor SKU already has an approved mapping to a different product. Tick to supersede it; both steps are recorded in the audit log.
+              This SKU already has an approved mapping to a different product. Tick to supersede it; both steps are recorded in the audit log.
               <label className="check">
                 <input type="checkbox" checked={supersede} onChange={(e) => setSupersede(e.target.checked)} />
                 Supersede the existing mapping
@@ -294,7 +309,7 @@ function ExceptionDrawer({ id, canDecide, onClose }: { id: string; canDecide: bo
           {item.status.toLowerCase()} {fmtDate(item.resolved_at)}
           {item.resolved_product ? ` → ${item.resolved_product.name} (${item.resolved_product.catalog_item_number})` : ""}
           {item.resolution_note ? ` — ${item.resolution_note}` : ""}
-          {item.resolved_product_id ? (
+          {item.resolved_product_id && canDecide ? (
             <>
               {" · "}
               <Link href={`/watchlist?product_id=${item.resolved_product_id}`} data-testid="watch-this-product">

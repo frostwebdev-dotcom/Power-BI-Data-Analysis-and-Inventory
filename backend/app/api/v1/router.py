@@ -18,6 +18,7 @@ from app.api.v1.routes import (
     health,
     import_profiles,
     imports,
+    products,
     vendors,
     watchlist,
 )
@@ -30,6 +31,7 @@ api_router.include_router(vendors.router)
 api_router.include_router(import_profiles.router)
 api_router.include_router(import_profiles.schemas_router)
 api_router.include_router(imports.router)
+api_router.include_router(products.router)
 api_router.include_router(exceptions.router)
 api_router.include_router(watchlist.router)
 api_router.include_router(watchlist.availability_router)

@@ -2,8 +2,18 @@
 > [ADR 0016](decisions/0016-entra-sign-in.md): explicit enrollment, local database
 > roles, MSAL browser login, and v2 delegated token validation. Earlier references
 > below to missing production sign-in/B2 describe the historical implementation.
-> Live verification and Azure registration remain pending; see
-> [the staging sign-in runbook](entra-staging-sign-in.md).
+> Azure registration, migrations and the first admin's hosted sign-in have since been
+> confirmed through the staging session. Both administrators are enrolled;
+> The second admin's browser login still needs confirmation.
+>
+> 2026-10-07 catalogue update: organization-scoped product lookup, paginated
+> identifier/listing details, explicit product selection and Amazon source
+> context are implemented. The staging workflow deploys both API and web images;
+> Azure Files provisioning and attachment scripts are included. These new
+> changes require CI review and deployment. Hosted CSV/XLSX acceptance,
+> scheduled-run evidence and retention after replica replacement remain live
+> verification tasks; see [staging acceptance](staging-acceptance.md). Historical
+> Products/B9 placeholders below are superseded by this implementation update.
 
 # Phase 1 Status
 

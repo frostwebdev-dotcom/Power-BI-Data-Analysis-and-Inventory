@@ -65,6 +65,15 @@ test("Milestone 1 walk-through", async ({ page }) => {
     await signIn(page);
   });
 
+  await test.step("look up a catalogue product and inspect its identifiers", async () => {
+    await page.goto("/products");
+    await page.getByLabel("Search catalogue").fill("012345678905");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByTestId("product-row-DEMO-001").getByRole("button", { name: "Details" }).click();
+    await expect(page.getByTestId("product-identifiers")).toContainText("00012345678905");
+    await page.getByRole("button", { name: "Close" }).click();
+  });
+
   await test.step("create a vendor", async () => {
     await page.goto("/vendors");
     await page.getByRole("button", { name: "New vendor" }).click();

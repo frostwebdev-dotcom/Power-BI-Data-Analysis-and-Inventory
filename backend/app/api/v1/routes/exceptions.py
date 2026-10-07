@@ -34,6 +34,7 @@ from app.schemas.exceptions import (
     VendorLineSummary,
 )
 from app.services import exceptions as service
+from app.services.products import listing_response
 
 router = APIRouter(prefix="/exceptions", tags=["exceptions"])
 
@@ -56,6 +57,7 @@ _CONFLICT: Responses = {
 def _summary(item: ProductMappingException) -> ExceptionSummary:
     row = item.import_job_row
     line = item.vendor_product
+    listing = item.marketplace_listing
     body = ExceptionSummary.model_validate(item)
     body.vendor_sku = (row.vendor_sku if row is not None else None) or (
         line.vendor_sku if line is not None else None
@@ -63,6 +65,10 @@ def _summary(item: ProductMappingException) -> ExceptionSummary:
     body.description = (row.description if row is not None else None) or (
         line.vendor_description if line is not None else None
     )
+    if listing is not None:
+        body.seller_sku = listing.seller_sku
+        body.source = listing.marketplace.value.lower()
+        body.description = body.description or listing_response(listing).name
     body.row_number = row.row_number if row is not None else None
     body.age_hours = round((datetime.now(UTC) - item.created_at).total_seconds() / 3600, 2)
     return body
@@ -106,7 +112,7 @@ def _detail(
             else None
         ),
         listing=(
-            ListingSummary.model_validate(item.marketplace_listing)
+            ListingSummary(**listing_response(item.marketplace_listing).model_dump())
             if item.marketplace_listing is not None
             else None
         ),

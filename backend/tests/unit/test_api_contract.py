@@ -95,6 +95,10 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/availability/events",
         "/api/v1/audit/events",
         "/api/v1/dashboard",
+        "/api/v1/products",
+        "/api/v1/products/{product_id}",
+        "/api/v1/products/{product_id}/identifiers",
+        "/api/v1/products/{product_id}/listings",
     }
 
 

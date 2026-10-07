@@ -84,6 +84,7 @@ class ExceptionRepository(ScopedRepository):
                 statement.options(
                     selectinload(ProductMappingException.vendor_product),
                     selectinload(ProductMappingException.import_job_row),
+                    selectinload(ProductMappingException.marketplace_listing),
                 )
                 .order_by(ProductMappingException.created_at, ProductMappingException.id)
                 .offset((page - 1) * page_size)
