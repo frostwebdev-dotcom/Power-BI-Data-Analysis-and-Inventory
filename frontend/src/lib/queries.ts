@@ -19,6 +19,9 @@ import type {
   ImportRow,
   MappingException,
   MappingExceptionDetail,
+  MarketplaceListing,
+  Product,
+  ProductIdentifier,
   RuleSchemas,
   StatusHistory,
   Vendor,
@@ -26,6 +29,10 @@ import type {
 } from "./types";
 
 export const keys = {
+  products: (query?: Query) => ["products", query ?? {}] as const,
+  product: (id: string) => ["products", id] as const,
+  identifiers: (id: string, query?: Query) => ["products", id, "identifiers", query ?? {}] as const,
+  listings: (id: string, query?: Query) => ["products", id, "listings", query ?? {}] as const,
   vendors: (query?: Query) => ["vendors", query ?? {}] as const,
   vendor: (id: string) => ["vendors", id] as const,
   profiles: (vendorId: string, includeInactive: boolean) =>
@@ -43,6 +50,22 @@ export const keys = {
   audit: (query?: Query) => ["audit", query ?? {}] as const,
   dashboard: ["dashboard"] as const,
 };
+
+export function useProducts(query?: Query, enabled = true) {
+  return useQuery({ queryKey: keys.products(query), queryFn: () => api.get<Page<Product>>("/products", query), enabled });
+}
+
+export function useProduct(id: string | null) {
+  return useQuery({ queryKey: keys.product(id ?? ""), queryFn: () => api.get<Product>(`/products/${id}`), enabled: Boolean(id) });
+}
+
+export function useProductIdentifiers(id: string, query?: Query) {
+  return useQuery({ queryKey: keys.identifiers(id, query), queryFn: () => api.get<Page<ProductIdentifier>>(`/products/${id}/identifiers`, query) });
+}
+
+export function useProductListings(id: string, query?: Query) {
+  return useQuery({ queryKey: keys.listings(id, query), queryFn: () => api.get<Page<MarketplaceListing>>(`/products/${id}/listings`, query) });
+}
 
 export function useVendors(query?: Query) {
   return useQuery({ queryKey: keys.vendors(query), queryFn: () => api.get<Page<Vendor>>("/vendors", query) });

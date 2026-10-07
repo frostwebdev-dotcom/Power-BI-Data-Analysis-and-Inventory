@@ -182,6 +182,46 @@ export interface ProductSummary {
   is_active: boolean;
 }
 
+export interface Product extends ProductSummary {
+  manufacturer: string | null;
+  description: string | null;
+  pack_size: number | null;
+  unit_of_measure: string | null;
+  status: string;
+  nineyard_last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductIdentifier {
+  id: string;
+  identifier_type: string;
+  raw_value: string;
+  normalized_value: string;
+  source_system: string;
+  vendor_id: string | null;
+  marketplace_listing_id: string | null;
+  has_valid_checksum: boolean | null;
+  is_primary: boolean;
+  is_active: boolean;
+}
+
+export interface MarketplaceListing {
+  id: string;
+  product_id: string | null;
+  marketplace: string;
+  marketplace_id: string;
+  seller_sku: string;
+  asin: string | null;
+  name: string | null;
+  listing_status: string;
+  mapping_status: string;
+  mapping_method: string | null;
+  approved_by_user_id: string | null;
+  approved_at: string | null;
+  is_active: boolean;
+}
+
 export interface Candidate {
   product_id: string;
   rule: string;
@@ -212,6 +252,8 @@ export interface MappingException {
   description: string | null;
   row_number: number | null;
   age_hours: number | null;
+  seller_sku: string | null;
+  source: string;
 }
 
 export interface RuleEvaluation {
@@ -233,6 +275,7 @@ export interface VendorLine {
 }
 
 export interface MappingExceptionDetail extends MappingException {
+  listing: MarketplaceListing | null;
   candidates: Candidate[];
   match_evaluations: { source?: string; rules?: RuleEvaluation[] };
   source_row: ImportRow | null;

@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import type { FormEvent } from "react";
 
+import { ProductPicker } from "@/components/ProductPicker";
+
 import { Drawer, EmptyState, ErrorNote, KeyValues, Loading, PageHeader, Pager, StatusBadge, fmtDate, fmtNumber } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useVendors, useWatchHistory, useWatchlist } from "@/lib/queries";
+import { useProduct, useVendors, useWatchHistory, useWatchlist } from "@/lib/queries";
 import type { WatchlistEntry } from "@/lib/types";
 
 export default function WatchlistPage() {
@@ -117,7 +119,7 @@ function Watchlist() {
           <Pager page={entries.data.page} pageSize={entries.data.page_size} total={entries.data.total} onPage={setPage} />
         </div>
       ) : null}
-      {adding ? <AddWatch initialProductId={params.get("product_id") ?? ""} onClose={() => setAdding(false)} /> : null}
+      {adding && canWrite ? <AddWatch initialProductId={params.get("product_id") ?? ""} onClose={() => setAdding(false)} /> : null}
       {history ? <HistoryDrawer id={history} onClose={() => setHistory(null)} /> : null}
     </>
   );
@@ -150,18 +152,17 @@ function AddWatch({ initialProductId, onClose }: { initialProductId: string; onC
       onClose();
     },
   });
+  const chosen = useProduct(form.product_id || null);
+  const canAdd = Boolean(chosen.data?.is_active);
   function submit(event: FormEvent) {
     event.preventDefault();
-    add.mutate();
+    if (canAdd) add.mutate();
   }
   return (
     <Drawer title="Watch a product" onClose={onClose}>
       <form className="form" onSubmit={submit} data-testid="watch-form">
-        <label className="field">
-          <span className="field__label">Product id</span>
-          <input name="product_id" required className="mono" value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })} />
-          <span className="field__hint">From an exception&apos;s approved product or the catalogue. Search by name arrives with the products screen (B9).</span>
-        </label>
+        <ProductPicker value={form.product_id} onChange={(id) => setForm({ ...form, product_id: id })} disabled={add.isPending} />
+        <input name="product_id" type="hidden" value={form.product_id} />
         <label className="field">
           <span className="field__label">Vendor</span>
           <select name="vendor_id" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
@@ -199,7 +200,7 @@ function AddWatch({ initialProductId, onClose }: { initialProductId: string; onC
         </label>
         <ErrorNote error={add.error} />
         <div className="form__actions">
-          <button type="submit" className="button button--primary" disabled={add.isPending} data-testid="watch-submit">
+          <button type="submit" className="button button--primary" disabled={!canAdd || add.isPending} data-testid="watch-submit">
             Add to watchlist
           </button>
         </div>

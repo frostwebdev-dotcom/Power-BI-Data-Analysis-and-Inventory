@@ -29,8 +29,9 @@ RUN python -m pip install --upgrade pip \
 
 # Run as a non-root user. The storage directories are created here so the
 # container still starts when no bind mount is supplied.
-RUN groupadd --system appuser \
-    && useradd --system --gid appuser --home-dir /app appuser \
+RUN groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid appuser --home-dir /app --no-create-home \
+    --shell /usr/sbin/nologin appuser \
     && mkdir -p /storage/raw /storage/processed /storage/rejected \
     && chown -R appuser:appuser /app /storage
 USER appuser
