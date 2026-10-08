@@ -65,6 +65,14 @@ storage. The script reads the existing template, adds the named mount, retains
 other mounts and settings, and creates a revision. It refuses to replace an
 existing raw storage mount.
 
+The script uses the signed-in Azure CLI account, keeps its access token in
+memory, and follows Azure's asynchronous operation URL. An HTTP `202 Accepted`
+is not success: the script waits for the operation and for a new ready revision
+containing the mount. If it fails or times out, retain its operation URL and
+correlation ID and inspect that operation before retrying; do not submit
+overlapping updates. The script's successful output verifies configuration and
+readiness, while file writes and persistence still need the checks below.
+
 ```powershell
 .\infra\scripts\attach-staging-raw-storage.ps1
 ```
