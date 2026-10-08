@@ -1,7 +1,8 @@
 # =============================================================================
 # Continuous integration.
 #
-# Three independent jobs, every push and pull request:
+# Four independent test jobs, every push and pull request:
+#   storage-windows asynchronous storage updates on Windows PowerShell 5.1
 #   backend        ruff format --check, ruff check, mypy (strict), pytest
 #                  (unit + integration against a PostgreSQL 16 service)
 #   frontend       npm ci, eslint, tsc --noEmit, next build
@@ -39,6 +40,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
+  storage-windows:
+    name: Storage attachment (Windows PowerShell)
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check asynchronous storage updates on Windows PowerShell 5.1
+        shell: powershell
+        run: ./infra/tests/storage-attachment.test.ps1
+
   backend:
     name: backend
     runs-on: ubuntu-latest
@@ -230,7 +241,7 @@ jobs:
         run: $COMPOSE down -v --remove-orphans
   deploy-staging:
     name: Deploy API and web app to Azure staging
-    needs: [backend, frontend, compose-smoke]
+    needs: [backend, frontend, compose-smoke, storage-windows]
     if: >-
       github.event_name == 'workflow_dispatch' &&
       inputs.deploy_staging &&
