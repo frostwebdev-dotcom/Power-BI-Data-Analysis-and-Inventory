@@ -13,10 +13,16 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-$raw = & az containerapp show --subscription $Subscription --resource-group $ResourceGroup --name $AppName --output json
+# Read and patch with one schema. Azure CLI's current model can include scaling
+# fields that the older 2024-03-01 PATCH endpoint rejects.
+$appId = "/subscriptions/$Subscription/resourceGroups/$ResourceGroup/providers/Microsoft.App/containerApps/$AppName"
+$resourceUrl = "https://management.azure.com${appId}?api-version=2025-07-01"
+$raw = & az rest --subscription $Subscription --method get --url $resourceUrl --output json
 if ($LASTEXITCODE -ne 0) { throw 'Could not read the Container App.' }
 $app = ($raw -join "`n") | ConvertFrom-Json
-$environmentName = ($app.properties.managedEnvironmentId -split '/')[-1]
+$environmentId = $app.properties.environmentId
+if (-not $environmentId) { $environmentId = $app.properties.managedEnvironmentId }
+$environmentName = ($environmentId -split '/')[-1]
 $storage = & az containerapp env storage show --subscription $Subscription --resource-group $ResourceGroup --name $environmentName --storage-name $EnvironmentStorageName --query name --output tsv
 if ($LASTEXITCODE -ne 0 -or -not $storage) { throw 'Provision the environment file share before attaching it.' }
 $template = $app.properties.template
@@ -45,10 +51,9 @@ $container[0] | Add-Member -NotePropertyName volumeMounts -NotePropertyValue $mo
 $template.PSObject.Properties.Remove('revisionSuffix')
 $bodyFile = Join-Path $env:TEMP ("prms-storage-patch-" + [guid]::NewGuid() + '.json')
 try {
-    $body = @{ properties = @{ template = $template } } | ConvertTo-Json -Depth 100
+    $body = @{ location = $app.location; properties = @{ template = $template } } | ConvertTo-Json -Depth 100
     [System.IO.File]::WriteAllText($bodyFile, $body, [System.Text.UTF8Encoding]::new($false))
-    $url = "https://management.azure.com$($app.id)?api-version=2024-03-01"
-    & az rest --subscription $Subscription --method patch --url $url --body "@$bodyFile" --output none
+    & az rest --subscription $Subscription --method patch --url $resourceUrl --body "@$bodyFile" --output none
     if ($LASTEXITCODE -ne 0) { throw 'Could not apply the storage mount.' }
 } finally {
     Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue
