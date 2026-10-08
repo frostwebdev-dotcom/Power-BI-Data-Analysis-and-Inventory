@@ -24,7 +24,6 @@ $app = ($raw -join "`n") | ConvertFrom-Json
 if ($app.properties.provisioningState -and $app.properties.provisioningState -notin @('Succeeded', 'Failed', 'Canceled')) {
     throw 'A Container App update is already in progress. Wait for it before attaching storage.'
 }
-$previousRevision = $app.properties.latestRevisionName
 $environmentId = $app.properties.environmentId
 if (-not $environmentId) { $environmentId = $app.properties.managedEnvironmentId }
 $environmentName = ($environmentId -split '/')[-1]
@@ -53,7 +52,12 @@ $mounts = @($container[0].volumeMounts | Where-Object { $null -ne $_ }) + @(@{
     volumeName = $volumeName; mountPath = '/storage/raw'
 })
 $container[0] | Add-Member -NotePropertyName volumeMounts -NotePropertyValue $mounts -Force
-$template.PSObject.Properties.Remove('revisionSuffix')
+# JSON Merge Patch retains omitted properties. Removing this property locally
+# would reuse the deployed GitHub suffix and Azure would reject the revision.
+$revisionSuffix = 'raw-' + [guid]::NewGuid().ToString('N').Substring(0, 12)
+$targetRevision = "${AppName}--${revisionSuffix}"
+$template | Add-Member -NotePropertyName revisionSuffix -NotePropertyValue $revisionSuffix -Force
+Write-Output "Target storage revision: $targetRevision"
 # az rest returns immediately on HTTP 202 and does not expose the operation
 # headers to the script. Use the current CLI account's token in memory so we can
 # track the actual operation, including errors that never reach system logs.
@@ -129,11 +133,11 @@ try {
             $_.name -eq $volumeName -and $_.storageType -eq 'AzureFile' -and $_.storageName -eq $EnvironmentStorageName
         })
         Write-Output "Mount check ${attempt}: state=$($properties.provisioningState); revision=$($properties.latestRevisionName)"
-        if ($properties.latestRevisionName -ne $previousRevision -and $properties.provisioningState -in @('Failed', 'Canceled')) {
+        if ($properties.latestRevisionName -eq $targetRevision -and $properties.provisioningState -in @('Failed', 'Canceled')) {
             throw "The storage revision failed: $($properties.provisioningError). Inspect its system logs."
         }
         if ($mounted.Count -eq 1 -and $volume.Count -eq 1 -and $properties.provisioningState -eq 'Succeeded' -and
-            $properties.latestRevisionName -ne $previousRevision -and $properties.latestReadyRevisionName -eq $properties.latestRevisionName) {
+            $properties.latestRevisionName -eq $targetRevision -and $properties.latestReadyRevisionName -eq $targetRevision) {
             [pscustomobject]@{
                 State = $properties.provisioningState; Revision = $properties.latestRevisionName
                 ReadyRevision = $properties.latestReadyRevisionName; Volumes = $properties.template.volumes
