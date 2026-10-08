@@ -103,7 +103,7 @@ function global:Invoke-WebRequest {
 }
 $script = Join-Path $PSScriptRoot '../scripts/attach-staging-raw-storage.ps1'
 $output = (& $script -Subscription test -MaxPollAttempts 3) -join "`n"
-if ($output -match 'mock-secret-token-never-print' -or $output -notmatch '"ReadyRevision": "mounted"') { throw 'Unverified success or credentials printed' }
+if ($output -match 'mock-secret-token-never-print' -or $output -notmatch '"ReadyRevision"\s*:\s*"mounted"') { throw 'Unverified success or credentials printed' }
 if ($global:operationReads -ne 2 -or $global:resourceReads -ne 2 -or $global:delays[0] -ne 2) { throw 'Did not wait for operation, Retry-After and resource consistency' }
 $template = $global:captured.properties.template
 if ($global:readUrl -ne $global:patchUrl -or -not $global:patchUrl.EndsWith('?api-version=2025-07-01')) { throw 'Read and patch API schemas differ' }
