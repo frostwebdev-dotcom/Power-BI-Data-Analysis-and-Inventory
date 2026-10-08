@@ -65,6 +65,11 @@ storage. The script reads the existing template, adds the named mount, retains
 other mounts and settings, and creates a revision. It refuses to replace an
 existing raw storage mount.
 
+Each attachment uses a fresh `raw-...` revision suffix. Omitting the previous
+suffix from a JSON merge patch would retain it and fail with "revision with
+suffix ... already exists". The script verifies its exact target revision so
+an unrelated concurrent deployment cannot be mistaken for a successful mount.
+
 The script uses the signed-in Azure CLI account, keeps its access token in
 memory, and follows Azure's asynchronous operation URL. An HTTP `202 Accepted`
 is not success: the script waits for the operation and for a new ready revision
