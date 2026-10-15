@@ -35,13 +35,16 @@ pytestmark = pytest.mark.integration
 # --- Identifier uniqueness ---------------------------------------------------
 
 
-def test_a_upc_resolves_to_only_one_product(db_session: Session) -> None:
-    """Match priority 1 is only unambiguous if the database enforces it."""
+def test_a_shared_upc_retains_both_products_but_not_duplicate_owner_rows(
+    db_session: Session,
+) -> None:
+    """Real catalogue ambiguity must reach the engine, never pick a first owner."""
     organization = factories.make_organization(db_session)
     first = factories.make_product(db_session, organization)
     second = factories.make_product(db_session, organization)
 
     factories.make_identifier(db_session, organization, first, normalized_value="00012345678905")
+    factories.make_identifier(db_session, organization, second, normalized_value="00012345678905")
 
     with pytest.raises(IntegrityError):
         factories.make_identifier(

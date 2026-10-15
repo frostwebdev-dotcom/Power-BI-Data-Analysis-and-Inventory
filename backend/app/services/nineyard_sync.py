@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Final, Protocol
@@ -34,6 +35,7 @@ from app.models.enums import (
 from app.models.sync import NineyardSyncRun, SourceRecord
 from app.repositories.scoping import TenantScope
 from app.services import audit
+from app.services.nineyard_identity import lock_catalogue
 
 _logger = get_logger(__name__)
 
@@ -179,20 +181,30 @@ def _apply_snapshot(
     seen_at: datetime,
 ) -> tuple[dict[str, int], dict[str, int]]:
     scope = TenantScope(organization_id)
+    lock_catalogue(session, organization_id)
     products = {
-        product.catalog_item_number: product
+        product.nineyard_item_id: product
         for product in session.execute(scope.select(Product)).scalars()
+        if product.nineyard_item_id is not None
     }
-    identifiers = {
-        (identifier.identifier_type, identifier.normalized_value): identifier
-        for identifier in session.execute(scope.select(ProductIdentifier)).scalars()
-        if identifier.is_active
-    }
-    source_hashes = {
-        (record.source_entity_type, record.source_record_id, record.payload_sha256)
-        for record in session.execute(scope.select(SourceRecord)).scalars()
-        if record.source_system is SourceSystem.NINEYARD
-    }
+    identifiers: defaultdict[tuple[IdentifierType, str], list[ProductIdentifier]] = defaultdict(
+        list
+    )
+    for identifier in session.execute(scope.select(ProductIdentifier)).scalars():
+        if identifier.is_active:
+            identifiers[(identifier.identifier_type, identifier.normalized_value)].append(
+                identifier
+            )
+    source_hashes = set(
+        session.execute(
+            scope.select(
+                SourceRecord,
+                SourceRecord.source_entity_type,
+                SourceRecord.source_record_id,
+                SourceRecord.payload_sha256,
+            ).where(SourceRecord.source_system == SourceSystem.NINEYARD)
+        ).tuples()
+    )
 
     counts = {
         "items_seen": 0,
@@ -214,23 +226,27 @@ def _apply_snapshot(
     for payload in items:
         counts["items_seen"] += 1
         item_id = payload.get("itemId")
-        if not isinstance(item_id, int):
+        if not isinstance(item_id, int) or isinstance(item_id, bool) or item_id <= 0:
             counts["items_failed"] += 1
             continue
-        catalog_number = str(item_id)
-        product = products.get(catalog_number)
+        external_id = str(item_id)
+        product = products.get(external_id)
         values = _product_values(payload, item_id=item_id, seen_at=seen_at)
         if product is None:
             product = Product(
                 organization_id=organization_id,
-                catalog_item_number=catalog_number,
+                nineyard_item_id=external_id,
+                catalog_item_number=_text(payload.get("itemName")) or external_id,
                 **values,
             )
             session.add(product)
             session.flush()
-            products[catalog_number] = product
+            products[external_id] = product
             counts["items_created"] += 1
         else:
+            # A Products export supplies the business catalogue number and main
+            # barcodes. The API's vendor mapping feed must not erase either.
+            values["attributes"] = {**product.attributes, **values["attributes"]}
             changed = any(
                 field != "nineyard_last_seen_at" and getattr(product, field) != value
                 for field, value in values.items()
@@ -247,13 +263,17 @@ def _apply_snapshot(
             organization_id,
             product,
             IdentifierType.CATALOG_ITEM_NUMBER,
-            catalog_number,
-            catalog_number,
+            product.catalog_item_number,
+            product.catalog_item_number,
         )
         raw_upc = payload.get("vendorUPC")
         if isinstance(raw_upc, str) and raw_upc.strip():
             normalized = normalize_gtin(raw_upc)
-            if normalized.usable and normalized.canonical is not None:
+            if (
+                normalized.usable
+                and normalized.canonical is not None
+                and set(normalized.digits) != {"0"}
+            ):
                 outcome = _ensure_identifier(
                     session,
                     identifiers,
@@ -270,14 +290,14 @@ def _apply_snapshot(
                     details["identifier_conflicts"] += 1
 
         payload_hash = _payload_hash(payload)
-        source_key = ("catalog_item", catalog_number, payload_hash)
+        source_key = ("catalog_item", external_id, payload_hash)
         if source_key not in source_hashes:
             session.add(
                 SourceRecord(
                     organization_id=organization_id,
                     source_system=SourceSystem.NINEYARD,
                     source_entity_type="catalog_item",
-                    source_record_id=catalog_number,
+                    source_record_id=external_id,
                     local_entity_type=Product.__tablename__,
                     local_entity_id=product.id,
                     nineyard_sync_run_id=run.id,
@@ -352,7 +372,7 @@ def _product_values(
 
 def _ensure_identifier(
     session: Session,
-    identifiers: dict[tuple[IdentifierType, str], ProductIdentifier],
+    identifiers: dict[tuple[IdentifierType, str], list[ProductIdentifier]],
     organization_id: uuid.UUID,
     product: Product,
     identifier_type: IdentifierType,
@@ -362,15 +382,20 @@ def _ensure_identifier(
     has_valid_checksum: bool | None = None,
 ) -> str:
     key = (identifier_type, normalized_value)
-    existing = identifiers.get(key)
+    owners = identifiers.get(key, [])
+    existing = next((row for row in owners if row.product_id == product.id), None)
     if existing is not None:
-        if existing.product_id != product.id:
-            return "conflict"
         existing.raw_value = raw_value
         existing.is_active = True
         if has_valid_checksum is not None:
             existing.has_valid_checksum = has_valid_checksum
         return "unchanged"
+    if owners and identifier_type not in (
+        IdentifierType.UPC,
+        IdentifierType.EAN,
+        IdentifierType.GTIN,
+    ):
+        return "conflict"
     identifier = ProductIdentifier(
         organization_id=organization_id,
         product_id=product.id,
@@ -384,7 +409,7 @@ def _ensure_identifier(
     )
     session.add(identifier)
     session.flush()
-    identifiers[key] = identifier
+    identifiers.setdefault(key, []).append(identifier)
     return "created"
 
 

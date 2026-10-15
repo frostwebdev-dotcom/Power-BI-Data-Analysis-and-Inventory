@@ -1,3 +1,11 @@
+> 2026-10-15 catalogue identity correction: the client's Products export identifies
+> column F `Product ID` as the business catalogue number and U `Upc` as main
+> product barcodes. A dry-run-first CSV importer and separate API `ItemId` binding
+> are implemented under [ADR 0017](decisions/0017-nineyard-product-export-identity.md).
+> Shared barcodes retain every owner and require review. Staging migration,
+> live dry run and application of the client export are still pending. See the
+> [import runbook](nineyard-catalogue-import.md).
+>
 > 2026-10-07 authentication update: Entra sign-in is implemented in source under
 > [ADR 0016](decisions/0016-entra-sign-in.md): explicit enrollment, local database
 > roles, MSAL browser login, and v2 delegated token validation. Earlier references

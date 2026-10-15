@@ -51,6 +51,8 @@ class Product(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base
     __tablename__ = "products"
 
     catalog_item_number: Mapped[str] = mapped_column(nullable=False)
+    # Nineyard's numeric API ItemId is not the client's Product ID / catalogue number.
+    nineyard_item_id: Mapped[str | None] = mapped_column(nullable=True)
     name: Mapped[str] = mapped_column(nullable=False)
     brand: Mapped[str | None] = mapped_column(nullable=True)
     manufacturer: Mapped[str | None] = mapped_column(nullable=True)
@@ -82,6 +84,12 @@ class Product(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base
             "uq_products_organization_id_catalog_item_number",
             "organization_id",
             "catalog_item_number",
+            unique=True,
+        ),
+        Index(
+            "uq_products_organization_id_nineyard_item_id",
+            "organization_id",
+            "nineyard_item_id",
             unique=True,
         ),
         # Product-name search. The btree serves prefix and exact lookups; the
@@ -239,9 +247,8 @@ class ProductIdentifier(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampM
     marketplace_listing: Mapped[MarketplaceListing | None] = relationship()
 
     __table_args__ = (
-        # Global identifiers (catalog item number, UPC, EAN, GTIN, ASIN, MPN)
-        # resolve to exactly one product per tenant. This is what makes match
-        # priorities 1 and 2 unambiguous rather than "pick the first row".
+        # Business identifiers stay unique. Barcodes may be shared by products
+        # in the source; retain every owner so priority 1 reports ambiguity.
         Index(
             "uq_product_identifiers_global_value",
             "organization_id",
@@ -250,7 +257,17 @@ class ProductIdentifier(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampM
             unique=True,
             postgresql_where=text(
                 "is_active and vendor_id is null and marketplace_listing_id is null"
+                " and identifier_type not in ('UPC', 'EAN', 'GTIN')"
             ),
+        ),
+        Index(
+            "uq_product_identifiers_barcode_value",
+            "organization_id",
+            "product_id",
+            "identifier_type",
+            "normalized_value",
+            unique=True,
+            postgresql_where=text("is_active and identifier_type in ('UPC', 'EAN', 'GTIN')"),
         ),
         # A vendor SKU is unique within its vendor, not globally: two vendors
         # may legitimately use the same SKU string for different products.
