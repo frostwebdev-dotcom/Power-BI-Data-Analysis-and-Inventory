@@ -40,7 +40,11 @@ class MatchIndexRepository(ScopedRepository):
         for value, product_id in self.session.execute(
             self.select(
                 ProductIdentifier, ProductIdentifier.normalized_value, ProductIdentifier.product_id
-            ).where(
+            )
+            .join(Product, Product.id == ProductIdentifier.product_id)
+            .where(
+                Product.organization_id == self.scope.organization_id,
+                Product.is_active.is_(True),
                 ProductIdentifier.identifier_type.in_(GTIN_IDENTIFIER_TYPES),
                 ProductIdentifier.is_active.is_(True),
                 # An identifier whose own check digit failed cannot drive priority 1.
