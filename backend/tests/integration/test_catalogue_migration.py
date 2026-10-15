@@ -87,7 +87,9 @@ def test_external_id_backfill_uses_provenance_and_roundtrips(
             connection.execute(
                 text("SELECT id, nineyard_item_id FROM products WHERE organization_id = :org"),
                 {"org": org_id},
-            ).tuples()
+            )
+            .tuples()
+            .all()
         )
         assert values == {product_id: "123", unbound_id: None}
     check_migrations(scratch_database_url)
