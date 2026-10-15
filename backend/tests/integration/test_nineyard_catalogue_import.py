@@ -51,8 +51,8 @@ def test_dry_run_then_apply_preserves_approvals_uuid_and_raw_bytes(
         vendor,
         product_id=product.id,
         mapping_status=MappingStatus.APPROVED,
-        approved_by_user_id=user.id,
-        approved_at=product.created_at,
+        mapping_approved_by_user_id=user.id,
+        mapping_approved_at=product.created_at,
     )
     listing = factories.make_marketplace_listing(
         db_session,
@@ -82,6 +82,8 @@ def test_dry_run_then_apply_preserves_approvals_uuid_and_raw_bytes(
     assert product.catalog_item_number == "ABC-001"
     assert other.catalog_item_number == "101"
     assert mapping.product_id == product.id and mapping.mapping_status is MappingStatus.APPROVED
+    assert mapping.mapping_approved_by_user_id == user.id
+    assert mapping.mapping_approved_at == product.created_at
     assert listing.product_id == product.id and listing.mapping_status is MappingStatus.APPROVED
     assert storage.open(report["raw_storage_uri"]) == content
     identifiers = list(

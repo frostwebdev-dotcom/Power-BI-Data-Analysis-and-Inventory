@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import DBAPIError, OperationalError
 
@@ -37,10 +37,21 @@ def scratch_database_url(test_database_url: URL) -> Iterator[URL]:
         drop_database(scratch)
 
 
-def test_external_id_backfill_uses_provenance_and_roundtrips(scratch_database_url: URL) -> None:
+@pytest.fixture
+def catalogue_engine(scratch_database_url: URL) -> Iterator[Engine]:
+    engine = create_engine(scratch_database_url)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+def test_external_id_backfill_uses_provenance_and_roundtrips(
+    scratch_database_url: URL, catalogue_engine: Engine
+) -> None:
     run_migrations(scratch_database_url, "e71a20261007")
     org_id, product_id, unbound_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    engine = create_engine(scratch_database_url)
+    engine = catalogue_engine
     with engine.begin() as connection:
         connection.execute(
             text("INSERT INTO organizations (id, name, slug) VALUES (:id, 'Test', 'test')"),
@@ -60,9 +71,15 @@ def test_external_id_backfill_uses_provenance_and_roundtrips(scratch_database_ur
                 id, organization_id, source_system, source_entity_type, source_record_id,
                 local_entity_type, local_entity_id, payload, payload_sha256
             ) VALUES (:id, :org, 'NINEYARD', 'catalog_item', '123', 'products', :product,
-                      '{"itemId":123}'::jsonb, :digest)
+                          CAST(:payload AS jsonb), :digest)
         """),
-            {"id": uuid.uuid4(), "org": org_id, "product": product_id, "digest": "a" * 64},
+            {
+                "id": uuid.uuid4(),
+                "org": org_id,
+                "product": product_id,
+                "payload": '{"itemId":123}',
+                "digest": "a" * 64,
+            },
         )
     run_migrations(scratch_database_url)
     with engine.connect() as connection:
@@ -80,9 +97,11 @@ def test_external_id_backfill_uses_provenance_and_roundtrips(scratch_database_ur
     engine.dispose()
 
 
-def test_downgrade_refuses_to_choose_a_shared_barcode_owner(scratch_database_url: URL) -> None:
+def test_downgrade_refuses_to_choose_a_shared_barcode_owner(
+    scratch_database_url: URL, catalogue_engine: Engine
+) -> None:
     run_migrations(scratch_database_url)
-    engine = create_engine(scratch_database_url)
+    engine = catalogue_engine
     org_id = uuid.uuid4()
     with engine.begin() as connection:
         connection.execute(
