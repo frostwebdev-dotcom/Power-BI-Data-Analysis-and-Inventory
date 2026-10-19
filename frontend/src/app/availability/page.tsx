@@ -6,6 +6,8 @@ import { EmptyState, ErrorNote, Loading, PageHeader, Pager, StatusBadge, fmtDate
 import { useEvents, useVendors } from "@/lib/queries";
 
 export default function AvailabilityPage() {
+  const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [vendorId, setVendorId] = useState("");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
@@ -14,6 +16,7 @@ export default function AvailabilityPage() {
   const events = useEvents({
     page,
     page_size: 50,
+    q: query,
     vendor_id: vendorId,
     watchlist_only: watchlistOnly,
     since: since ? new Date(since).toISOString() : "",
@@ -23,7 +26,21 @@ export default function AvailabilityPage() {
   return (
     <>
       <PageHeader title="Availability" lede="Every time a vendor line changed between unavailable and available, with the two snapshots that show it. Events on watched products are linked to their watch entry." />
-      <div className="toolbar">
+      <form className="toolbar toolbar--wrap" role="search" onSubmit={(event) => { event.preventDefault(); setQuery(draft.trim()); setPage(1); }}>
+        <input
+          type="search"
+          aria-label="Search availability"
+          aria-describedby="availability-search-help"
+          placeholder="Catalog #, vendor SKU, UPC or name"
+          maxLength={200}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit" className="button">Search</button>
+        {draft || query ? <button type="button" className="button button--ghost" onClick={() => { setDraft(""); setQuery(""); setPage(1); }}>Clear search</button> : null}
+      </form>
+      <p id="availability-search-help" className="muted small">Search all recorded availability changes. Products without a recorded change will not appear.</p>
+      <div className="toolbar toolbar--wrap">
         <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); setPage(1); }} aria-label="Vendor">
           <option value="">All vendors</option>
           {(vendors.data?.items ?? []).map((v) => (
@@ -43,7 +60,8 @@ export default function AvailabilityPage() {
       </div>
       <ErrorNote error={events.error} />
       {events.isPending ? <Loading what="Loading events" /> : null}
-      {events.data && events.data.items.length === 0 ? <EmptyState title="No availability changes" text="Events appear when an import shows a line flipping between available and unavailable." /> : null}
+      {events.data ? <p className="muted small" role="status">{events.data.total.toLocaleString()} availability {events.data.total === 1 ? "change" : "changes"}{query ? ` matching “${query}”` : ""}</p> : null}
+      {events.data && events.data.items.length === 0 ? <EmptyState title={query ? "No matching availability changes" : "No availability changes"} text={query ? "Try a catalog number, vendor SKU, exact UPC or product name, or adjust the vendor, watched-products and date filters. A product may have inventory without a recorded availability change." : "Events appear when an import shows a line flipping between available and unavailable."} /> : null}
       {events.data && events.data.items.length > 0 ? (
         <div className="table-wrap">
           <table className="table" data-testid="availability-events">

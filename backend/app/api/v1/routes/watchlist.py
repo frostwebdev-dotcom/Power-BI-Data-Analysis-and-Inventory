@@ -167,6 +167,9 @@ def list_events(
     product_id: uuid.UUID | None = Query(None),
     watchlist_only: bool = Query(False, description="Only events linked to a watch entry."),
     since: datetime | None = Query(None, description="Only events detected at or after this."),
+    q: str | None = Query(
+        None, max_length=200, description="Search catalog number, product name, vendor SKU or UPC."
+    ),
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> AvailabilityEventListResponse:
@@ -177,6 +180,7 @@ def list_events(
         product_id=product_id,
         watchlist_only=watchlist_only,
         since=since,
+        q=q,
     )
     return AvailabilityEventListResponse(
         items=[_event(e) for e in result.items],
