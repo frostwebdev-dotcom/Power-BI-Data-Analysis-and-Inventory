@@ -23,7 +23,7 @@ export default function ImportsPage() {
 function Imports() {
   const params = useSearchParams();
   const selected = params.get("job");
-  return selected ? <JobDetail jobId={selected} /> : <JobList />;
+  return selected ? <JobDetail key={selected} jobId={selected} /> : <JobList />;
 }
 
 function JobList() {
@@ -222,7 +222,9 @@ function JobDetail({ jobId }: { jobId: string }) {
   const report = useImportReport(jobId);
   const [rowStatus, setRowStatus] = useState("");
   const [rowPage, setRowPage] = useState(1);
-  const rows = useImportRows(jobId, { status: rowStatus, page: rowPage, page_size: 50 });
+  const [rowDraft, setRowDraft] = useState("");
+  const [rowQuery, setRowQuery] = useState("");
+  const rows = useImportRows(jobId, { status: rowStatus, q: rowQuery, page: rowPage, page_size: 50 });
   const [downloadError, setDownloadError] = useState<unknown>(null);
 
   async function download() {
@@ -304,6 +306,11 @@ function JobDetail({ jobId }: { jobId: string }) {
       <section className="card">
         <div className="card__header">
           <h2 className="card__title">Rows</h2>
+        </div>
+        <form className="toolbar toolbar--wrap" role="search" onSubmit={(event) => { event.preventDefault(); setRowQuery(rowDraft.trim()); setRowPage(1); }}>
+          <input type="search" aria-label="Search import rows" aria-describedby="import-row-search-help" placeholder="Vendor SKU, exact UPC or description" value={rowDraft} maxLength={200} onChange={(event) => setRowDraft(event.target.value)} style={{ flex: "1 1 280px" }} />
+          <button type="submit" className="button">Search</button>
+          {rowDraft || rowQuery ? <button type="button" className="button button--ghost" onClick={() => { setRowDraft(""); setRowQuery(""); setRowPage(1); }}>Clear search</button> : null}
           <select value={rowStatus} onChange={(e) => { setRowStatus(e.target.value); setRowPage(1); }} aria-label="Row status" data-testid="row-status-filter">
             <option value="">All rows</option>
             {["OK", "WARNING", "ERROR", "SKIPPED"].map((s) => (
@@ -312,9 +319,13 @@ function JobDetail({ jobId }: { jobId: string }) {
               </option>
             ))}
           </select>
-        </div>
+        </form>
+        <p id="import-row-search-help" className="muted small">Search all rows in this import, including rows beyond the current page.</p>
         <ErrorNote error={rows.error} />
-        {rows.data ? (
+        {rows.data ? <p role="status" className="muted small">{fmtNumber(rows.data.total)} {rows.data.total === 1 ? "row" : "rows"}{rowQuery ? ` matching “${rowQuery}”` : ""}{rowStatus ? ` · ${rowStatus.toLowerCase()}` : ""}</p> : null}
+        {rows.isPending ? <Loading what="Loading rows" /> : rows.data?.items.length === 0 ? (
+          <EmptyState title={rowQuery ? "No matching import rows" : "No rows"} text="Try a vendor SKU, exact UPC or description, or choose a different row status." />
+        ) : rows.data ? (
           <div className="table-wrap">
             <table className="table table--compact" data-testid="import-rows">
               <thead>

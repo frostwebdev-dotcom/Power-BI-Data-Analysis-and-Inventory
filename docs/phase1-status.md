@@ -1,3 +1,13 @@
+> 2026-10-19 import row search: import details now support vendor SKU and
+> description substring search and exact raw/normalized UPC lookup across the
+> selected import. Status and issue filters apply before counts and pagination;
+> the UI supports Enter, Search, Clear, result counts and an empty state.
+> Search reads the retained row snapshot and does not alter imports or mappings.
+> All 41 import upload/API integration cases passed against isolated PostgreSQL
+> (PGlite), including search, scope, filters and pagination. Both mocked-browser
+> search tests, frontend lint/typecheck/build and backend lint/typecheck passed.
+> Hosted deployment remains pending.
+>
 > 2026-10-19 availability search: the Availability screen and events API now
 > support catalog number, product name, vendor SKU and exact UPC/GTIN lookup.
 > The query runs within the organization scope before counting and pagination;
@@ -5,8 +15,8 @@
 > can be found through a vendor line's subsequently approved product mapping.
 > Search does not change mappings or create stock-transition events. This is
 > an event-history view, not a current-inventory lookup. API integration cases
-> passed against an isolated PGlite PostgreSQL instance; hosted Azure deployment
-> and acceptance of this change remain pending.
+> passed against an isolated PGlite PostgreSQL instance. Azure staging deployment
+> succeeded in CI run 39184604740; client acceptance remains pending.
 >
 > 2026-10-15 catalogue identity correction: the client's Products export identifies
 > column F `Product ID` as the business catalogue number and U `Upc` as main

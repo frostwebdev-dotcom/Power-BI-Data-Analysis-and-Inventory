@@ -592,3 +592,127 @@ class TestProfilesAndListing:
         paged = client.get(IMPORTS, params={"page": 2, "page_size": 1}, headers=headers)
         assert paged.json()["page"] == 2 and len(paged.json()["items"]) == 1
         assert client.get(IMPORTS, params={"status": "nope"}, headers=headers).status_code == 422
+
+
+# --- import snapshot search (AC-9.7) -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["i0088099", "88099", "nautica", "031655531908", "00031655531908", "031-655-531908"],
+)
+def test_row_search_finds_snapshot_across_pages(
+    client: TestClient,
+    login: Login,
+    vendor: Vendor,
+    organization: Organization,
+    db_session: Session,
+    query: str,
+) -> None:
+    from app.models.enums import ImportRowStatus
+
+    headers, _ = login(RoleCode.DATA_OPERATOR)
+    job = upload(client, headers, vendor).json()["job"]
+    record = db_session.get(ImportJob, uuid.UUID(job["id"]))
+    assert record is not None
+    for number in range(1, 52):
+        factories.make_import_job_row(
+            db_session,
+            organization,
+            record,
+            row_number=number,
+            vendor_sku=f"OTHER-{number}",
+            status=ImportRowStatus.OK,
+        )
+    target = factories.make_import_job_row(
+        db_session,
+        organization,
+        record,
+        row_number=762,
+        vendor_sku="I0088099",
+        description="Nautica Voyage",
+        raw_upc="031655531908",
+        normalized_upc="00031655531908",
+        quantity=1000,
+        unit_cost=11,
+        status=ImportRowStatus.OK,
+    )
+    response = client.get(
+        f"{IMPORTS}/{record.id}/rows",
+        params={"q": f"  {query}  ", "page_size": 1},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == str(target.id)
+    assert float(body["items"][0]["quantity"]) == 1000
+    assert float(body["items"][0]["unit_cost"]) == 11
+
+
+def test_row_search_literal_filters_counts_and_import_isolation(
+    client: TestClient,
+    login: Login,
+    vendor: Vendor,
+    organization: Organization,
+    db_session: Session,
+) -> None:
+    from app.models.enums import ImportRowStatus
+
+    headers, _ = login(RoleCode.DATA_OPERATOR)
+    record = db_session.get(
+        ImportJob, uuid.UUID(upload(client, headers, vendor).json()["job"]["id"])
+    )
+    assert record is not None
+    for number, status, code in [
+        (1, ImportRowStatus.WARNING, "UPC_INVALID"),
+        (2, ImportRowStatus.WARNING, "PRICE_INVALID"),
+        (3, ImportRowStatus.OK, None),
+    ]:
+        factories.make_import_job_row(
+            db_session,
+            organization,
+            record,
+            row_number=number,
+            vendor_sku=r"SPECIAL_%\SKU",
+            status=status,
+            error_code=code,
+        )
+    factories.make_import_job_row(
+        db_session,
+        organization,
+        record,
+        vendor_sku="SPECIAL-ANYTHING-SKU",
+        status=ImportRowStatus.OK,
+    )
+    other_file = factories.make_import_file(db_session, organization, vendor)
+    other_job = factories.make_import_job(db_session, organization, vendor, other_file)
+    factories.make_import_job_row(db_session, organization, other_job, vendor_sku=r"SPECIAL_%\SKU")
+    foreign_org = factories.make_organization(db_session)
+    foreign_vendor = factories.make_vendor(db_session, foreign_org, code="FOREIGN")
+    foreign_file = factories.make_import_file(db_session, foreign_org, foreign_vendor)
+    foreign_job = factories.make_import_job(db_session, foreign_org, foreign_vendor, foreign_file)
+    factories.make_import_job_row(db_session, foreign_org, foreign_job, vendor_sku=r"SPECIAL_%\SKU")
+
+    path = f"{IMPORTS}/{record.id}/rows"
+    response = client.get(path, params={"q": "_%\\", "page_size": 1, "page": 2}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["total"] == 3
+    assert response.json()["items"][0]["row_number"] == 2
+    filtered = client.get(
+        path,
+        params={"q": "_%\\", "status": "WARNING", "error_code": "UPC_INVALID"},
+        headers=headers,
+    )
+    assert filtered.json()["total"] == 1
+    assert filtered.json()["items"][0]["row_number"] == 1
+    assert client.get(path, params={"q": "missing"}, headers=headers).json()["total"] == 0
+    assert client.get(path, params={"q": "   "}, headers=headers).json()["total"] == 4
+    assert client.get(path, params={"q": "a" * 201}, headers=headers).status_code == 422
+    assert client.get(path, params={"q": "SPECIAL"}).status_code == 401
+    assert (
+        client.get(
+            f"{IMPORTS}/{foreign_job.id}/rows", params={"q": "SPECIAL"}, headers=headers
+        ).status_code
+        == 404
+    )
