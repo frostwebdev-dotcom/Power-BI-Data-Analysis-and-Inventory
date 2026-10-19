@@ -122,6 +122,7 @@ Legend: **[A]** automated test · **[M]** manual verification · **[A+M]** both.
 | AC-9.4 | Report figures reconcile exactly: matched + exception + unmatched + skipped equals the parsed row count. | [A] |
 | AC-9.5 | An error listing is downloadable and every entry traces back to its source row number in the retained raw file. | [A+M] |
 | AC-9.6 | Batch status and the report are visible in the admin UI while the import is running and after it completes. | [M] |
+| AC-9.7 | Import rows can be searched by vendor SKU or description (literal, case-insensitive substring) and exact raw or normalized UPC/GTIN. Search stays within the organization and selected import, composes with status/issue filters before counting and pagination, and resets the UI to page 1. | [A+M] |
 
 ## AC-10 — OOS watchlist
 

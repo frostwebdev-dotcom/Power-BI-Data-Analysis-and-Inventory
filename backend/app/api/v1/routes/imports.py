@@ -226,6 +226,9 @@ def list_rows(
     page_size: int = Query(50, ge=1, le=200),
     status_filter: ImportRowStatus | None = Query(None, alias="status"),
     error_code: str | None = Query(None, max_length=64),
+    q: str | None = Query(
+        None, max_length=200, description="Vendor SKU or description substring, or exact UPC/GTIN"
+    ),
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> ImportRowListResponse:
@@ -237,6 +240,7 @@ def list_rows(
         page_size=page_size,
         status=status_filter,
         error_code=error_code,
+        q=q,
     )
     return ImportRowListResponse(
         items=[ImportRowResponse.model_validate(r) for r in result.items],

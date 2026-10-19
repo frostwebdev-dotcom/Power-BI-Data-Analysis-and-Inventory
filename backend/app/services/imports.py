@@ -214,10 +214,11 @@ def list_rows(
     page_size: int,
     status: ImportRowStatus | None,
     error_code: str | None,
+    q: str | None = None,
 ) -> ImportRowPage:
     get_job(session, principal, job_id)
     return ImportRepository(session, principal.organization_id).list_rows(
-        job_id, page=page, page_size=page_size, status=status, error_code=error_code
+        job_id, page=page, page_size=page_size, status=status, error_code=error_code, q=q
     )
 
 

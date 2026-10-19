@@ -6,9 +6,10 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
+from app.matching.normalize import normalize_gtin
 from app.models.enums import ImportJobStatus, ImportRowStatus
 from app.models.ingestion import ImportFile, ImportJob, ImportJobRow
 from app.repositories.scoping import ScopedRepository
@@ -115,6 +116,7 @@ class ImportRepository(ScopedRepository):
         page_size: int = 50,
         status: ImportRowStatus | None = None,
         error_code: str | None = None,
+        q: str | None = None,
     ) -> ImportRowPage:
         """In file order, so a listing reads like the file (AC-9.5)."""
         page = max(page, 1)
@@ -124,6 +126,22 @@ class ImportRepository(ScopedRepository):
             statement = statement.where(ImportJobRow.status == status)
         if error_code is not None:
             statement = statement.where(ImportJobRow.error_code == error_code)
+        if q and (query := q.strip()):
+            # Search the import snapshot, with literal rather than wildcard input.
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            barcode = normalize_gtin(query)
+            barcode_values = [query]
+            if barcode.usable and barcode.canonical is not None:
+                barcode_values.append(barcode.canonical)
+            statement = statement.where(
+                or_(
+                    ImportJobRow.vendor_sku.ilike(pattern, escape="\\"),
+                    ImportJobRow.description.ilike(pattern, escape="\\"),
+                    ImportJobRow.raw_upc == query,
+                    ImportJobRow.normalized_upc.in_(barcode_values),
+                )
+            )
         total = self.session.execute(
             select(func.count()).select_from(statement.subquery())
         ).scalar_one()
