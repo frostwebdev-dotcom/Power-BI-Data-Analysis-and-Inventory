@@ -143,6 +143,7 @@ Legend: **[A]** automated test · **[M]** manual verification · **[A+M]** both.
 | AC-11.5 | A vendor value not covered by the profile's `availability_rule` maps to `unknown` with a warning — never to `available`. | [A] |
 | AC-11.6 | An availability event on a watched item creates a `watchlist_hit` and is surfaced prominently in the admin UI. | [A+M] |
 | AC-11.7 | A transition on an unmatched vendor product is still recorded, with a null `product_id`, so signal is not lost while the mapping is pending. | [A] |
+| AC-11.8 | The availability feed can be searched by catalog number, product name, vendor SKU, or exact UPC/GTIN. Search is tenant-scoped, applies before pagination, composes with vendor/watch/date filters, and resets the UI to page 1. The empty state explains that products without a recorded availability change are not listed. | [A+M] |
 
 ## AC-12 — Audit logging
 

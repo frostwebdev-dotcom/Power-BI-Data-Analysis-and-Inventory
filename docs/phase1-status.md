@@ -1,3 +1,13 @@
+> 2026-10-19 availability search: the Availability screen and events API now
+> support catalog number, product name, vendor SKU and exact UPC/GTIN lookup.
+> The query runs within the organization scope before counting and pagination;
+> vendor, watched-product and date filters remain applied. Historical events
+> can be found through a vendor line's subsequently approved product mapping.
+> Search does not change mappings or create stock-transition events. This is
+> an event-history view, not a current-inventory lookup. API integration cases
+> passed against an isolated PGlite PostgreSQL instance; hosted Azure deployment
+> and acceptance of this change remain pending.
+>
 > 2026-10-15 catalogue identity correction: the client's Products export identifies
 > column F `Product ID` as the business catalogue number and U `Upc` as main
 > product barcodes. A dry-run-first CSV importer and separate API `ItemId` binding

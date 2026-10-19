@@ -695,6 +695,145 @@ class TestWatchlistApi:
 
 
 class TestEventFeed:
+    @pytest.mark.parametrize(
+        ("query", "expected_sku"),
+        [
+            ("  nau-531908  ", "I0088099"),
+            ("NAUTICA", "I0088099"),
+            ("i0088099", "I0088099"),
+            ("012345678905", "I0088099"),
+            ("00012345678905", "I0088099"),
+            ("uncatalogued", "UNMAPPED_50%"),
+            ("%", "UNMAPPED_50%"),
+            ("_", "UNMAPPED_50%"),
+            ("missing", None),
+        ],
+    )
+    def test_search_mapped_and_unmapped_events(
+        self,
+        client: TestClient,
+        operator: Headers,
+        vendor: Vendor,
+        db_session: Session,
+        organization: Organization,
+        query: str,
+        expected_sku: str | None,
+    ) -> None:
+        product = factories.make_product(
+            db_session, organization, catalog_item_number="NAU-531908", name="Nautica Voyage"
+        )
+        factories.make_identifier(
+            db_session, organization, product, raw_value="012345678905", normalized_value=UPC_A
+        )
+        import_rows(
+            client,
+            operator,
+            vendor,
+            [
+                ["I0088099", "012345678905", "Nautica source", "1000", "11"],
+                ["UNMAPPED_50%", "", "Uncatalogued fragrance", "25", "5"],
+                ["OTHER", "", "Another fragrance", "10", "2"],
+            ],
+            name="search.csv",
+        )
+        response = client.get(EVENTS, params={"q": query}, headers=operator)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["total"] == (1 if expected_sku else 0)
+        assert [event["vendor_sku"] for event in body["items"]] == (
+            [expected_sku] if expected_sku else []
+        )
+
+    def test_search_composes_with_filters_pagination_and_tenant_scope(
+        self,
+        client: TestClient,
+        operator: Headers,
+        manager: tuple[Headers, User],
+        vendor: Vendor,
+        db_session: Session,
+        organization: Organization,
+    ) -> None:
+        product = factories.make_product(db_session, organization, name="Nautica Voyage")
+        factories.make_identifier(db_session, organization, product, normalized_value=UPC_A)
+        headers, _ = manager
+        watch(client, headers, product.id)
+        other_vendor = factories.make_vendor(db_session, organization, code="OTHER")
+        import_rows(
+            client,
+            operator,
+            vendor,
+            [["V-1", "012345678905", "source", "5", "11"]],
+            name="first.csv",
+        )
+        import_rows(
+            client,
+            operator,
+            other_vendor,
+            [["V-2", "012345678905", "source", "7", "12"]],
+            name="second.csv",
+        )
+        # Multiple matching identifiers must not multiply an event in the count.
+        factories.make_identifier(
+            db_session, organization, product, raw_value="036000291452", normalized_value=UPC_B
+        )
+        foreign = factories.make_organization(db_session)
+        foreign_vendor = factories.make_vendor(db_session, foreign, code="FOREIGN")
+        foreign_product = factories.make_product(db_session, foreign, name="Nautica Voyage")
+        line = factories.make_vendor_product(
+            db_session, foreign, foreign_vendor, vendor_sku="FOREIGN-NAUTICA"
+        )
+        file = factories.make_import_file(db_session, foreign, foreign_vendor)
+        job = factories.make_import_job(db_session, foreign, foreign_vendor, file)
+        snapshot = factories.make_snapshot(db_session, foreign, foreign_vendor, line, job)
+        factories.make_availability_event(
+            db_session, foreign, foreign_vendor, line, snapshot, product_id=foreign_product.id
+        )
+
+        def search(**params: Any) -> dict[str, Any]:
+            response = client.get(EVENTS, params={"q": "nautica", **params}, headers=operator)
+            assert response.status_code == 200, response.text
+            body: dict[str, Any] = response.json()
+            return body
+
+        first = search(page_size=1)
+        second = search(page_size=1, page=2)
+        assert first["total"] == second["total"] == 2
+        assert first["items"][0]["id"] != second["items"][0]["id"]
+        assert search(page_size=1, page=3)["items"] == []
+        assert search(vendor_id=str(vendor.id), watchlist_only=True)["total"] == 1
+        assert search(product_id=str(product.id))["total"] == 2
+        assert search(since=(datetime.now(UTC) + timedelta(days=1)).isoformat())["total"] == 0
+        assert search(q="   ")["total"] == 2
+        assert search(q="FOREIGN-NAUTICA")["total"] == 0
+        assert client.get(EVENTS, params={"q": "x" * 201}, headers=operator).status_code == 422
+
+    def test_catalog_search_finds_event_from_before_vendor_mapping(
+        self,
+        client: TestClient,
+        operator: Headers,
+        vendor: Vendor,
+        db_session: Session,
+        organization: Organization,
+    ) -> None:
+        product = factories.make_product(db_session, organization, catalog_item_number="NAU-531908")
+        line = factories.make_vendor_product(
+            db_session,
+            organization,
+            vendor,
+            product_id=product.id,
+            mapping_status="APPROVED",
+            mapping_method="MANUAL_APPROVAL",
+            mapping_approved_at=datetime.now(UTC),
+        )
+        file = factories.make_import_file(db_session, organization, vendor)
+        job = factories.make_import_job(db_session, organization, vendor, file)
+        snapshot = factories.make_snapshot(db_session, organization, vendor, line, job)
+        event = factories.make_availability_event(db_session, organization, vendor, line, snapshot)
+        assert event.product_id is None
+        response = client.get(EVENTS, params={"q": "NAU-531908"}, headers=operator)
+        assert response.status_code == 200, response.text
+        assert [row["id"] for row in response.json()["items"]] == [str(event.id)]
+
     def test_filters(
         self,
         client: TestClient,

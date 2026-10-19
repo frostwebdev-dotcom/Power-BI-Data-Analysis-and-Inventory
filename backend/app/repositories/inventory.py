@@ -7,11 +7,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.models.enums import AvailabilityStatus
+from app.matching.normalize import normalize_gtin
+from app.models.catalog import Product, ProductIdentifier
+from app.models.enums import AvailabilityStatus, IdentifierType
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
+from app.models.vendor import VendorProduct
 from app.models.watchlist import OosStatusHistory, OosWatchlistEntry
 from app.repositories.scoping import ScopedRepository
 
@@ -125,6 +128,7 @@ class InventoryRepository(ScopedRepository):
         product_id: uuid.UUID | None = None,
         watchlist_only: bool = False,
         since: datetime | None = None,
+        q: str | None = None,
     ) -> EventPage:
         page = max(page, 1)
         page_size = max(1, min(page_size, MAX_PAGE_SIZE))
@@ -137,6 +141,52 @@ class InventoryRepository(ScopedRepository):
             statement = statement.where(AvailabilityEvent.oos_watchlist_id.is_not(None))
         if since is not None:
             statement = statement.where(AvailabilityEvent.detected_at >= since)
+        if q and (query := q.strip()):
+            # Literal substring search: user '%' and '_' are not SQL wildcards.
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            barcode = normalize_gtin(query)
+            barcode_values = [query]
+            if barcode.usable and barcode.canonical is not None:
+                barcode_values.append(barcode.canonical)
+            identifier_hit = (
+                self.select(ProductIdentifier, ProductIdentifier.id)
+                .where(
+                    ProductIdentifier.product_id == Product.id,
+                    ProductIdentifier.is_active.is_(True),
+                    ProductIdentifier.identifier_type.in_(
+                        (IdentifierType.UPC, IdentifierType.EAN, IdentifierType.GTIN)
+                    ),
+                    or_(
+                        ProductIdentifier.raw_value == query,
+                        ProductIdentifier.normalized_value.in_(barcode_values),
+                    ),
+                )
+                .exists()
+            )
+            products = self.select(Product, Product.id).where(
+                or_(
+                    Product.catalog_item_number.ilike(pattern, escape="\\"),
+                    Product.name.ilike(pattern, escape="\\"),
+                    identifier_hit,
+                )
+            )
+            vendor_lines = self.select(VendorProduct, VendorProduct.id).where(
+                or_(
+                    VendorProduct.vendor_sku.ilike(pattern, escape="\\"),
+                    VendorProduct.vendor_description.ilike(pattern, escape="\\"),
+                    VendorProduct.raw_upc == query,
+                    VendorProduct.normalized_upc.in_(barcode_values),
+                    # Older events can predate a subsequently approved mapping.
+                    VendorProduct.product_id.in_(products),
+                )
+            )
+            statement = statement.where(
+                or_(
+                    AvailabilityEvent.product_id.in_(products),
+                    AvailabilityEvent.vendor_product_id.in_(vendor_lines),
+                )
+            )
         total = self.session.execute(
             select(func.count()).select_from(statement.subquery())
         ).scalar_one()
