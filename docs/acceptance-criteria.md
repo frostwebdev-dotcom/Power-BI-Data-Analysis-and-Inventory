@@ -76,6 +76,7 @@ Legend: **[A]** automated test · **[M]** manual verification · **[A+M]** both.
 | AC-5.6 | Re-uploading a byte-identical file is detected by checksum and requires explicit confirmation rather than silently creating a second batch. | [A] |
 | AC-5.7 | A batch interrupted by a worker restart resumes and completes without duplicating rows. | [A] |
 | AC-5.8 | Files in UTF-8, UTF-8-with-BOM, and Windows-1252 all import correctly, with the detected encoding recorded on `import_file`. | [A] |
+| AC-5.9 | A standalone terminal DOS end-of-file marker in a CSV is ignored and noted without modifying retained bytes or source row numbers. Markers inside cells or followed by another data record remain source data. | [A] |
 
 ## AC-6 — Vendor-specific import profiles
 
@@ -99,6 +100,7 @@ Legend: **[A]** automated test · **[M]** manual verification · **[A+M]** both.
 | AC-7.6 | UPC normalization strips non-digits, expands UPC-E, validates the check digit, and compares in canonical GTIN-14 form. Values differing only in leading zeros match; a value with an invalid check digit does not match at priority 1 and produces a warning. | [A] |
 | AC-7.7 | A row with no usable signal ends as `unmatched` and enters the exception queue. Nothing is silently dropped. | [A] |
 | AC-7.8 | Matching never writes a mapping automatically. Mappings originate only from human approval. | [A] |
+| AC-7.9 | When UPC normalization is enabled, the exact Excel text wrapper `="digits"` is unwrapped before GTIN validation, preserving raw values and leading zeroes. Disabled normalization/padding rules remain enforced; bad checksums, other formulas and malformed wrappers do not become automatic UPC matches. | [A] |
 
 ## AC-8 — Product-mapping exception workflow
 
