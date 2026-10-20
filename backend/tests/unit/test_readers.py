@@ -90,6 +90,39 @@ class TestStreaming:
         assert rows[0].cells == ["1", "2"]
         assert stream.notes == ["row 2 had 3 cells for 2 headers; extra ignored"]
 
+    @pytest.mark.parametrize("footer", [b"\x1a", b"\x1a\r\n", b" \x1a \r\n\r\n"])
+    def test_a_terminal_dos_eof_record_is_not_inventory(self, footer: bytes) -> None:
+        content = b"UPC,Qty\r\n012345678905,2\r\n\r\n" + footer
+        stream = open_rows(content, CSV)
+
+        assert [(r.row_number, r.cells, r.is_blank) for r in stream.rows] == [
+            (2, ["012345678905", "2"], False),
+            (3, ["", ""], True),
+        ]
+        assert stream.notes == ["ignored terminal DOS end-of-file marker"]
+        assert content.endswith(footer)  # The retained source is never rewritten.
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"UPC,Qty\n012345678905,2\x1a",
+            b'UPC,Qty\n"\x1a",2\n',
+            b"UPC,Qty\n\x1a\n012345678905,2\n",
+            b'UPC,Qty\n012345678905,2\n"\x1a"',
+        ],
+    )
+    def test_eof_characters_in_source_data_are_preserved(self, content: bytes) -> None:
+        stream = open_rows(content, CSV)
+        rows = list(stream.rows)
+        assert any("\x1a" in cell for row in rows for cell in row.cells)
+        assert stream.notes == []
+
+    def test_terminal_dos_eof_is_removed_after_decoding_utf16(self) -> None:
+        content = "UPC,Qty\r\n012345678905,2\r\n\x1a".encode("utf-16")
+        stream = open_rows(content, CSV)
+        assert [(r.row_number, r.cells) for r in stream.rows] == [(2, ["012345678905", "2"])]
+        assert stream.encoding == "utf-16"
+
 
 class TestEncodings:
     @pytest.mark.parametrize(

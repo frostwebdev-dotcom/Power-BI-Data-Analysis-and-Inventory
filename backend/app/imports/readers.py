@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -50,6 +51,10 @@ _BOMS: Final = (
     (b"\xff\xfe", "utf-16"),
     (b"\xfe\xff", "utf-16"),
 )
+
+# Some DOS/Windows exports end with a standalone Ctrl-Z record. Only a
+# terminal, unquoted marker line is metadata; never strip it out of a cell.
+_DOS_EOF_TRAILER: Final = re.compile(r"(?:\A|(?<=[\r\n]))[ \t]*\x1a[ \t\r\n]*\Z")
 
 
 class UnreadableFile(Exception):  # noqa: N818 — a user-facing outcome
@@ -188,6 +193,7 @@ def _guess_encoding(content: bytes) -> str | None:
 
 def _open_csv(content: bytes, options: ReadOptions) -> RowStream:
     text, encoding = _decode(content, options.encoding)
+    text, eof_markers = _DOS_EOF_TRAILER.subn("", text)
     delimiter = options.delimiter or _sniff_delimiter(text)
     reader = csv.reader(
         io.StringIO(text, newline=""),
@@ -203,7 +209,10 @@ def _open_csv(content: bytes, options: ReadOptions) -> RowStream:
             yield last_line + 1, record
             last_line = reader.line_num
 
-    return _assemble(numbered(), options, encoding=encoding)
+    stream = _assemble(numbered(), options, encoding=encoding)
+    if eof_markers:
+        stream.notes.append("ignored terminal DOS end-of-file marker")
+    return stream
 
 
 def _sniff_delimiter(text: str) -> str:

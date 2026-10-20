@@ -562,6 +562,90 @@ class TestMapper:
         assert "stripping is disabled" in preview.rows[0].issues[0].message
         assert "padding is disabled" in preview.rows[1].issues[0].message
 
+    @pytest.mark.parametrize(
+        ("raw", "canonical"),
+        [
+            ('="012345678905"', "00012345678905"),
+            (' ="012345678905" ', "00012345678905"),
+            ('="4006381333931"', "04006381333931"),
+            ('="12345678905"', "00012345678905"),
+        ],
+    )
+    def test_digit_only_excel_text_wrappers_preserve_raw_values(
+        self, raw: str, canonical: str
+    ) -> None:
+        [row] = map_table(self.rules(), self.HEADERS, [[raw, "W", "1", "2"]]).rows
+        assert row.raw_upc == raw.strip()
+        assert row.raw["upc"] == raw.strip()
+        assert row.normalized_upc == canonical
+        assert row.has_valid_checksum is True
+        assert row.issues == []
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "=012345678905",
+            '="012345678905',
+            '="012345678905"&"0"',
+            '="0-12345-67890-5"',
+            '="1.23457E+11"',
+            "=SUM(012345678905)",
+            '="B012345678905"',
+            '=""',
+        ],
+    )
+    def test_other_formulas_and_malformed_wrappers_are_not_identifiers(self, raw: str) -> None:
+        [row] = map_table(self.rules(), self.HEADERS, [[raw, "W", "1", "2"]]).rows
+        assert row.normalized_upc is None
+        assert [i.code for i in row.issues] == [IssueCode.UPC_INVALID]
+
+    def test_wrapped_upc_still_requires_a_valid_check_digit(self) -> None:
+        [row] = map_table(self.rules(), self.HEADERS, [['="012345678906"', "W", "1", "2"]]).rows
+        assert row.normalized_upc == "00012345678906"
+        assert row.has_valid_checksum is False
+        assert [i.code for i in row.issues] == [IssueCode.UPC_INVALID]
+        assert row.status is ImportRowStatus.WARNING
+
+    @pytest.mark.parametrize(
+        ("normalization", "raw", "reason"),
+        [
+            (NormalizationRules(upc_strip_non_digits=False), '="012345678905"', "stripping"),
+            (NormalizationRules(upc_pad_to_12=False), '="12345678905"', "padding"),
+        ],
+    )
+    def test_wrappers_respect_profile_normalization_flags(
+        self, normalization: NormalizationRules, raw: str, reason: str
+    ) -> None:
+        rules = ProfileRules(column_map=MINIMAL, normalization_rules=normalization)
+        [row] = map_table(rules, ["UPC", "Quantity"], [[raw, "1"]]).rows
+        assert row.normalized_upc is None
+        assert reason in row.issues[0].message
+
+    def test_vendor_csv_preview_uses_wrapped_upcs_and_ignores_dos_footer(self) -> None:
+        content = (
+            b" ITEM,UPCCHKDIG,MFG NAME,DESCRIPTION,PACK,ONHAND,REG,YOUR PRICE,MY ORDER\r\n"
+            b'00001,="012345678905",Maker,Widget,012,00024,3.00,2.50\r\n\x1a'
+        )
+        table = read_table(content, ReadOptions(file_format=FileFormat.CSV, delimiter=","))
+        rules = ProfileRules(
+            column_map=columns(
+                ("vendor_sku", "ITEM"),
+                ("upc", "UPCCHKDIG"),
+                ("description", "DESCRIPTION"),
+                ("pack_size", "PACK"),
+                ("quantity_available", "ONHAND"),
+                ("unit_cost", "YOUR PRICE"),
+            )
+        )
+        preview = map_table(rules, table.headers, table.rows, first_row_number=2)
+        [row] = preview.rows
+        assert preview.header_ok and not preview.issues
+        assert row.row_number == 2 and row.status is ImportRowStatus.OK
+        assert row.vendor_sku == "00001"
+        assert row.raw_upc == '="012345678905"'
+        assert row.normalized_upc == "00012345678905"
+        assert (row.quantity, row.pack_size, row.unit_cost) == (24, 12, Decimal("2.50"))
+
     def test_fixed_case_pack_is_recorded(self) -> None:
         rules = ProfileRules(
             column_map=MINIMAL,

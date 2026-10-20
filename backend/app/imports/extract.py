@@ -14,6 +14,7 @@ what the import does.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -364,18 +365,25 @@ def _availability(
     return AvailabilityStatus.UNKNOWN
 
 
+_EXCEL_TEXT_UPC: Final = re.compile(r'="([0-9]+)"')
+
+
 def _normalize_upc(
     text: str, norm: NormalizationRules
 ) -> tuple[str | None, bool | None, str | None]:
     """Apply the profile's UPC flags on top of the shared normaliser.
 
     ``upc_strip_non_digits`` off: a value with anything but digits is
-    refused as-is instead of cleaned. ``upc_pad_to_12`` off: an 11-digit
-    value is refused instead of having its leading zero restored.
+    refused as-is instead of cleaned. When enabled, an exact digit-only Excel
+    text wrapper is unwrapped without evaluating a formula or changing raw data.
+    ``upc_pad_to_12`` off: an 11-digit value is refused instead of having its
+    leading zero restored.
     """
     candidate = text.strip()
     if not norm.upc_strip_non_digits and not candidate.isdigit():
         return None, None, "contains non-digit characters (stripping is disabled)"
+    if norm.upc_strip_non_digits and (wrapped := _EXCEL_TEXT_UPC.fullmatch(candidate)):
+        candidate = wrapped.group(1)
     if not norm.upc_pad_to_12 and len(candidate) == 11 and candidate.isdigit():
         return None, None, "11 digits and leading-zero padding is disabled"
     normalized = normalize_gtin(candidate)

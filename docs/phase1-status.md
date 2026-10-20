@@ -1,3 +1,17 @@
+> 2026-10-20 vendor CSV compatibility: the importer accepts the exact digit-only
+> Excel text wrapper `="digits"` when UPC normalization is enabled, keeps checksum
+> validation and the raw UPC, and ignores a standalone terminal DOS end-of-file
+> marker during CSV reading. Other formulas and malformed wrappers remain invalid;
+> embedded markers, source line numbers, retained bytes and the existing
+> last-row-wins duplicate SKU policy are preserved. All 796 backend unit tests,
+> lint, formatting and strict type checks passed. The supplied CSV was checked
+> locally through the production reader/extractor: 3,721 data rows, 3,682 OK,
+> 39 checksum warnings, no extraction errors, 3,651 unique SKUs and 70 repeats
+> before the importer's duplicate policy. The original SHA-256 stayed unchanged.
+> This is a local parser check, not a hosted import or a catalogue match test.
+> CI, deployment, vendor identity/unit confirmation and hosted CSV acceptance
+> remain pending.
+>
 > 2026-10-19 import row search: import details now support vendor SKU and
 > description substring search and exact raw/normalized UPC lookup across the
 > selected import. Status and issue filters apply before counts and pagination;
