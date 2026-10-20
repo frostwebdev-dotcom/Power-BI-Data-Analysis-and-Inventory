@@ -294,7 +294,12 @@ class TestCreate:
             "case_pack_from": "pack_size_column",
             "fixed_pack_size": None,
         }
-        assert body["price_semantics"] == {"currency": "USD", "includes_tax": False, "per": "each"}
+        assert body["price_semantics"] == {
+            "currency": "USD",
+            "includes_tax": False,
+            "per": "each",
+            "discount_percent": "0",
+        }
         assert body["pack_size_handling"] == {"mode": "store_as_stated"}
         assert body["header_signature"] == compute_header_signature(CSV_HEADERS)
 
@@ -549,6 +554,31 @@ class TestVersioning:
 
 
 class TestValidate:
+    def test_versioned_discount_is_applied_in_preview(
+        self, client: TestClient, login: Login, vendor: Vendor
+    ) -> None:
+        headers, _ = login(RoleCode.DATA_OPERATOR)
+        v1 = create(client, headers, vendor, csv_profile())
+        response = client.patch(
+            f"{profiles_url(vendor)}/{v1['id']}",
+            json={"price_semantics": {"discount_percent": "12"}},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        v2 = response.json()
+        assert v2["version"] == 2 and v2["price_semantics"]["discount_percent"] == "12"
+        old = client.get(f"{profiles_url(vendor)}/{v1['id']}", headers=headers).json()
+        assert old["price_semantics"]["discount_percent"] == "0"
+        preview = client.post(
+            f"{profiles_url(vendor)}/{v2['id']}/validate",
+            files=upload("sample.csv", csv_sample()),
+            headers=headers,
+        )
+        assert preview.status_code == 200, preview.text
+        row = preview.json()["rows"][0]
+        assert row["raw"]["unit_cost"] == "$3.50"
+        assert row["values"]["unit_cost"] == "3.0800"
+
     def test_csv_sample_against_the_stored_profile(
         self, client: TestClient, login: Login, vendor: Vendor, db_session: Session
     ) -> None:

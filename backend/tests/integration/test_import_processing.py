@@ -274,6 +274,25 @@ def audit_actions(db_session: Session, job_id: str) -> list[str]:
 
 
 class TestBriefLayouts:
+    def test_profile_discount_is_persisted_without_rewriting_the_source(
+        self, client: TestClient, operator: Headers, vendor: Vendor
+    ) -> None:
+        content = csv_bytes(BRIEF_A, [["012345678905", "Widget", "24", "4.22"]])
+        job = import_file(
+            client,
+            operator,
+            vendor,
+            profile_a(price_semantics={"discount_percent": "12"}),
+            "discount.csv",
+            content,
+        )
+        [row] = rows(client, operator, job["id"])
+        assert row["raw_data"]["unit_cost"] == "4.22"
+        assert row["unit_cost"] == "3.7136"
+        assert row["normalized_data"]["unit_cost"] == "3.7136"
+        retained = client.get(f"{IMPORTS}/{job['id']}/raw", headers=operator)
+        assert retained.status_code == 200 and retained.content == content
+
     def test_layout_a_as_csv(
         self, client: TestClient, operator: Headers, vendor: Vendor, db_session: Session
     ) -> None:

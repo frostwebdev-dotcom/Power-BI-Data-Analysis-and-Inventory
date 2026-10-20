@@ -305,7 +305,8 @@ def extract_row(
                     Issue(IssueCode.PRICE_INVALID, "unit_cost", f"{cost_raw!r} is not a price")
                 )
             else:
-                row.unit_cost = cost
+                discount = rules.price_semantics.discount_percent
+                row.unit_cost = cost * (Decimal("1") - discount / Decimal("100"))
                 row.currency = rules.price_semantics.currency
 
     if ColumnTarget.PACK_SIZE.value in by_target:

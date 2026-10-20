@@ -193,6 +193,20 @@ class TestQuantitySemantics:
 
 
 class TestPriceSemantics:
+    def test_old_profiles_have_no_discount(self) -> None:
+        assert PriceSemantics().discount_percent == Decimal("0")
+
+    @pytest.mark.parametrize("value", ["-1", "100.01", "NaN", "Infinity", "-Infinity"])
+    def test_discount_must_be_finite_and_between_zero_and_one_hundred(self, value: str) -> None:
+        with pytest.raises(ValidationError):
+            PriceSemantics(discount_percent=Decimal(value))
+
+    def test_discount_survives_json_profile_serialization(self) -> None:
+        rules = PriceSemantics(discount_percent=Decimal("12.5"))
+        assert PriceSemantics.model_validate_json(rules.model_dump_json()) == rules
+        schema = rule_json_schemas()["price_semantics"]
+        assert "discount_percent" in schema["properties"]
+
     def test_currency_is_normalised(self) -> None:
         assert PriceSemantics(currency=" eur ").currency == "EUR"
 
@@ -454,6 +468,44 @@ class TestMapper:
         )
         preview = map_table(rules, self.HEADERS, [["012345678905", "W", "1", "$1,299.50"]])
         assert preview.rows[0].unit_cost == Decimal("1299.50")
+
+    @pytest.mark.parametrize(
+        ("source", "discount", "expected"),
+        [
+            ("4.22", "12", "3.7136"),
+            ("4.17", "12", "3.6696"),
+            ("0.85", "12", "0.7480"),
+            ("4.22", "0", "4.22"),
+            ("4.22", "100", "0"),
+            ("0", "12", "0"),
+            ("4.22", "12.5", "3.6925"),
+        ],
+    )
+    def test_profile_discount_changes_only_normalized_cost(
+        self, source: str, discount: str, expected: str
+    ) -> None:
+        rules = ProfileRules(
+            column_map=self.rules().column_map,
+            price_semantics=PriceSemantics(discount_percent=Decimal(discount)),
+        )
+        cells = ["012345678905", "Widget", "24", source]
+        for _ in range(2):
+            [row] = map_table(rules, self.HEADERS, [cells]).rows
+            assert row.unit_cost == Decimal(expected)
+            assert row.raw["unit_cost"] == source
+            assert row.quantity == 24 and row.currency == "USD"
+            assert row.issues == []
+        assert cells == ["012345678905", "Widget", "24", source]
+
+    @pytest.mark.parametrize("source", ["", "abc", "-1", "NaN", "Infinity"])
+    def test_discount_does_not_turn_invalid_or_missing_prices_into_costs(self, source: str) -> None:
+        rules = ProfileRules(
+            column_map=self.rules().column_map,
+            price_semantics=PriceSemantics(discount_percent=Decimal("12")),
+        )
+        [row] = map_table(rules, self.HEADERS, [["012345678905", "W", "1", source]]).rows
+        assert row.unit_cost is None
+        assert [i.code for i in row.issues] == ([IssueCode.PRICE_INVALID] if source else [])
 
     def test_decimal_comma_and_space_grouping(self) -> None:
         rules = ProfileRules(

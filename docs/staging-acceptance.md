@@ -168,3 +168,32 @@ re-registers jobs and starts their intervals again. Check console logs for
 appears. Do not launch overlapping manual retries during this verification.
 
 Hosted acceptance is complete only after these live results are recorded.
+
+## QKD CSV price rule
+
+The client identifies `INSTEAFL - 2026-10-08T220607.980.CSV` as the latest
+provided QKD export and requests a 12% deduction from column H (`YOUR PRICE`).
+Keep the original upload unchanged. Under vendor **QKD**, create a versioned
+CSV profile with UTF-8 encoding, comma delimiter, header row index 0 and skip
+rows 0. Use these column mappings:
+
+| Source | Target |
+|---|---|
+| ITEM | vendor_sku |
+| UPCCHKDIG | upc |
+| DESCRIPTION | description |
+| ONHAND | quantity_available |
+| YOUR PRICE | unit_cost |
+| PACK | pack_size |
+
+Under **Price**, enter **Discount percent = 12**. This stores the normalized
+cost as source column H multiplied by 0.88, using Decimal arithmetic without
+additional cent rounding. For example, a source price of 4.22 previews as
+3.7136. The raw source price remains 4.22. Existing profiles default to zero
+discount. Editing a saved rule creates another profile version.
+
+Confirm whether quantities and prices are per each or per case with the client
+before saving the profile and importing inventory. Do not infer this from the
+`PACK` column or change quantities. Validate the original file in the profile
+preview, check the net price, then pin the header and save. A local full-file
+extractor check is not evidence of a completed hosted import.
