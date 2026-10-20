@@ -1,3 +1,16 @@
+> 2026-10-20 QKD price normalization: the client identifies the supplied CSV
+> as QKD and requires a 12% deduction from column H (`YOUR PRICE`). The versioned
+> profile now supports `discount_percent`, default 0, restricted to finite 0–100.
+> Preview and ingestion use their shared extractor to compute source cost ×
+> (1 − discount / 100) with Decimal, preserving raw values/files and invalid-price
+> handling, without extra cent rounding or pack conversion. All 815 backend unit
+> tests, lint and strict type checks passed. A local read-only check of all 3,721
+> supplied rows verified each net price equals original column H × 0.88; the
+> original SHA-256 stayed unchanged. Profile API/versioning and persisted import
+> integration regressions were added; CI and deployment remain pending. Confirm
+> quantity and price unit/case semantics before creating the hosted QKD profile
+> and importing inventory; see [QKD setup](staging-acceptance.md#qkd-csv-price-rule).
+>
 > 2026-10-20 vendor CSV compatibility: the importer accepts the exact digit-only
 > Excel text wrapper `="digits"` when UPC normalization is enabled, keeps checksum
 > validation and the raw UPC, and ignores a standalone terminal DOS end-of-file

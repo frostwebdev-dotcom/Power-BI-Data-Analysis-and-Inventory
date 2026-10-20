@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Iterable
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Final, Literal
 
@@ -201,6 +202,17 @@ class PriceSemantics(BaseModel):
     currency: str = "USD"
     includes_tax: bool = False
     per: Literal["each", "case"] = "each"
+    discount_percent: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        le=100,
+        allow_inf_nan=False,
+        title="Discount percent",
+        description=(
+            "Percentage deducted from the mapped source price. Enter 12 for 12% off. "
+            "The original source price is preserved. Zero leaves the price unchanged."
+        ),
+    )
 
     @field_validator("currency")
     @classmethod

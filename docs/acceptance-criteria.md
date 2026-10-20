@@ -87,6 +87,7 @@ Legend: **[A]** automated test · **[M]** manual verification · **[A+M]** both.
 | AC-6.3 | Editing a profile creates a new version and leaves prior batches interpretable under the version they ran with. | [A] |
 | AC-6.4 | An incoming file whose header does not match the profile's `header_signature` fails the batch immediately with a clear diff of expected vs. observed columns, rather than mapping columns positionally. | [A] |
 | AC-6.5 | Profile changes are audited. | [A] |
+| AC-6.6 | A versioned profile may deduct a finite percentage from 0 to 100 from its mapped source cost using Decimal arithmetic. Omitted discounts default to zero. Preview and import apply the same rule once to the original source price, preserving raw bytes/values, invalid-price validation and prior profile versions. | [A+M] |
 
 ## AC-7 — Deterministic product matching
 
