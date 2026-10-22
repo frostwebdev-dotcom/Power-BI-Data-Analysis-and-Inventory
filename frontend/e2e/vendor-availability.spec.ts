@@ -102,7 +102,7 @@ test("invalid roster blocks creation and viewer cannot access setup controls", a
   await page.getByRole("button", { name: "Set up vendor list" }).click();
   await page.getByLabel("Vendor list CSV").setInputFiles({ name: "vendors.csv", mimeType: "text/csv", buffer: Buffer.from("code,name\nNYB,Duplicate\n") });
   await page.getByRole("button", { name: "Preview vendor list" }).click();
-  await expect(page.getByRole("alert")).toContainText("No vendors were created");
+  await expect(page.getByRole("alert").filter({ hasText: "No vendors were created" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create 0 vendors" })).toBeDisabled();
   await page.unroute("**/api/v1/**");
   await mockApp(page, "VIEWER");
@@ -116,7 +116,7 @@ test("editing a vendor preserves lead time, notes and saved purchasing terms", a
   await page.goto("/vendors");
   await page.getByTestId("vendor-row-PCA").getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.getByLabel("Default lead time (days)")).toHaveValue("7");
-  await expect(page.getByLabel("Notes", { exact: true })).toHaveValue("Keep saved notes");
+  await expect(page.getByLabel("Notes")).toHaveValue("Keep saved notes");
   await page.getByLabel("Name", { exact: true }).fill("Perfume Center Updated");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect.poll(() => calls.find((call) => call.path === "/vendors/pca")?.body?.name).toBe("Perfume Center Updated");
