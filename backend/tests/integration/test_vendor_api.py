@@ -122,8 +122,9 @@ class TestVendorRoster:
             )
         assert db_session.scalars(select(Vendor).where(Vendor.code.in_(["AA", "BB"]))).all() == []
         assert (
-            db_session.scalars(select(AuditEvent).where(AuditEvent.action == "vendor.created"))
-            .all()
+            db_session.scalars(
+                select(AuditEvent).where(AuditEvent.action == "vendor.created")
+            ).all()
             == []
         )
 
