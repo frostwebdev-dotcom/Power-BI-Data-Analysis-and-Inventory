@@ -7,6 +7,7 @@ Reads for every role; adding and removing a watch for ``PURCHASING_MANAGER``
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -18,11 +19,13 @@ from app.api.v1.routes.vendors import READ_ROLES
 from app.core.security import Principal, RoleCode
 from app.db.session import get_db
 from app.models.inventory import AvailabilityEvent
+from app.models.watchlist import OosStatusHistory, OosWatchlistEntry
 from app.repositories.inventory import InventoryRepository
 from app.schemas.watchlist import (
     AvailabilityEventListResponse,
     AvailabilityEventResponse,
     StatusHistoryResponse,
+    StockVendor,
     WatchlistCreate,
     WatchlistEntryResponse,
     WatchlistHistoryResponse,
@@ -41,6 +44,31 @@ Responses = dict[int | str, dict[str, Any]]
 _FORBIDDEN: Responses = {403: {"description": "The caller lacks the required role."}}
 _NOT_FOUND: Responses = {404: {"description": "No such entry, product or vendor."}}
 _CONFLICT: Responses = {409: {"description": "The watch already exists or was already removed."}}
+
+
+def _watch_entries(
+    session: Session, principal: Principal, entries: Sequence[OosWatchlistEntry]
+) -> list[WatchlistEntryResponse]:
+    available = InventoryRepository(session, principal.organization_id).available_vendors(
+        {entry.product_id for entry in entries}
+    )
+    result = []
+    for entry in entries:
+        body = WatchlistEntryResponse.model_validate(entry)
+        body.available_vendors = [
+            StockVendor(id=vendor.id, code=vendor.code, name=vendor.name)
+            for vendor in available.get(entry.product_id, [])
+            if entry.vendor_id is None or entry.vendor_id == vendor.id
+        ]
+        result.append(body)
+    return result
+
+
+def _history(row: OosStatusHistory) -> StatusHistoryResponse:
+    body = StatusHistoryResponse.model_validate(row)
+    body.vendor_code = row.vendor.code if row.vendor else None
+    body.vendor_name = row.vendor.name if row.vendor else None
+    return body
 
 
 @router.get(
@@ -68,7 +96,7 @@ def list_watchlist(
         include_inactive=include_inactive,
     )
     return WatchlistListResponse(
-        items=[WatchlistEntryResponse.model_validate(e) for e in result.items],
+        items=_watch_entries(session, principal, result.items),
         page=result.page,
         page_size=result.page_size,
         total=result.total,
@@ -87,7 +115,7 @@ def add_watch(
     principal: Principal = _write,
     session: Session = Depends(get_db),
 ) -> WatchlistEntryResponse:
-    return WatchlistEntryResponse.model_validate(service.add_watch(session, principal, payload))
+    return _watch_entries(session, principal, [service.add_watch(session, principal, payload)])[0]
 
 
 @router.get(
@@ -101,7 +129,7 @@ def get_watch(
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> WatchlistEntryResponse:
-    return WatchlistEntryResponse.model_validate(service.get_watch(session, principal, entry_id))
+    return _watch_entries(session, principal, [service.get_watch(session, principal, entry_id)])[0]
 
 
 @router.post(
@@ -117,9 +145,9 @@ def remove_watch(
     session: Session = Depends(get_db),
 ) -> WatchlistEntryResponse:
     note = payload.note if payload is not None else None
-    return WatchlistEntryResponse.model_validate(
-        service.remove_watch(session, principal, entry_id, note=note)
-    )
+    return _watch_entries(
+        session, principal, [service.remove_watch(session, principal, entry_id, note=note)]
+    )[0]
 
 
 @router.get(
@@ -135,11 +163,8 @@ def watch_history(
 ) -> WatchlistHistoryResponse:
     entry = service.get_watch(session, principal, entry_id)
     return WatchlistHistoryResponse(
-        entry=WatchlistEntryResponse.model_validate(entry),
-        history=[
-            StatusHistoryResponse.model_validate(h)
-            for h in service.history(session, principal, entry_id)
-        ],
+        entry=_watch_entries(session, principal, [entry])[0],
+        history=[_history(h) for h in service.history(session, principal, entry_id)],
     )
 
 
@@ -148,6 +173,8 @@ def watch_history(
 
 def _event(event: AvailabilityEvent) -> AvailabilityEventResponse:
     body = AvailabilityEventResponse.model_validate(event)
+    body.vendor_code = event.vendor.code if event.vendor else None
+    body.vendor_name = event.vendor.name if event.vendor else None
     body.vendor_sku = event.vendor_product.vendor_sku if event.vendor_product else None
     body.product_name = event.product.name if event.product else None
     body.catalog_item_number = event.product.catalog_item_number if event.product else None

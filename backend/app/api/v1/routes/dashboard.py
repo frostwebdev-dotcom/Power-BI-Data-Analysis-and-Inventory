@@ -58,11 +58,19 @@ class SyncStatusSummary(BaseModel):
     error_message: str | None
 
 
+class RestockVendor(BaseModel):
+    vendor_id: uuid.UUID
+    vendor_code: str
+    vendor_name: str
+    event_count: int
+
+
 class DashboardResponse(BaseModel):
     open_exceptions: int
     watchlist_active: int
     watchlist_in_stock: int
     watchlist_newly_available_7d: int
+    newly_available_by_vendor: list[RestockVendor]
     imports_running: int
     last_imports: list[LastImport]
     amazon_syncs: list[SyncStatusSummary]
@@ -116,13 +124,21 @@ def dashboard(
             OosWatchlistEntry.current_status == OosStatus.IN_STOCK,
         )
     )
-    newly_available = count(
-        repository.select(AvailabilityEvent).where(
-            AvailabilityEvent.event_type == AvailabilityEventType.BECAME_AVAILABLE,
-            AvailabilityEvent.oos_watchlist_id.is_not(None),
-            AvailabilityEvent.detected_at >= now - timedelta(days=7),
-        )
+    restock_events = repository.select(AvailabilityEvent).where(
+        AvailabilityEvent.event_type == AvailabilityEventType.BECAME_AVAILABLE,
+        AvailabilityEvent.oos_watchlist_id.is_not(None),
+        AvailabilityEvent.detected_at >= now - timedelta(days=7),
     )
+    newly_available = count(restock_events)
+    by_vendor = session.execute(
+        restock_events.with_only_columns(
+            Vendor.id, Vendor.code, Vendor.name, func.count(AvailabilityEvent.id)
+        )
+        .join(Vendor, Vendor.id == AvailabilityEvent.vendor_id)
+        .where(Vendor.organization_id == principal.organization_id)
+        .group_by(Vendor.id, Vendor.code, Vendor.name)
+        .order_by(Vendor.name, Vendor.code)
+    ).all()
     imports_running = count(
         repository.select(ImportJob).where(
             ImportJob.status.in_((ImportJobStatus.PENDING, ImportJobStatus.RUNNING))
@@ -213,6 +229,10 @@ def dashboard(
         watchlist_active=watchlist_active,
         watchlist_in_stock=watchlist_in_stock,
         watchlist_newly_available_7d=newly_available,
+        newly_available_by_vendor=[
+            RestockVendor(vendor_id=vid, vendor_code=code, vendor_name=name, event_count=total)
+            for vid, code, name, total in by_vendor
+        ],
         imports_running=imports_running,
         last_imports=last_imports,
         amazon_syncs=amazon_syncs,

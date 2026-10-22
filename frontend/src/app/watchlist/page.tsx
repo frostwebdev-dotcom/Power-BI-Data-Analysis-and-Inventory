@@ -80,7 +80,8 @@ function Watchlist() {
               <tr>
                 <th>Product</th>
                 <th>Catalog #</th>
-                <th>Vendor</th>
+                <th>Watch scope</th>
+                <th>Available from</th>
                 <th>Status</th>
                 <th>Priority</th>
                 <th>Want</th>
@@ -95,6 +96,16 @@ function Watchlist() {
                   <td>{entry.product.name}</td>
                   <td className="mono">{entry.product.catalog_item_number}</td>
                   <td>{vendorCode(entry.vendor_id)}</td>
+                  <td>
+                    {entry.available_vendors?.length ? entry.available_vendors.map((vendor) => (
+                      <div key={vendor.id}>{vendor.name} <span className="mono muted small">{vendor.code}</span></div>
+                    )) : (
+                      <span className="muted">
+                        {entry.available_vendors === undefined || entry.current_status === "UNKNOWN"
+                          ? "Not yet known" : "No vendor currently available"}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <StatusBadge value={entry.is_active ? entry.current_status : "INACTIVE"} />
                   </td>
@@ -230,6 +241,7 @@ function HistoryDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 <th>When</th>
                 <th>From</th>
                 <th>To</th>
+                <th>Source vendor</th>
               </tr>
             </thead>
             <tbody>
@@ -241,6 +253,10 @@ function HistoryDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   </td>
                   <td>
                     <StatusBadge value={h.new_status} />
+                  </td>
+                  <td>
+                    {h.vendor_name ?? h.vendor_code ?? "—"}
+                    {h.vendor_name && h.vendor_code ? <div className="mono muted small">{h.vendor_code}</div> : null}
                   </td>
                 </tr>
               ))}

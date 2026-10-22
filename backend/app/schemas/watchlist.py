@@ -39,12 +39,19 @@ class WatchedProduct(BaseModel):
     name: str
 
 
+class StockVendor(BaseModel):
+    id: uuid.UUID
+    code: str
+    name: str
+
+
 class WatchlistEntryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     product_id: uuid.UUID
     product: WatchedProduct
+    available_vendors: list[StockVendor] = Field(default_factory=list)
     vendor_id: uuid.UUID | None
     reason: str | None
     priority: WatchlistPriority
@@ -76,6 +83,8 @@ class StatusHistoryResponse(BaseModel):
     oos_watchlist_id: uuid.UUID
     product_id: uuid.UUID
     vendor_id: uuid.UUID | None
+    vendor_code: str | None = None
+    vendor_name: str | None = None
     previous_status: OosStatus | None
     new_status: OosStatus
     vendor_inventory_snapshot_id: uuid.UUID | None
@@ -107,6 +116,8 @@ class AvailabilityEventResponse(BaseModel):
     acknowledged_by_user_id: uuid.UUID | None
     acknowledged_at: datetime | None
     #: Denormalised for the feed.
+    vendor_code: str | None = None
+    vendor_name: str | None = None
     vendor_sku: str | None = None
     product_name: str | None = None
     catalog_item_number: str | None = None
