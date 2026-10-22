@@ -105,6 +105,26 @@ export default function DashboardPage() {
       <div className="grid grid--2" style={{ marginTop: 26 }}>
         <section className="card">
           <div className="card__header">
+            <span className="card__title">Back in stock by vendor · 7 days</span>
+          </div>
+          {data && !data.newly_available_by_vendor?.length ? (
+            <p className="muted">No watched restock updates in the last 7 days.</p>
+          ) : null}
+          {data?.newly_available_by_vendor?.length ? (
+            <table className="table table--compact" data-testid="restock-vendors">
+              <thead><tr><th>Available from</th><th>Stock updates</th><th /></tr></thead>
+              <tbody>{data.newly_available_by_vendor.map((vendor) => (
+                <tr key={vendor.vendor_id}>
+                  <td>{vendor.vendor_name} <span className="mono muted small">{vendor.vendor_code}</span></td>
+                  <td>{fmtNumber(vendor.event_count)}</td>
+                  <td><Link href={`/availability?watchlist=1&vendor_id=${vendor.vendor_id}`}>View items</Link></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          ) : null}
+        </section>
+        <section className="card">
+          <div className="card__header">
             <span className="card__title">Last import per vendor</span>
           </div>
           {data && data.last_imports.length === 0 ? <p className="muted">No vendors yet.</p> : null}

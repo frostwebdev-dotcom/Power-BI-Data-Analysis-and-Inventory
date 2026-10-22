@@ -22,6 +22,7 @@ from app.db.session import get_db
 from app.main import create_app
 from app.models import AuditEvent, Organization, User, Vendor, VendorContact
 from app.models.enums import ActorType, VendorStatus
+from app.services import audit
 from app.services.roles import assign_role, ensure_system_roles
 from tests.integration import factories
 
@@ -91,6 +92,121 @@ def payload(**overrides: Any) -> dict[str, Any]:
     }
     body.update(overrides)
     return body
+
+
+class TestVendorRoster:
+    def test_audit_failure_rolls_back_the_entire_roster(
+        self,
+        client: TestClient,
+        login: Login,
+        db_session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        headers, _ = login(RoleCode.DATA_OPERATOR)
+        record_change = audit.record_change
+        calls = 0
+
+        def fail_second_audit(*args: Any, **kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("audit unavailable")
+            return record_change(*args, **kwargs)
+
+        monkeypatch.setattr(audit, "record_change", fail_second_audit)
+        with pytest.raises(RuntimeError, match="audit unavailable"):
+            client.post(
+                f"{VENDORS}/bulk-setup",
+                json={"csv_text": "code,name\nAA,First\nBB,Second\n", "apply": True},
+                headers=headers,
+            )
+        assert db_session.scalars(select(Vendor).where(Vendor.code.in_(["AA", "BB"]))).all() == []
+        assert (
+            db_session.scalars(
+                select(AuditEvent).where(AuditEvent.action == "vendor.created")
+            ).all()
+            == []
+        )
+
+    def test_preview_apply_and_retry_preserve_existing_and_audit_new_vendors(
+        self, client: TestClient, login: Login, db_session: Session, organization: Organization
+    ) -> None:
+        headers, user = login(RoleCode.ADMIN)
+        saved = factories.make_vendor(
+            db_session, organization, code="PCA", name="PCA", notes="Preserve these terms"
+        )
+        request = {
+            "csv_text": "code,name,payment_terms\nPCA,PCA,Net 90\nNYB,NYB International,Net 30\n"
+        }
+        preview = client.post(f"{VENDORS}/bulk-setup", json=request, headers=headers)
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["ready"] is True
+        assert preview.json()["applied"] is False
+        assert [row["action"] for row in preview.json()["rows"]] == ["existing", "create"]
+        assert db_session.scalar(select(Vendor).where(Vendor.code == "NYB")) is None
+
+        response = client.post(
+            f"{VENDORS}/bulk-setup", json={**request, "apply": True}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["created"] == 1
+        assert response.json()["existing"] == 1
+        db_session.refresh(saved)
+        assert saved.notes == "Preserve these terms"
+        assert saved.purchasing_terms == {}
+        created = db_session.scalars(select(Vendor).where(Vendor.code == "NYB")).one()
+        assert created.organization_id == organization.id
+        assert created.purchasing_terms == {"payment": "Net 30"}
+        audits = db_session.scalars(
+            select(AuditEvent).where(AuditEvent.entity_id == created.id)
+        ).all()
+        assert len(audits) == 1
+        assert audits[0].actor_user_id == user.id
+        retry = client.post(
+            f"{VENDORS}/bulk-setup", json={**request, "apply": True}, headers=headers
+        ).json()
+        assert retry["created"] == 0
+        assert retry["existing"] == 2
+
+    def test_invalid_rows_prevent_partial_apply(
+        self, client: TestClient, login: Login, db_session: Session
+    ) -> None:
+        headers, _ = login(RoleCode.ADMIN)
+        response = client.post(
+            f"{VENDORS}/bulk-setup",
+            json={"csv_text": "code,name\nAA,Valid\nAA,Duplicate\n", "apply": True},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["ready"] is False
+        assert response.json()["applied"] is False
+        assert db_session.scalar(select(Vendor).where(Vendor.code == "AA")) is None
+
+    def test_name_conflicts_are_visible_and_other_tenants_do_not_conflict(
+        self, client: TestClient, login: Login, db_session: Session, organization: Organization
+    ) -> None:
+        headers, _ = login(RoleCode.ADMIN)
+        foreign = factories.make_organization(db_session)
+        factories.make_vendor(db_session, foreign, code="NYB", name="NYB International")
+        factories.make_vendor(db_session, organization, code="PCA", name="Perfume Center")
+        request = {"csv_text": "code,name\nNYB,NYB International\nOTHER,Perfume Center\n"}
+        preview = client.post(f"{VENDORS}/bulk-setup", json=request, headers=headers).json()
+        assert [row["action"] for row in preview["rows"]] == ["create", "invalid"]
+        assert preview["ready"] is False
+
+    @pytest.mark.parametrize("role", [RoleCode.VIEWER, RoleCode.PURCHASING_MANAGER])
+    def test_roster_requires_vendor_write_permission(
+        self, client: TestClient, login: Login, role: RoleCode
+    ) -> None:
+        headers, _ = login(role)
+        assert (
+            client.post(
+                f"{VENDORS}/bulk-setup",
+                json={"csv_text": "code,name\nAA,Vendor\n"},
+                headers=headers,
+            ).status_code
+            == 403
+        )
 
 
 def audit_rows(db_session: Session, entity_id: uuid.UUID) -> list[AuditEvent]:

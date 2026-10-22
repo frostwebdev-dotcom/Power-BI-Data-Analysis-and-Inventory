@@ -67,6 +67,7 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/auth/dev-token",
         "/api/v1/amazon/velocity",
         "/api/v1/vendors",
+        "/api/v1/vendors/bulk-setup",
         "/api/v1/vendors/{vendor_id}",
         "/api/v1/vendors/{vendor_id}/deactivate",
         "/api/v1/vendors/{vendor_id}/contacts",

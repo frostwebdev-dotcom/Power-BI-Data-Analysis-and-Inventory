@@ -33,6 +33,7 @@ from app.schemas.vendors import (
     VendorUpdate,
 )
 from app.services import vendors as service
+from app.services.vendor_roster import VendorRosterRequest, VendorRosterResponse, setup_roster
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
@@ -80,6 +81,20 @@ def list_vendors(
         page_size=result.page_size,
         total=result.total,
     )
+
+
+@router.post(
+    "/bulk-setup",
+    response_model=VendorRosterResponse,
+    summary="Preview or create missing vendors from an approved CSV roster",
+    responses={**_FORBIDDEN, **_CONFLICT},
+)
+def bulk_setup(
+    payload: VendorRosterRequest,
+    principal: Principal = _write,
+    session: Session = Depends(get_db),
+) -> VendorRosterResponse:
+    return setup_roster(session, principal, payload)
 
 
 @router.get(

@@ -46,6 +46,7 @@ extracts/
 !backend/tests/fixtures/**
 !**/fixtures/**/*.csv
 !**/fixtures/**/*.xlsx
+!frontend/public/vendor-roster-template.csv
 
 # ---------------------------------------------------------------------------
 # Retained import files. Raw files are business data, not source code, and may

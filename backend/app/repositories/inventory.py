@@ -14,7 +14,7 @@ from app.matching.normalize import normalize_gtin
 from app.models.catalog import Product, ProductIdentifier
 from app.models.enums import AvailabilityStatus, IdentifierType
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
-from app.models.vendor import VendorProduct
+from app.models.vendor import Vendor, VendorProduct
 from app.models.watchlist import OosStatusHistory, OosWatchlistEntry
 from app.repositories.scoping import ScopedRepository
 
@@ -193,6 +193,7 @@ class InventoryRepository(ScopedRepository):
         items = (
             self.session.execute(
                 statement.options(
+                    selectinload(AvailabilityEvent.vendor),
                     selectinload(AvailabilityEvent.vendor_product),
                     selectinload(AvailabilityEvent.product),
                 )
@@ -301,9 +302,42 @@ class InventoryRepository(ScopedRepository):
         return (
             self.session.execute(
                 self.select(OosStatusHistory)
+                .options(selectinload(OosStatusHistory.vendor))
                 .where(OosStatusHistory.oos_watchlist_id == entry_id)
                 .order_by(OosStatusHistory.changed_at, OosStatusHistory.id)
             )
             .scalars()
             .all()
         )
+
+    def available_vendors(self, product_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[Vendor]]:
+        """Current suppliers, from each vendor line's latest snapshot in this tenant."""
+        if not product_ids:
+            return {}
+        latest = (
+            self.select(
+                VendorInventorySnapshot,
+                VendorInventorySnapshot.product_id,
+                VendorInventorySnapshot.vendor_id,
+                VendorInventorySnapshot.availability_status,
+            )
+            .where(VendorInventorySnapshot.product_id.in_(product_ids))
+            .distinct(VendorInventorySnapshot.vendor_product_id)
+            .order_by(
+                VendorInventorySnapshot.vendor_product_id,
+                VendorInventorySnapshot.captured_at.desc(),
+                VendorInventorySnapshot.id.desc(),
+            )
+            .subquery()
+        )
+        rows = self.session.execute(
+            self.select(Vendor, latest.c.product_id, Vendor)
+            .join(latest, latest.c.vendor_id == Vendor.id)
+            .where(latest.c.availability_status == AvailabilityStatus.AVAILABLE)
+            .distinct()
+            .order_by(Vendor.name, Vendor.code)
+        ).all()
+        result: dict[uuid.UUID, list[Vendor]] = {}
+        for product_id, vendor in rows:
+            result.setdefault(product_id, []).append(vendor)
+        return result

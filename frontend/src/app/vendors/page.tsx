@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { Drawer, EmptyState, ErrorNote, Loading, PageHeader, Pager, StatusBadge, fmtDate } from "@/components/ui";
+import { VendorBulkSetup } from "@/components/VendorBulkSetup";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useVendors } from "@/lib/queries";
@@ -16,6 +17,11 @@ interface VendorForm {
   name: string;
   currency: string;
   contact_email: string;
+  contact_phone: string;
+  timezone: string;
+  payment_terms: string;
+  freight_terms: string;
+  inventory_cadence: string;
   default_lead_time_days: string;
   minimum_order_quantity: string;
   minimum_order_value: string;
@@ -27,17 +33,30 @@ const EMPTY: VendorForm = {
   name: "",
   currency: "USD",
   contact_email: "",
+  contact_phone: "",
+  timezone: "UTC",
+  payment_terms: "",
+  freight_terms: "",
+  inventory_cadence: "",
   default_lead_time_days: "",
   minimum_order_quantity: "",
   minimum_order_value: "",
   notes: "",
 };
 
-function toPayload(form: VendorForm, includeCode: boolean): Record<string, unknown> {
+function toPayload(form: VendorForm, includeCode: boolean, savedTerms: Record<string, unknown> = {}): Record<string, unknown> {
+  const terms = { ...savedTerms };
+  for (const [key, value] of [["payment", form.payment_terms], ["freight", form.freight_terms], ["inventory_cadence", form.inventory_cadence]] as const) {
+    if (value.trim()) terms[key] = value.trim();
+    else delete terms[key];
+  }
   const payload: Record<string, unknown> = {
     name: form.name.trim(),
     currency: form.currency.trim() || "USD",
     contact_email: form.contact_email.trim() || null,
+    contact_phone: form.contact_phone.trim() || null,
+    timezone: form.timezone.trim() || "UTC",
+    purchasing_terms: terms,
     default_lead_time_days: form.default_lead_time_days ? Number(form.default_lead_time_days) : null,
     minimum_order_quantity: form.minimum_order_quantity ? Number(form.minimum_order_quantity) : null,
     minimum_order_value: form.minimum_order_value ? form.minimum_order_value : null,
@@ -53,10 +72,15 @@ function fromVendor(vendor: Vendor): VendorForm {
     name: vendor.name,
     currency: vendor.currency ?? "USD",
     contact_email: vendor.contact_email ?? "",
-    default_lead_time_days: "",
+    contact_phone: vendor.contact_phone ?? "",
+    timezone: vendor.timezone ?? "UTC",
+    payment_terms: String(vendor.purchasing_terms?.payment ?? ""),
+    freight_terms: String(vendor.purchasing_terms?.freight ?? ""),
+    inventory_cadence: String(vendor.purchasing_terms?.inventory_cadence ?? ""),
+    default_lead_time_days: vendor.default_lead_time_days?.toString() ?? "",
     minimum_order_quantity: vendor.minimum_order_quantity?.toString() ?? "",
     minimum_order_value: vendor.minimum_order_value ?? "",
-    notes: "",
+    notes: vendor.notes ?? "",
   };
 }
 
@@ -67,6 +91,7 @@ export default function VendorsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [editing, setEditing] = useState<Vendor | "new" | null>(null);
+  const [bulkSetup, setBulkSetup] = useState(false);
 
   const vendors = useVendors({ page, page_size: 25, q: search, status });
 
@@ -77,9 +102,12 @@ export default function VendorsPage() {
         lede="Suppliers, their purchasing terms, and the import profiles that read their files."
         actions={
           canWrite ? (
-            <button type="button" className="button button--primary" onClick={() => setEditing("new")}>
-              New vendor
-            </button>
+            <>
+              <button type="button" className="button" onClick={() => setBulkSetup(true)}>Set up vendor list</button>
+              <button type="button" className="button button--primary" onClick={() => setEditing("new")}>
+                New vendor
+              </button>
+            </>
           ) : null
         }
       />
@@ -108,6 +136,9 @@ export default function VendorsPage() {
         </select>
       </div>
       <ErrorNote error={vendors.error} />
+      {vendors.data ? (
+        <p className="muted small" role="status">{vendors.data.total} vendors{search || status ? " matching the filters" : " configured"}</p>
+      ) : null}
       {vendors.isPending ? <Loading what="Loading vendors" /> : null}
       {vendors.data && vendors.data.items.length === 0 ? (
         <EmptyState title="No vendors yet" text={canWrite ? "Create the first one with “New vendor”." : undefined} />
@@ -157,6 +188,7 @@ export default function VendorsPage() {
         </div>
       ) : null}
       {editing ? <VendorEditor vendor={editing === "new" ? null : editing} onClose={() => setEditing(null)} /> : null}
+      {bulkSetup && canWrite ? <VendorBulkSetup onClose={() => setBulkSetup(false)} /> : null}
     </>
   );
 }
@@ -170,7 +202,7 @@ function VendorEditor({ vendor, onClose }: { vendor: Vendor | null; onClose: () 
   const save = useMutation({
     mutationFn: () =>
       vendor
-        ? api.patch<Vendor>(`/vendors/${vendor.id}`, toPayload(form, false))
+        ? api.patch<Vendor>(`/vendors/${vendor.id}`, toPayload(form, false, vendor.purchasing_terms))
         : api.post<Vendor>("/vendors", toPayload(form, true)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["vendors"] });
@@ -225,6 +257,13 @@ function VendorEditor({ vendor, onClose }: { vendor: Vendor | null; onClose: () 
             <span className="field__label">Minimum order value</span>
             <input name="minimum_order_value" inputMode="decimal" value={form.minimum_order_value} onChange={set("minimum_order_value")} />
           </label>
+        </div>
+        <div className="grid grid--2">
+          <label className="field"><span className="field__label">Contact phone</span><input name="contact_phone" value={form.contact_phone} onChange={set("contact_phone")} /></label>
+          <label className="field"><span className="field__label">Vendor timezone</span><input name="timezone" value={form.timezone} onChange={set("timezone")} /></label>
+          <label className="field"><span className="field__label">Payment terms</span><input name="payment_terms" value={form.payment_terms} onChange={set("payment_terms")} /></label>
+          <label className="field"><span className="field__label">Freight terms</span><input name="freight_terms" value={form.freight_terms} onChange={set("freight_terms")} /></label>
+          <label className="field"><span className="field__label">Inventory cadence</span><input name="inventory_cadence" value={form.inventory_cadence} onChange={set("inventory_cadence")} /></label>
         </div>
         <label className="field">
           <span className="field__label">Notes</span>

@@ -1,16 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { EmptyState, ErrorNote, Loading, PageHeader, Pager, StatusBadge, fmtDate, fmtNumber } from "@/components/ui";
 import { useEvents, useVendors } from "@/lib/queries";
 
 export default function AvailabilityPage() {
+  return <Suspense fallback={<Loading />}><Availability /></Suspense>;
+}
+
+function Availability() {
+  const params = useSearchParams();
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [vendorId, setVendorId] = useState("");
-  const [watchlistOnly, setWatchlistOnly] = useState(false);
+  const [vendorId, setVendorId] = useState(params.get("vendor_id") ?? "");
+  const [watchlistOnly, setWatchlistOnly] = useState(params.get("watchlist") === "1");
   const [since, setSince] = useState("");
   const vendors = useVendors({ page_size: 200 });
   const events = useEvents({
@@ -83,12 +89,19 @@ export default function AvailabilityPage() {
                   <td>{fmtDate(event.detected_at)}</td>
                   <td>
                     <StatusBadge value={event.event_type} />
+                    <div className="small">
+                      {event.event_type === "BECAME_AVAILABLE" ? "Available from " : "Stock change at "}
+                      {event.vendor_name ?? event.vendor_code ?? vendorCode(event.vendor_id)}
+                    </div>
                   </td>
                   <td>
                     {event.product_name ?? <span className="muted">unmapped line</span>}
                     {event.catalog_item_number ? <span className="mono muted small"> {event.catalog_item_number}</span> : null}
                   </td>
-                  <td className="mono">{vendorCode(event.vendor_id)}</td>
+                  <td>
+                    {event.vendor_name ?? event.vendor_code ?? vendorCode(event.vendor_id)}
+                    {event.vendor_name ? <div className="mono muted small">{event.vendor_code}</div> : null}
+                  </td>
                   <td className="mono">{event.vendor_sku ?? "—"}</td>
                   <td>
                     {fmtNumber(event.previous_quantity)} → {fmtNumber(event.new_quantity)}

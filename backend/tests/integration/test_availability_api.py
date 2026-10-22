@@ -667,7 +667,9 @@ class TestWatchlistApi:
         headers, _ = manager
         product = factories.make_product(db_session, organization)
         factories.make_identifier(db_session, organization, product, normalized_value=UPC_A)
-        other_vendor = factories.make_vendor(db_session, organization, code="OTHER")
+        other_vendor = factories.make_vendor(
+            db_session, organization, code="OTHER", name="Other Supplier"
+        )
         db_session.flush()
         entry = watch(client, headers, product.id)  # any vendor
         import_rows(
@@ -677,11 +679,26 @@ class TestWatchlistApi:
             client, operator, other_vendor, [["O-1", "012345678905", "x", "5", "1"]], name="o.csv"
         )
         assert status_of(db_session, entry["id"]) == "IN_STOCK"
+        current = client.get(f"{WATCHLIST}/{entry['id']}", headers=headers).json()
+        assert {v["code"] for v in current["available_vendors"]} == {"ACME", "OTHER"}
+        scoped = watch(client, headers, product.id, vendor_id=str(vendor.id))
+        assert [v["code"] for v in scoped["available_vendors"]] == ["ACME"]
 
         import_rows(
             client, operator, vendor, [["A-1", "012345678905", "x", "0", "1"]], name="a2.csv"
         )
         assert status_of(db_session, entry["id"]) == "IN_STOCK"  # the other vendor still has it
+        current = client.get(f"{WATCHLIST}/{entry['id']}", headers=headers).json()
+        assert [v["code"] for v in current["available_vendors"]] == ["OTHER"]
+        assert current["available_vendors"][0]["name"] == other_vendor.name
+        feed = client.get(EVENTS, headers=headers).json()["items"]
+        assert all(e["vendor_code"] in {"ACME", "OTHER"} for e in feed)
+        names = {"ACME": vendor.name, "OTHER": other_vendor.name}
+        assert all(e["vendor_name"] == names[e["vendor_code"]] for e in feed)
+        dashboard = client.get("/api/v1/dashboard", headers=headers).json()
+        assert {
+            v["vendor_code"]: v["event_count"] for v in dashboard["newly_available_by_vendor"]
+        } == {"ACME": 1, "OTHER": 1}
 
         import_rows(
             client, operator, other_vendor, [["O-1", "012345678905", "x", "0", "1"]], name="o2.csv"
@@ -692,6 +709,9 @@ class TestWatchlistApi:
             ("UNKNOWN", "IN_STOCK"),
             ("IN_STOCK", "OUT_OF_STOCK"),
         ]
+        assert [h["vendor_code"] for h in hist] == ["ACME", "OTHER"]
+        current = client.get(f"{WATCHLIST}/{entry['id']}", headers=headers).json()
+        assert current["available_vendors"] == []
 
 
 class TestEventFeed:

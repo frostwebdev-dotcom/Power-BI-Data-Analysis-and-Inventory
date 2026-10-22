@@ -22,6 +22,11 @@ export interface Vendor {
   is_active: boolean;
   currency: string | null;
   contact_email: string | null;
+  contact_phone?: string | null;
+  timezone?: string;
+  default_lead_time_days?: number | null;
+  notes?: string | null;
+  purchasing_terms?: Record<string, unknown>;
   minimum_order_quantity: number | null;
   minimum_order_value: string | null;
   created_at: string;
@@ -290,6 +295,7 @@ export interface Resolution {
 }
 
 export interface WatchlistEntry {
+  available_vendors?: { id: string; code: string; name: string }[];
   id: string;
   product_id: string;
   product: { id: string; catalog_item_number: string; name: string };
@@ -307,6 +313,8 @@ export interface WatchlistEntry {
 }
 
 export interface StatusHistory {
+  vendor_name?: string | null;
+  vendor_code?: string | null;
   id: string;
   previous_status: string | null;
   new_status: string;
@@ -315,6 +323,8 @@ export interface StatusHistory {
 }
 
 export interface AvailabilityEvent {
+  vendor_name?: string | null;
+  vendor_code?: string | null;
   id: string;
   vendor_id: string;
   vendor_product_id: string;
@@ -382,6 +392,7 @@ export interface Dashboard {
   watchlist_active: number;
   watchlist_in_stock: number;
   watchlist_newly_available_7d: number;
+  newly_available_by_vendor?: { vendor_id: string; vendor_name: string; vendor_code: string; event_count: number }[];
   imports_running: number;
   last_imports: LastImport[];
   amazon_syncs: SyncSummary[];
