@@ -51,6 +51,25 @@ function SyncRow({
   );
 }
 
+/** Keep date and time readable without losing the reader's timezone. */
+function ImportTimestamp({ value }: { value: string | null | undefined }) {
+  if (!value) return <span className="muted">—</span>;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span>{value}</span>;
+  return (
+    <time className="dashboard-imports__timestamp" dateTime={value} title={fmtDate(value)}>
+      <span>
+        {date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+      </span>{" "}
+      <span className="muted">
+        {date.toLocaleTimeString(undefined, {
+          hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short",
+        })}
+      </span>
+    </time>
+  );
+}
+
 /**
  * The dashboard. Every number is a live count from the API; where there is
  * nothing to count yet the card says so instead of showing a zero that looks
@@ -102,7 +121,42 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="grid grid--2" style={{ marginTop: 26 }}>
+      <div className="grid dashboard-grid" style={{ marginTop: 26 }}>
+        <section className="card dashboard-imports">
+          <div className="card__header">
+            <span className="card__title">Last import per vendor</span>
+          </div>
+          {data && data.last_imports.length === 0 ? <p className="muted">No vendors yet.</p> : null}
+          {data && data.last_imports.length > 0 ? (
+            <div className="dashboard-imports__scroll" role="region" aria-label="Last import per vendor" tabIndex={0}>
+            <table className="table table--compact dashboard-imports__table" data-testid="last-imports">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th>Status</th>
+                  <th className="dashboard-imports__number">Rows</th>
+                  <th className="dashboard-imports__number">Exceptions</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.last_imports.map((row) => (
+                  <tr key={row.vendor_id}>
+                    <td>
+                      <span className="dashboard-imports__vendor">{row.vendor_name}</span>
+                      {row.vendor_name !== row.vendor_code ? <span className="mono muted small">{row.vendor_code}</span> : null}
+                    </td>
+                    <td>{row.job_id ? <Link href={`/imports?job=${row.job_id}`}><StatusBadge value={row.status} /></Link> : <span className="muted">never imported</span>}</td>
+                    <td className="dashboard-imports__number">{fmtNumber(row.total_rows)}</td>
+                    <td className="dashboard-imports__number">{fmtNumber(row.exception_rows)}</td>
+                    <td><ImportTimestamp value={row.completed_at ?? row.created_at} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          ) : null}
+        </section>
         <section className="card">
           <div className="card__header">
             <span className="card__title">Back in stock by vendor · 7 days</span>
@@ -120,38 +174,6 @@ export default function DashboardPage() {
                   <td><Link href={`/availability?watchlist=1&vendor_id=${vendor.vendor_id}`}>View items</Link></td>
                 </tr>
               ))}</tbody>
-            </table>
-          ) : null}
-        </section>
-        <section className="card">
-          <div className="card__header">
-            <span className="card__title">Last import per vendor</span>
-          </div>
-          {data && data.last_imports.length === 0 ? <p className="muted">No vendors yet.</p> : null}
-          {data && data.last_imports.length > 0 ? (
-            <table className="table table--compact" data-testid="last-imports">
-              <thead>
-                <tr>
-                  <th>Vendor</th>
-                  <th>Status</th>
-                  <th>Rows</th>
-                  <th>Exceptions</th>
-                  <th>When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.last_imports.map((row) => (
-                  <tr key={row.vendor_id}>
-                    <td>
-                      <span className="mono">{row.vendor_code}</span> {row.vendor_name}
-                    </td>
-                    <td>{row.job_id ? <Link href={`/imports?job=${row.job_id}`}><StatusBadge value={row.status} /></Link> : <span className="muted">never imported</span>}</td>
-                    <td>{fmtNumber(row.total_rows)}</td>
-                    <td>{fmtNumber(row.exception_rows)}</td>
-                    <td>{fmtDate(row.completed_at ?? row.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
             </table>
           ) : null}
         </section>
@@ -208,3 +230,4 @@ export default function DashboardPage() {
     </>
   );
 }
+
