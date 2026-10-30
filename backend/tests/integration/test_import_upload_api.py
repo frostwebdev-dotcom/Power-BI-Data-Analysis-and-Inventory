@@ -276,8 +276,15 @@ class TestRetention:
         assert raw.headers["x-content-sha256"] == expected
         assert 'filename="Weekly Prices.csv"' in raw.headers["content-disposition"]
 
+    @pytest.mark.parametrize(
+        ("filename", "mime"),
+        [
+            ("wholesale.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("wholesale.xls", "application/vnd.ms-excel"),
+        ],
+    )
     def test_xlsx_round_trip_is_byte_identical(
-        self, client: TestClient, login: Login, vendor: Vendor
+        self, client: TestClient, login: Login, vendor: Vendor, filename: str, mime: str
     ) -> None:
         headers, _ = login(RoleCode.DATA_OPERATOR)
         content = xlsx_bytes()
@@ -286,9 +293,9 @@ class TestRetention:
             client,
             headers,
             vendor,
-            name="wholesale.xlsx",
+            name=filename,
             content=content,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            mime=mime,
         )
 
         assert response.status_code == 201, response.text
@@ -297,7 +304,7 @@ class TestRetention:
         assert file["detected_encoding"] is None  # not a text file
         raw = client.get(f"{IMPORTS}/{response.json()['job']['id']}/raw", headers=headers)
         assert raw.content == content
-        assert raw.headers["content-type"].startswith("application/vnd.openxmlformats")
+        assert raw.headers["content-type"].startswith(mime)
 
     def test_cp1252_encoding_is_recorded(
         self, client: TestClient, login: Login, vendor: Vendor
@@ -445,7 +452,7 @@ class TestDuplicates:
 
 
 class TestRefusals:
-    @pytest.mark.parametrize("name", ["prices.txt", "prices.xls", "prices", "prices.csv.exe"])
+    @pytest.mark.parametrize("name", ["prices.txt", "prices.xlsm", "prices", "prices.csv.exe"])
     def test_unsupported_extension_is_415(
         self, client: TestClient, login: Login, vendor: Vendor, raw_dir: Path, name: str
     ) -> None:

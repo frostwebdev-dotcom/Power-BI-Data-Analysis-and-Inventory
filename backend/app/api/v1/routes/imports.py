@@ -47,13 +47,14 @@ _NOT_FOUND: Responses = {404: {"description": "No such import, vendor or profile
 _UPLOAD_REFUSED: Responses = {
     409: {"description": "The bytes were already received for another vendor."},
     413: {"description": "The file exceeds IMPORT_MAX_UPLOAD_MB."},
-    415: {"description": "The file is not .csv or .xlsx."},
+    415: {"description": "The file is not .csv, .xls or .xlsx."},
     422: {"description": "The file is empty or the form is invalid."},
 }
 
 _READ_CHUNK = 1 << 20
 _MEDIA_TYPES = {
     ".csv": "text/csv",
+    ".xls": "application/vnd.ms-excel",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
@@ -75,7 +76,7 @@ _MEDIA_TYPES = {
 )
 async def upload_file(
     response: Response,
-    file: Annotated[UploadFile, File(description="A .csv or .xlsx vendor file.")],
+    file: Annotated[UploadFile, File(description="A .csv, .xls or .xlsx vendor file.")],
     vendor_id: Annotated[uuid.UUID, Form()],
     profile_id: Annotated[uuid.UUID | None, Form()] = None,
     principal: Principal = _write,

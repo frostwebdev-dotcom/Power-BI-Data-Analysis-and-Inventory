@@ -92,8 +92,6 @@ class ColumnMap(BaseModel):
             raise ValueError(f"each target may be mapped once; duplicated: {duplicates}")
         if ColumnTarget.UPC not in targets and ColumnTarget.VENDOR_SKU not in targets:
             raise ValueError("at least one of upc or vendor_sku must be mapped")
-        if ColumnTarget.QUANTITY_AVAILABLE not in targets:
-            raise ValueError("quantity_available must be mapped")
         sources = [c.source_key for c in self.columns]
         repeated = sorted({str(s) for s in sources if sources.count(s) > 1})
         if repeated:
@@ -114,6 +112,13 @@ class NormalizationRules(BaseModel):
     upc_strip_non_digits: bool = True
     #: An 11-digit UPC-A that lost its leading zero in a spreadsheet gets it back.
     upc_pad_to_12: bool = True
+    vendor_sku_from_upc: bool = Field(
+        default=False,
+        description=(
+            "For files without supplier SKUs, use UPC:<normalized UPC> as the vendor line key. "
+            "Only a valid, checksummed UPC is eligible; original UPC text is retained."
+        ),
+    )
     decimal_separator: Literal[".", ","] = "."
     thousands_separator: Literal["", ",", "."] = ""
     currency_symbols_to_strip: list[str] = Field(default_factory=lambda: ["$"])
@@ -142,7 +147,13 @@ class AvailabilityRules(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    available_when: Literal["quantity_gt_zero", "status_column"] = "quantity_gt_zero"
+    available_when: Literal["quantity_gt_zero", "status_column", "listed"] = Field(
+        default="quantity_gt_zero",
+        description=(
+            "Use listed only when the supplier confirms every listed item is in stock. "
+            "Quantities may be absent and remain unknown; provided counts are kept as stated."
+        ),
+    )
     status_column: str | None = None
     available_values: list[str] = Field(default_factory=list)
     unavailable_values: list[str] = Field(default_factory=list)
@@ -252,6 +263,11 @@ class ProfileRules(BaseModel):
     @model_validator(mode="after")
     def _cross_rules(self) -> ProfileRules:
         targets = self.column_map.targets()
+        if (
+            self.availability_rules.available_when != "listed"
+            and ColumnTarget.QUANTITY_AVAILABLE not in targets
+        ):
+            raise ValueError("quantity_available must be mapped unless availability mode is listed")
         if (
             self.quantity_semantics.unit == "case"
             and self.quantity_semantics.case_pack_from == "pack_size_column"

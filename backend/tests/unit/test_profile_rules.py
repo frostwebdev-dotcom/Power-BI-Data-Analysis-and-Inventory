@@ -57,7 +57,7 @@ class TestColumnMap:
 
     def test_quantity_available_is_required(self) -> None:
         with pytest.raises(ValidationError, match="quantity_available must be mapped"):
-            columns(("upc", "UPC"), ("description", "Desc"))
+            ProfileRules(column_map=columns(("upc", "UPC"), ("description", "Desc")))
 
     def test_upc_or_vendor_sku_is_required(self) -> None:
         with pytest.raises(ValidationError, match="upc or vendor_sku"):

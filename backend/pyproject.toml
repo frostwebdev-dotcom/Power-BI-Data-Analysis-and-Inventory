@@ -42,6 +42,7 @@ dependencies = [
     # Vendor file ingestion (phase 4+): XLSX reading and multipart uploads.
     # No pandas, ever — every cell is read as str (ADR 0008, risk R2).
     "openpyxl>=3.1",
+    "xlrd>=2.0.1,<3",
     "python-multipart>=0.0.9",
     # Encoding detection for CSV uploads that name no encoding (AC-5.8).
     "charset-normalizer>=3.3",
@@ -119,7 +120,7 @@ ignore_missing_imports = true
 # python-amazon-sp-api ships no type information. Its types stop at the
 # anti-corruption layer in app/integrations/amazon, which is fully typed.
 [[tool.mypy.overrides]]
-module = ["sp_api.*", "apscheduler.*"]
+module = ["sp_api.*", "apscheduler.*", "xlrd.*"]
 ignore_missing_imports = true
 
 # -----------------------------------------------------------------------------

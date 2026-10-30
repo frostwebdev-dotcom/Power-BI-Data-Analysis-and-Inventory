@@ -227,6 +227,11 @@ def _sniff_delimiter(text: str) -> str:
 
 
 def _open_xlsx(content: bytes, options: ReadOptions) -> RowStream:
+    # Several supplier exports have extensions that disagree with their bytes.
+    # Excel profiles accept both encodings without converting the raw upload.
+    if content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+        return _open_xls(content, options)
+
     from openpyxl import load_workbook
 
     try:
@@ -264,6 +269,56 @@ def _open_xlsx(content: bytes, options: ReadOptions) -> RowStream:
         workbook.close()
         raise
     stream.sheet = sheet.title
+    return stream
+
+
+def _open_xls(content: bytes, options: ReadOptions) -> RowStream:
+    import xlrd
+
+    try:
+        workbook = xlrd.open_workbook(file_contents=content, on_demand=True)
+    except Exception as exc:
+        raise UnreadableFile(f"not a readable XLS workbook: {type(exc).__name__}") from exc
+
+    names = workbook.sheet_names()
+    if options.sheet_name is not None:
+        if options.sheet_name not in names:
+            workbook.release_resources()
+            raise UnreadableFile(f"sheet {options.sheet_name!r} not found; sheets: {names}")
+        sheet = workbook.sheet_by_name(options.sheet_name)
+    else:
+        index = options.sheet_index or 0
+        if index >= len(names):
+            workbook.release_resources()
+            raise UnreadableFile(
+                f"sheet index {index} out of range; the workbook has {len(names)} sheet(s)"
+            )
+        sheet = workbook.sheet_by_index(index)
+
+    def numbered() -> Iterator[tuple[int, list[str]]]:
+        try:
+            for number in range(sheet.nrows):
+                cells: list[str] = []
+                for cell in sheet.row(number):
+                    value = cell.value
+                    if cell.ctype == xlrd.XL_CELL_DATE:
+                        value = xlrd.xldate_as_datetime(value, workbook.datemode)
+                    elif cell.ctype == xlrd.XL_CELL_BOOLEAN:
+                        value = bool(value)
+                    elif cell.ctype == xlrd.XL_CELL_ERROR:
+                        value = xlrd.error_text_from_code.get(value, "#ERROR!")
+                    cells.append(cell_text(value))
+                yield number + 1, cells
+        finally:
+            workbook.release_resources()
+
+    try:
+        stream = _assemble(numbered(), options, encoding=None)
+    except UnreadableFile:
+        workbook.release_resources()
+        raise
+    stream.sheet = sheet.name
+    stream.notes.append("legacy XLS workbook read without converting the original file")
     return stream
 
 

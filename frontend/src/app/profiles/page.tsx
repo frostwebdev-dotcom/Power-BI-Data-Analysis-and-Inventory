@@ -259,7 +259,7 @@ function ProfileEditor({
               <span className="field__label">Format</span>
               <select name="file_format" value={settings.file_format} onChange={(e) => setSettings({ ...settings, file_format: e.target.value as "CSV" | "XLSX" })}>
                 <option value="CSV">CSV</option>
-                <option value="XLSX">XLSX</option>
+                <option value="XLSX">Excel (.xls or .xlsx)</option>
               </select>
             </label>
             <label className="field">
@@ -309,7 +309,7 @@ function ProfileEditor({
             stored. Pinning the header locks this profile to the file&apos;s exact columns (AC-6.4).
           </p>
           <div className="toolbar">
-            <input type="file" accept=".csv,.xlsx" data-testid="sample-file" onChange={(e) => setSample(e.target.files?.[0] ?? null)} />
+            <input type="file" accept=".csv,.xls,.xlsx" data-testid="sample-file" onChange={(e) => setSample(e.target.files?.[0] ?? null)} />
             <button type="button" className="button" disabled={!sample || validate.isPending} onClick={() => validate.mutate()}>
               {validate.isPending ? "Validating…" : "Validate"}
             </button>
