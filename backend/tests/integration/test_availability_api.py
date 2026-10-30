@@ -210,6 +210,62 @@ def watch(
 # --- exit criterion 9 -----------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("derived_sku", [False, True])
+def test_listed_item_without_quantity_updates_stock_and_preserves_unknown_count(
+    client: TestClient,
+    operator: Headers,
+    manager: tuple[Headers, User],
+    vendor: Vendor,
+    db_session: Session,
+    organization: Organization,
+    derived_sku: bool,
+) -> None:
+    product = factories.make_product(db_session, organization, name="Listed fragrance")
+    factories.make_identifier(db_session, organization, product, normalized_value=UPC_A)
+    db_session.flush()
+    entry = watch(client, manager[0], product.id)
+    columns = [
+        {"target": "upc", "source": "UPC"},
+        {"target": "description", "source": "Desc"},
+        {"target": "unit_cost", "source": "Cost"},
+    ]
+    headers = ["UPC", "Desc", "Cost"]
+    cells = ["012345678905", "Listed fragrance", "12.50"]
+    if not derived_sku:
+        columns.insert(0, {"target": "vendor_sku", "source": "SKU"})
+        headers.insert(0, "SKU")
+        cells.insert(0, "L-1")
+    profile = client.post(
+        f"/api/v1/vendors/{vendor.id}/import-profiles",
+        json={
+            "name": "listed-stock",
+            "column_map": {"columns": columns},
+            "availability_rules": {"available_when": "listed"},
+            "normalization_rules": {"vendor_sku_from_upc": derived_sku},
+        },
+        headers=operator,
+    )
+    assert profile.status_code == 201, profile.text
+    response = client.post(
+        IMPORTS,
+        data={"vendor_id": str(vendor.id), "profile_id": profile.json()["id"]},
+        files={"file": ("listed.csv", csv_bytes([cells], headers=headers))},
+        headers=operator,
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["job"]["status"] == "COMPLETED"
+    [snapshot] = snapshots_of(db_session, organization)
+    assert snapshot.availability_status is AvailabilityStatus.AVAILABLE
+    assert snapshot.quantity_available is None
+    assert snapshot.unit_cost == Decimal("12.50")
+    assert snapshot.product_id == product.id
+    [event] = events_of(db_session, organization)
+    assert event.vendor_id == vendor.id
+    assert event.new_quantity is None
+    assert event.oos_watchlist_id == uuid.UUID(entry["id"])
+    assert status_of(db_session, entry["id"]) == "IN_STOCK"
+
+
 class TestProductBecomesAvailable:
     def test_watch_then_zero_then_forty_raises_exactly_one_linked_event(
         self,

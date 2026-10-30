@@ -47,13 +47,13 @@ from app.services.vendors import get_vendor
 
 _logger = get_logger(__name__)
 
-ALLOWED_EXTENSIONS: Final = frozenset({".csv", ".xlsx"})
+ALLOWED_EXTENSIONS: Final = frozenset({".csv", ".xls", ".xlsx"})
 
 
 class UnsupportedFileType(AppError):  # noqa: N818
     status_code = 415
     code = "unsupported_file_type"
-    message = "Only .csv and .xlsx files can be imported."
+    message = "Only .csv, .xls and .xlsx files can be imported."
 
 
 class UploadTooLarge(AppError):  # noqa: N818

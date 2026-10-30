@@ -189,13 +189,13 @@ function UploadCard() {
         }}
         data-testid="dropzone"
       >
-        <input ref={inputRef} type="file" accept=".csv,.xlsx" hidden data-testid="upload-file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <input ref={inputRef} type="file" accept=".csv,.xls,.xlsx" hidden data-testid="upload-file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {file ? (
           <span>
             <strong>{file.name}</strong> · {(file.size / 1024).toFixed(1)} KB
           </span>
         ) : (
-          <span>Drop a .csv or .xlsx here, or click to choose</span>
+          <span>Drop a .csv, .xls or .xlsx here, or click to choose</span>
         )}
       </div>
       <div className="form__actions">

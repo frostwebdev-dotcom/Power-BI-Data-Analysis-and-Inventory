@@ -37,6 +37,8 @@ class IssueCode(StrEnum):
     UPC_INVALID = "UPC_INVALID"
     QUANTITY_INVALID = "QUANTITY_INVALID"
     QUANTITY_NEGATIVE = "QUANTITY_NEGATIVE"
+    QUANTITY_NOT_PROVIDED = "QUANTITY_NOT_PROVIDED"
+    QUANTITY_NOT_EXACT = "QUANTITY_NOT_EXACT"
     PRICE_INVALID = "PRICE_INVALID"
     PACK_SIZE_INVALID = "PACK_SIZE_INVALID"
     IDENTIFIER_MISSING = "IDENTIFIER_MISSING"
@@ -54,6 +56,8 @@ SEVERITY_OF: Final[dict[IssueCode, Severity]] = {
     IssueCode.UPC_INVALID: Severity.WARNING,
     IssueCode.QUANTITY_INVALID: Severity.ERROR,
     IssueCode.QUANTITY_NEGATIVE: Severity.ERROR,
+    IssueCode.QUANTITY_NOT_PROVIDED: Severity.INFO,
+    IssueCode.QUANTITY_NOT_EXACT: Severity.WARNING,
     IssueCode.PRICE_INVALID: Severity.WARNING,
     IssueCode.PACK_SIZE_INVALID: Severity.WARNING,
     IssueCode.IDENTIFIER_MISSING: Severity.ERROR,
@@ -122,6 +126,7 @@ class ExtractedRow:
     raw: dict[str, str]
     vendor_sku: str | None = None
     normalized_vendor_sku: str | None = None
+    vendor_sku_from_upc: bool = False
     raw_upc: str | None = None
     normalized_upc: str | None = None
     has_valid_checksum: bool | None = None
@@ -155,7 +160,7 @@ class ExtractedRow:
     def normalized_json(self) -> dict[str, Any]:
         """What ``import_job_rows.normalized_data`` stores: every derived value
         and every issue, so a row explains itself without re-parsing."""
-        return {
+        values: dict[str, Any] = {
             "vendor_sku": self.normalized_vendor_sku,
             "upc": self.normalized_upc,
             "upc_valid_checksum": self.has_valid_checksum,
@@ -168,6 +173,9 @@ class ExtractedRow:
             "unit_of_measure": self.unit_of_measure,
             "issues": [i.as_json() for i in self.issues],
         }
+        if self.vendor_sku_from_upc:
+            values["vendor_sku_from_upc"] = True
+        return values
 
 
 # --- columns ---------------------------------------------------------------------------
@@ -183,7 +191,10 @@ def plan_columns(rules: ProfileRules, headers: list[str]) -> ColumnPlan:
     missing_optional: list[ResolvedColumn] = []
     for mapping in rules.column_map.columns:
         index = _locate(mapping, normalized)
-        required = mapping.required or mapping.target in _ALWAYS_REQUIRED
+        required = mapping.required or (
+            mapping.target in _ALWAYS_REQUIRED
+            and rules.availability_rules.available_when != "listed"
+        )
         column = ResolvedColumn(
             target=mapping.target.value,
             source=mapping.source,
@@ -258,6 +269,9 @@ def extract_row(
         row.has_valid_checksum = valid
         if problem is not None:
             row.issues.append(Issue(IssueCode.UPC_INVALID, "upc", f"{upc!r}: {problem}"))
+    if not sku and norm.vendor_sku_from_upc and row.normalized_upc and row.has_valid_checksum:
+        row.vendor_sku = row.normalized_vendor_sku = f"UPC:{row.normalized_upc}"
+        row.vendor_sku_from_upc = True
     if not sku and not upc:
         row.issues.append(
             Issue(
@@ -272,11 +286,24 @@ def extract_row(
     uom = raw(ColumnTarget.UNIT_OF_MEASURE)
     row.unit_of_measure = uom or None
 
-    # Quantity — always required, always a whole number, never negative.
+    # Listed availability can be known without an exact stock count.
     quantity_raw = raw(ColumnTarget.QUANTITY_AVAILABLE)
+    listed = rules.availability_rules.available_when == "listed"
     if not quantity_raw:
         row.issues.append(
-            Issue(IssueCode.QUANTITY_INVALID, "quantity_available", "quantity is blank")
+            Issue(
+                IssueCode.QUANTITY_NOT_PROVIDED if listed else IssueCode.QUANTITY_INVALID,
+                "quantity_available",
+                "quantity not provided; count remains unknown" if listed else "quantity is blank",
+            )
+        )
+    elif listed and re.fullmatch(r"[0-9]+\+", quantity_raw):
+        row.issues.append(
+            Issue(
+                IssueCode.QUANTITY_NOT_EXACT,
+                "quantity_available",
+                f"{quantity_raw!r} is a lower bound, not an exact count; kept as unknown",
+            )
         )
     else:
         quantity = _parse_int(quantity_raw, norm)
@@ -341,6 +368,8 @@ def _availability(
     rules: ProfileRules, plan: ColumnPlan, row: ExtractedRow, cells: list[str]
 ) -> AvailabilityStatus:
     availability = rules.availability_rules
+    if availability.available_when == "listed":
+        return AvailabilityStatus.AVAILABLE
     if availability.available_when == "quantity_gt_zero":
         if row.quantity is None:
             return AvailabilityStatus.UNKNOWN

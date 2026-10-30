@@ -168,7 +168,7 @@ def _preview_response(file: UploadFile, preview: Any, table: Any) -> ValidationP
 async def validate_stored_profile(
     vendor_id: uuid.UUID,
     profile_id: uuid.UUID,
-    file: Annotated[UploadFile, File(description="A CSV or XLSX sample.")],
+    file: Annotated[UploadFile, File(description="A CSV, XLS or XLSX sample.")],
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> ValidationPreviewResponse:
@@ -191,7 +191,7 @@ async def validate_stored_profile(
 )
 async def validate_draft_profile(
     vendor_id: uuid.UUID,
-    file: Annotated[UploadFile, File(description="A CSV or XLSX sample.")],
+    file: Annotated[UploadFile, File(description="A CSV, XLS or XLSX sample.")],
     profile: Annotated[str, Form(description="The draft profile as JSON (ImportProfileCreate).")],
     principal: Principal = _read,
     session: Session = Depends(get_db),
