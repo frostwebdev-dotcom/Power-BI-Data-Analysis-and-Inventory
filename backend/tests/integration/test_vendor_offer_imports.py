@@ -201,17 +201,22 @@ def test_historical_file_level_job_blocks_new_worksheet_attempt(
 ) -> None:
     org, vendor, _, actor = context
     content = workbook_bytes()
+    storage = LocalStorageBackend(tmp_path)
+    uri = storage.put(content, "stock.xlsx", organization_id=org.id)
     retained = factories.make_import_file(
         db_session,
         org,
         vendor,
         sha256=hashlib.sha256(content).hexdigest(),
+        storage_uri=uri,
+        original_filename="stock.xlsx",
+        size_bytes=len(content),
     )
     historical = factories.make_import_job(db_session, org, vendor, retained)
     selected = profile(db_session, vendor, actor, "Niche", sheet_name="Niche")
     outcome = receive_upload(
         db_session,
-        LocalStorageBackend(tmp_path),
+        storage,
         principal=actor,
         vendor_id=vendor.id,
         profile_id=selected.id,
