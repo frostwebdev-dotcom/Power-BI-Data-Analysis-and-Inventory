@@ -136,6 +136,7 @@ function UploadCard() {
     onSuccess: async (body) => {
       setResult(body);
       setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
       await queryClient.invalidateQueries({ queryKey: ["imports"] });
       await queryClient.invalidateQueries({ queryKey: ["exceptions"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
