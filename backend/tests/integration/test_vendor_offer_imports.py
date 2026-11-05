@@ -18,6 +18,7 @@ from app.models.enums import ImportJobStatus, ImportRowStatus, MatchResult
 from app.models.ingestion import ImportFile, ImportJobRow
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
 from app.schemas.import_profiles import ImportProfileCreate
+from app.services import imports as import_service
 from app.services.import_processing import process_import_job
 from app.services.import_profiles import create_profile
 from app.services.imports import ImportFileBelongsToAnotherVendor, UploadOutcome, receive_upload
@@ -79,7 +80,10 @@ def workbook_bytes() -> bytes:
 
 
 def test_two_worksheets_share_raw_file_and_cannot_be_imported_twice(
-    db_session: Session, context: tuple[Organization, Vendor, User, Principal], tmp_path: Path
+    db_session: Session,
+    context: tuple[Organization, Vendor, User, Principal],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     org, vendor, _, actor = context
     storage = LocalStorageBackend(tmp_path)
@@ -87,6 +91,13 @@ def test_two_worksheets_share_raw_file_and_cannot_be_imported_twice(
     designer = profile(db_session, vendor, actor, "Designer", sheet_name="Designer Brands ")
     niche = profile(db_session, vendor, actor, "Niche", sheet_name="Niche")
     alias = profile(db_session, vendor, actor, "Designer by index", sheet_index=0)
+    resolve_sheet = import_service._selected_sheet
+
+    def retained_then_resolve(selected: VendorImportProfile | None, source: bytes) -> str | None:
+        assert any(p.is_file() for p in tmp_path.rglob("*.xlsx")), "raw must precede XLSX reading"
+        return resolve_sheet(selected, source)
+
+    monkeypatch.setattr(import_service, "_selected_sheet", retained_then_resolve)
 
     def upload(selected: VendorImportProfile | None = None) -> UploadOutcome:
         return receive_upload(
@@ -143,7 +154,22 @@ def test_two_worksheets_share_raw_file_and_cannot_be_imported_twice(
     )
     assert duplicate.duplicate and duplicate.job.id == first.job.id
     unprofiled = upload()
-    assert unprofiled.duplicate and unprofiled.job.id == first.job.id
+    assert unprofiled.duplicate and unprofiled.job.id in {first.job.id, second.job.id}
+    # The synthetic retained object can be restored even when the re-upload
+    # uses a different filename. Both jobs must still reference the original.
+    next(tmp_path.rglob("*.xlsx")).unlink()
+    restored = receive_upload(
+        db_session,
+        storage,
+        principal=actor,
+        vendor_id=vendor.id,
+        profile_id=alias.id,
+        filename="renamed-again.xlsx",
+        content=content,
+        declared_mime=None,
+        max_bytes=100000,
+    )
+    assert restored.duplicate and storage.open(first.job.import_file.storage_uri) == content
     for outcome in (first, second):
         process_import_job(
             db_session, storage, organization_id=org.id, job_id=outcome.job.id, actor=actor
@@ -175,17 +201,22 @@ def test_historical_file_level_job_blocks_new_worksheet_attempt(
 ) -> None:
     org, vendor, _, actor = context
     content = workbook_bytes()
+    storage = LocalStorageBackend(tmp_path)
+    uri = storage.put(content, "stock.xlsx", organization_id=org.id)
     retained = factories.make_import_file(
         db_session,
         org,
         vendor,
         sha256=hashlib.sha256(content).hexdigest(),
+        storage_uri=uri,
+        original_filename="stock.xlsx",
+        size_bytes=len(content),
     )
     historical = factories.make_import_job(db_session, org, vendor, retained)
     selected = profile(db_session, vendor, actor, "Niche", sheet_name="Niche")
     outcome = receive_upload(
         db_session,
-        LocalStorageBackend(tmp_path),
+        storage,
         principal=actor,
         vendor_id=vendor.id,
         profile_id=selected.id,
