@@ -118,26 +118,29 @@ def receive_upload(
     repository = ImportRepository(session, principal.organization_id)
 
     digest = sha256_hex(content)
-    source_sheet = _selected_sheet(profile, content)
     existing = repository.file_by_sha256(digest, for_update=True)
     if existing is not None:
         if existing.vendor_id != vendor.id:
             raise ImportFileBelongsToAnotherVendor(
                 details={"import_file_id": str(existing.id), "vendor_id": str(existing.vendor_id)}
             )
+        if not storage.exists(existing.storage_uri):
+            # Should never happen (ADR 0004). We hold the bytes, so restore
+            # the object rather than fail; the warning is the paper trail.
+            _logger.warning("import.stored_object_missing", uri=existing.storage_uri)
+            storage.put(
+                content,
+                existing.original_filename,
+                organization_id=principal.organization_id,
+                at=existing.uploaded_at,
+            )
+        source_sheet = _selected_sheet(profile, content)
         live = repository.live_job_for_file(existing.id, source_sheet=source_sheet)
         if live is not None:
             _logger.info(
                 "import.duplicate_upload", import_file_id=str(existing.id), job_id=str(live.id)
             )
             return UploadOutcome(job=live, duplicate=True)
-        if not storage.exists(existing.storage_uri):
-            # Should never happen (ADR 0004). We hold the bytes, so restore
-            # the object rather than fail; the warning is the paper trail.
-            _logger.warning("import.stored_object_missing", uri=existing.storage_uri)
-            storage.put(
-                content, name, organization_id=principal.organization_id, at=existing.uploaded_at
-            )
         job = _record_job(
             session,
             repository,
@@ -151,6 +154,7 @@ def receive_upload(
 
     # New bytes: stored first, recorded second (AC-5.4).
     uri = storage.put(content, name, organization_id=principal.organization_id)
+    source_sheet = _selected_sheet(profile, content)
     import_file = ImportFile(
         vendor_id=vendor.id,
         original_filename=name,
