@@ -792,5 +792,6 @@ class TestValidate:
             "unit_cost",
             "pack_size",
             "unit_of_measure",
+            "offer_variant",
             "ignore",
         ]
