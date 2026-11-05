@@ -43,6 +43,7 @@ class ImportJobResponse(BaseModel):
     import_file: ImportFileResponse
     vendor_import_profile_id: uuid.UUID | None
     profile_version: int | None
+    source_sheet: str | None = None
     status: ImportJobStatus
     current_stage: ImportJobStage | None
     total_rows: int

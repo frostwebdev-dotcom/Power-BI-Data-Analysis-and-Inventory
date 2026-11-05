@@ -11,7 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.imports.extract import ColumnPlan, ExtractedRow, extract_row, plan_columns
+from app.imports.extract import (
+    ColumnPlan,
+    ExtractedRow,
+    extract_row,
+    flag_shared_offer_upcs,
+    plan_columns,
+)
 from app.imports.profile_rules import ProfileRules, compute_header_signature
 
 
@@ -96,6 +102,7 @@ def map_table(
         extract_row(rules, plan, number, cells)
         for number, cells in enumerate(rows, start=first_row_number)
     ]
+    flag_shared_offer_upcs(rules, extracted)
     return MappingPreview(
         headers=headers,
         header_signature=signature,

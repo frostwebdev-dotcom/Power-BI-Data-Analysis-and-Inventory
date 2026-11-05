@@ -1,3 +1,12 @@
+> 2026-11-05 vendor batch: implementation adds opt-in offer keys, shared-UPC
+> review and section-heading skips, plus independent worksheet jobs sharing one
+> immutable original file. Upload processing now uses FastAPI's worker pool so
+> liveness probes are not blocked. Local focused parser tests, the health/upload
+> concurrency regression, frontend typecheck and backend app typing passed.
+> PostgreSQL migration/integration checks, CI, staging deployment and the eight
+> new vendor imports are pending. See [batch plan](vendor-batch-2026-11-05.md)
+> and [ADR 0018](decisions/0018-vendor-offer-and-worksheet-import-identity.md).
+>
 > 2026-10-20 QKD price normalization: the client identifies the supplied CSV
 > as QKD and requires a 12% deduction from column H (`YOUR PRICE`). The versioned
 > profile now supports `discount_percent`, default 0, restricted to finite 0–100.

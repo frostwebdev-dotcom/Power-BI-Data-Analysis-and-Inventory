@@ -14,7 +14,10 @@ what the import does.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -44,6 +47,8 @@ class IssueCode(StrEnum):
     IDENTIFIER_MISSING = "IDENTIFIER_MISSING"
     AVAILABILITY_UNKNOWN = "AVAILABILITY_UNKNOWN"
     DUPLICATE_IN_FILE = "DUPLICATE_IN_FILE"
+    NON_PRODUCT_ROW = "NON_PRODUCT_ROW"
+    UPC_SHARED_BY_OFFERS = "UPC_SHARED_BY_OFFERS"
 
 
 class Severity(StrEnum):
@@ -63,6 +68,8 @@ SEVERITY_OF: Final[dict[IssueCode, Severity]] = {
     IssueCode.IDENTIFIER_MISSING: Severity.ERROR,
     IssueCode.AVAILABILITY_UNKNOWN: Severity.WARNING,
     IssueCode.DUPLICATE_IN_FILE: Severity.WARNING,
+    IssueCode.NON_PRODUCT_ROW: Severity.INFO,
+    IssueCode.UPC_SHARED_BY_OFFERS: Severity.WARNING,
 }
 
 _STATUS_OF: Final = {
@@ -110,6 +117,7 @@ class ColumnPlan:
     missing_required: list[ResolvedColumn]
     missing_optional: list[ResolvedColumn]
     status_index: int | None
+    description_prefix_indexes: list[int] = field(default_factory=list)
 
     @property
     def by_target(self) -> dict[str, ResolvedColumn]:
@@ -127,6 +135,9 @@ class ExtractedRow:
     vendor_sku: str | None = None
     normalized_vendor_sku: str | None = None
     vendor_sku_from_upc: bool = False
+    vendor_sku_from_offer: bool = False
+    upc_shared_by_offers: bool = False
+    is_skipped: bool = False
     raw_upc: str | None = None
     normalized_upc: str | None = None
     has_valid_checksum: bool | None = None
@@ -137,10 +148,13 @@ class ExtractedRow:
     availability_status: AvailabilityStatus | None = None
     pack_size: int | None = None
     unit_of_measure: str | None = None
+    offer_variant: str | None = None
     issues: list[Issue] = field(default_factory=list)
 
     @property
     def status(self) -> ImportRowStatus:
+        if self.is_skipped:
+            return ImportRowStatus.SKIPPED
         worst = ImportRowStatus.OK
         for issue in self.issues:
             candidate = _STATUS_OF[issue.severity]
@@ -175,6 +189,12 @@ class ExtractedRow:
         }
         if self.vendor_sku_from_upc:
             values["vendor_sku_from_upc"] = True
+        if self.vendor_sku_from_offer:
+            values["vendor_sku_from_offer"] = True
+        if self.upc_shared_by_offers:
+            values["upc_shared_by_offers"] = True
+        if self.offer_variant:
+            values["offer_variant"] = self.offer_variant
         return values
 
 
@@ -207,6 +227,13 @@ def plan_columns(rules: ProfileRules, headers: list[str]) -> ColumnPlan:
             (missing_required if required else missing_optional).append(column)
 
     availability = rules.availability_rules
+    prefix_indexes: list[int] = []
+    for header in rules.normalization_rules.description_prefix_columns:
+        key = normalize_header(header)
+        if key not in normalized:
+            missing_required.append(ResolvedColumn("description", header, None, None, True))
+        else:
+            prefix_indexes.append(normalized.index(key))
     status_index = None
     if availability.available_when == "status_column" and availability.status_column:
         key = normalize_header(availability.status_column)
@@ -216,6 +243,7 @@ def plan_columns(rules: ProfileRules, headers: list[str]) -> ColumnPlan:
         missing_required=missing_required,
         missing_optional=missing_optional,
         status_index=status_index,
+        description_prefix_indexes=prefix_indexes,
     )
 
 
@@ -256,6 +284,20 @@ def extract_row(
         },
     )
 
+    if norm.skip_non_product_rows and not any(
+        raw(target)
+        for target in (
+            ColumnTarget.DESCRIPTION,
+            ColumnTarget.QUANTITY_AVAILABLE,
+            ColumnTarget.UNIT_COST,
+        )
+    ):
+        row.is_skipped = True
+        row.issues.append(
+            Issue(IssueCode.NON_PRODUCT_ROW, "description", "section heading; no product fields")
+        )
+        return row
+
     # Identity: vendor SKU and UPC. A row with neither can never match.
     sku = raw(ColumnTarget.VENDOR_SKU)
     if sku:
@@ -272,7 +314,27 @@ def extract_row(
     if not sku and norm.vendor_sku_from_upc and row.normalized_upc and row.has_valid_checksum:
         row.vendor_sku = row.normalized_vendor_sku = f"UPC:{row.normalized_upc}"
         row.vendor_sku_from_upc = True
-    if not sku and not upc:
+    description = raw(ColumnTarget.DESCRIPTION)
+    if description:
+        prefixes = [cells[i].strip() for i in plan.description_prefix_indexes if i < len(cells)]
+        description = " ".join([p for p in prefixes if p] + [description])
+    row.description = description or None
+    row.offer_variant = raw(ColumnTarget.OFFER_VARIANT) or None
+    if not sku and norm.vendor_sku_from_offer and description:
+        identity = [
+            (row.normalized_upc or "") if row.has_valid_checksum else upc or "",
+            description,
+            row.offer_variant or "",
+            raw(ColumnTarget.PACK_SIZE) or "",
+            raw(ColumnTarget.UNIT_OF_MEASURE) or "",
+        ]
+        stable = [normalize_vendor_sku(unicodedata.normalize("NFKC", v)) for v in identity]
+        digest = hashlib.sha256(
+            json.dumps(stable, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        row.vendor_sku = row.normalized_vendor_sku = f"OFFER:{digest.upper()}"
+        row.vendor_sku_from_offer = True
+    if not row.vendor_sku and not upc:
         row.issues.append(
             Issue(
                 IssueCode.IDENTIFIER_MISSING,
@@ -281,8 +343,6 @@ def extract_row(
             )
         )
 
-    description = raw(ColumnTarget.DESCRIPTION)
-    row.description = description or None
     uom = raw(ColumnTarget.UNIT_OF_MEASURE)
     row.unit_of_measure = uom or None
 
@@ -356,6 +416,29 @@ def extract_row(
 
     row.availability_status = _availability(rules, plan, row, cells)
     return row
+
+
+def shared_offer_issue() -> Issue:
+    return Issue(
+        IssueCode.UPC_SHARED_BY_OFFERS,
+        "upc",
+        "barcode is shared by distinct vendor offers; UPC auto-matching requires review",
+    )
+
+
+def flag_shared_offer_upcs(rules: ProfileRules, rows: list[ExtractedRow]) -> None:
+    """Preview equivalent of the full-file shared-offer check."""
+    if not rules.normalization_rules.review_shared_upc_offers:
+        return
+    offers: dict[str, set[str]] = {}
+    for row in rows:
+        if row.vendor_sku_from_offer and row.has_valid_checksum and row.normalized_upc:
+            assert row.normalized_vendor_sku is not None
+            offers.setdefault(row.normalized_upc, set()).add(row.normalized_vendor_sku)
+    for row in rows:
+        if row.normalized_upc and len(offers.get(row.normalized_upc, set())) > 1:
+            row.upc_shared_by_offers = True
+            row.issues.append(shared_offer_issue())
 
 
 def normalize_vendor_sku(sku: str) -> str:

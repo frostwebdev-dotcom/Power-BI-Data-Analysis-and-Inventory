@@ -82,6 +82,7 @@ function JobList() {
                 <tr key={job.id}>
                   <td>
                     <Link href={`/imports?job=${job.id}`}>{job.import_file.original_filename}</Link>
+                    {job.source_sheet ? <div className="muted">{job.source_sheet}</div> : null}
                   </td>
                   <td className="mono">{vendorName(job.vendor_id)}</td>
                   <td>
@@ -206,7 +207,9 @@ function UploadCard() {
       </div>
       {result ? (
         <Note tone={result.duplicate ? "warn" : "ok"}>
-          {result.duplicate ? "These exact bytes were already received; showing the existing import. " : "Received. "}
+          {result.duplicate
+            ? `This ${result.job.source_sheet ? "worksheet" : "file"} was already received; showing the existing import. `
+            : "Received. "}
           <Link href={`/imports?job=${result.job.id}`} data-testid="upload-result-link">
             {result.job.import_file.original_filename}
           </Link>{" "}
@@ -270,6 +273,7 @@ function JobDetail({ jobId }: { jobId: string }) {
               ["Status", <StatusBadge key="s" value={j.status} />],
               ["Stage", j.current_stage?.toLowerCase() ?? "—"],
               ["Profile version", j.profile_version ? `v${j.profile_version}` : "none"],
+              ...(j.source_sheet ? [["Worksheet", j.source_sheet] as [string, string]] : []),
               ["Uploaded", fmtDate(j.import_file.uploaded_at)],
               ["Completed", fmtDate(j.completed_at)],
               ["Size", `${fmtNumber(j.import_file.size_bytes)} bytes`],

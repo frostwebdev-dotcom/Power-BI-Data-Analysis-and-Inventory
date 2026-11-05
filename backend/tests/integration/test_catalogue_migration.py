@@ -102,7 +102,9 @@ def test_external_id_backfill_uses_provenance_and_roundtrips(
 def test_downgrade_refuses_to_choose_a_shared_barcode_owner(
     scratch_database_url: URL, catalogue_engine: Engine
 ) -> None:
-    run_migrations(scratch_database_url)
+    # Exercise this migration at its own revision. A later migration's DDL
+    # shares the downgrade transaction and would also roll back on refusal.
+    run_migrations(scratch_database_url, "9c1520261015")
     engine = catalogue_engine
     org_id = uuid.uuid4()
     with engine.begin() as connection:

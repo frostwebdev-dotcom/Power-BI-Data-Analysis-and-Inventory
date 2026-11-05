@@ -74,7 +74,7 @@ _MEDIA_TYPES = {
         },
     },
 )
-async def upload_file(
+def upload_file(
     response: Response,
     file: Annotated[UploadFile, File(description="A .csv, .xls or .xlsx vendor file.")],
     vendor_id: Annotated[uuid.UUID, Form()],
@@ -85,7 +85,10 @@ async def upload_file(
     storage: StorageBackend = Depends(get_storage),
 ) -> ImportUploadResponse:
     max_bytes = settings.import_max_upload_mb * 1024 * 1024
-    content = await _read_bounded(file, max_bytes)
+    # This pipeline uses synchronous SQLAlchemy and CPU-bound workbook parsing.
+    # A synchronous route runs in FastAPI's worker pool instead of blocking the
+    # event loop (and its health probes) throughout parsing/matching/snapshotting.
+    content = _read_bounded(file, max_bytes)
     outcome = service.receive_upload(
         session,
         storage,
@@ -127,13 +130,13 @@ async def upload_file(
     )
 
 
-async def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
+def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
     """Read the upload, but stop as soon as it is over the limit rather than
     buffering an arbitrarily large body first."""
     chunks: list[bytes] = []
     total = 0
     while True:
-        chunk = await file.read(_READ_CHUNK)
+        chunk = file.file.read(_READ_CHUNK)
         if not chunk:
             break
         total += len(chunk)
