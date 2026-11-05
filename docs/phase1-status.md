@@ -1,11 +1,18 @@
-> 2026-11-05 vendor batch: implementation adds opt-in offer keys, shared-UPC
-> review and section-heading skips, plus independent worksheet jobs sharing one
-> immutable original file. Upload processing now uses FastAPI's worker pool so
-> liveness probes are not blocked. Local focused parser tests, the health/upload
-> concurrency regression, frontend typecheck and backend app typing passed.
-> PostgreSQL migration/integration checks, CI, staging deployment and the eight
-> new vendor imports are pending. See [batch plan](vendor-batch-2026-11-05.md)
-> and [ADR 0018](decisions/0018-vendor-offer-and-worksheet-import-identity.md).
+> 2026-11-05 vendor batch: deployed to Azure staging and reconciled all eight new
+> vendors through nine header-pinned v1 profiles/imports, including both Spectrum
+> product worksheets sharing one unchanged original workbook. All jobs completed
+> with zero import errors: 4,680 product rows, 4,667 unique offer snapshots,
+> 706 catalog matches and 3,961 offers awaiting matching review. All eight raw
+> file hashes and every effective snapshot's price, quantity, currency and
+> availability were verified. 1,515 exact quantities remain unknown as stated
+> in the sources. PostgreSQL, migration, backend, frontend, Windows storage and
+> full Compose/browser CI checks passed; staging release #103 succeeded. Opt-in
+> offer keys preserve distinct vendor offers, shared UPCs require review, and
+> synchronous upload processing no longer blocks the API event loop. Existing
+> historical import counts survived migration unchanged. Client acceptance,
+> catalog matching review and older ET/French/MTZ source errors remain open.
+> See [verified batch results](vendor-batch-2026-11-05.md) and
+> [ADR 0018](decisions/0018-vendor-offer-and-worksheet-import-identity.md).
 >
 > 2026-10-20 QKD price normalization: the client identifies the supplied CSV
 > as QKD and requires a 12% deduction from column H (`YOUR PRICE`). The versioned
