@@ -131,6 +131,7 @@ export interface ImportJob {
   import_file: ImportFile;
   vendor_import_profile_id: string | null;
   profile_version: number | null;
+  source_sheet?: string | null;
   status: string;
   current_stage: string | null;
   total_rows: number;

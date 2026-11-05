@@ -35,14 +35,14 @@ from app.core.errors import AppError, ConflictError, NotFoundError, ValidationFa
 from app.core.logging import get_logger
 from app.core.security import Principal
 from app.db.transaction import transaction
-from app.imports.readers import detect_encoding
+from app.imports.readers import UnreadableFile, detect_encoding, read_table
 from app.imports.storage import StorageBackend, sha256_hex
-from app.models.enums import ImportJobStatus, ImportRowStatus
+from app.models.enums import FileFormat, ImportJobStatus, ImportRowStatus
 from app.models.ingestion import ImportFile, ImportJob
 from app.models.vendor import VendorImportProfile
 from app.repositories.imports import ImportJobPage, ImportRepository, ImportRowPage
 from app.services import audit
-from app.services.import_profiles import ImportProfileNotActive, get_profile
+from app.services.import_profiles import ImportProfileNotActive, get_profile, read_options_of
 from app.services.vendors import get_vendor
 
 _logger = get_logger(__name__)
@@ -118,13 +118,14 @@ def receive_upload(
     repository = ImportRepository(session, principal.organization_id)
 
     digest = sha256_hex(content)
-    existing = repository.file_by_sha256(digest)
+    source_sheet = _selected_sheet(profile, content)
+    existing = repository.file_by_sha256(digest, for_update=True)
     if existing is not None:
         if existing.vendor_id != vendor.id:
             raise ImportFileBelongsToAnotherVendor(
                 details={"import_file_id": str(existing.id), "vendor_id": str(existing.vendor_id)}
             )
-        live = repository.live_job_for_file(existing.id)
+        live = repository.live_job_for_file(existing.id, source_sheet=source_sheet)
         if live is not None:
             _logger.info(
                 "import.duplicate_upload", import_file_id=str(existing.id), job_id=str(live.id)
@@ -137,7 +138,15 @@ def receive_upload(
             storage.put(
                 content, name, organization_id=principal.organization_id, at=existing.uploaded_at
             )
-        job = _record_job(session, repository, principal, existing, profile, retry=True)
+        job = _record_job(
+            session,
+            repository,
+            principal,
+            existing,
+            profile,
+            retry=repository.live_job_for_file(existing.id) is None,
+            source_sheet=source_sheet,
+        )
         return UploadOutcome(job=job, duplicate=False)
 
     # New bytes: stored first, recorded second (AC-5.4).
@@ -167,7 +176,15 @@ def receive_upload(
                     f"retained for {vendor.code}."
                 ),
             )
-            job = _add_job(session, repository, principal, import_file, profile, retry=False)
+            job = _add_job(
+                session,
+                repository,
+                principal,
+                import_file,
+                profile,
+                retry=False,
+                source_sheet=source_sheet,
+            )
     except IntegrityError as exc:
         raise ImportFileConflict() from exc
     _logger.info(
@@ -348,6 +365,20 @@ def _checked_profile(
     return profile
 
 
+def _selected_sheet(profile: VendorImportProfile | None, content: bytes) -> str | None:
+    """Resolve index/name aliases to the workbook's actual worksheet title.
+
+    Invalid workbooks remain receivable: parsing records their normal durable
+    failure. No profile or CSV preserves the existing file-level behavior.
+    """
+    if profile is None or profile.file_format is not FileFormat.XLSX:
+        return None
+    try:
+        return read_table(content, read_options_of(profile), max_rows=0).sheet
+    except UnreadableFile:
+        return None
+
+
 def _record_job(
     session: Session,
     repository: ImportRepository,
@@ -356,10 +387,19 @@ def _record_job(
     profile: VendorImportProfile | None,
     *,
     retry: bool,
+    source_sheet: str | None = None,
 ) -> ImportJob:
     try:
         with transaction(session):
-            return _add_job(session, repository, principal, import_file, profile, retry=retry)
+            return _add_job(
+                session,
+                repository,
+                principal,
+                import_file,
+                profile,
+                retry=retry,
+                source_sheet=source_sheet,
+            )
     except IntegrityError as exc:
         raise ImportFileConflict() from exc
 
@@ -372,6 +412,7 @@ def _add_job(
     profile: VendorImportProfile | None,
     *,
     retry: bool,
+    source_sheet: str | None = None,
 ) -> ImportJob:
     """Inside the caller's transaction: the PENDING job and its audit row."""
     job = ImportJob(
@@ -379,6 +420,7 @@ def _add_job(
         import_file_id=import_file.id,
         vendor_import_profile_id=profile.id if profile is not None else None,
         profile_version=profile.version if profile is not None else None,
+        source_sheet=source_sheet,
         status=ImportJobStatus.PENDING,
         triggered_by_user_id=principal.user_id,
     )

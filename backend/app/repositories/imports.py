@@ -38,20 +38,34 @@ class ImportJobPage:
 
 
 class ImportRepository(ScopedRepository):
-    def file_by_sha256(self, sha256: str) -> ImportFile | None:
-        return self.session.execute(
-            self.select(ImportFile).where(ImportFile.sha256 == sha256)
-        ).scalar_one_or_none()
+    def file_by_sha256(self, sha256: str, *, for_update: bool = False) -> ImportFile | None:
+        statement = self.select(ImportFile).where(ImportFile.sha256 == sha256)
+        if for_update:
+            # Serialize worksheet/no-profile receipts for this retained file.
+            # Otherwise a file-level and worksheet job could race each other.
+            statement = statement.with_for_update()
+        return self.session.execute(statement).scalar_one_or_none()
 
-    def live_job_for_file(self, import_file_id: uuid.UUID) -> ImportJob | None:
-        """The one job the partial unique index allows: not FAILED or CANCELLED."""
-        return self.session.execute(
-            self.select(ImportJob)
-            .options(selectinload(ImportJob.import_file))
-            .where(
-                ImportJob.import_file_id == import_file_id,
-                ImportJob.status.not_in(RETRYABLE_STATUSES),
+    def live_job_for_file(
+        self, import_file_id: uuid.UUID, *, source_sheet: str | None = None
+    ) -> ImportJob | None:
+        """Return the selected worksheet's job, or a historical file-level job.
+
+        Without a worksheet selection, return the first existing job rather
+        than permitting an unprofiled upload to duplicate a sheet import.
+        """
+        statement = self.select(ImportJob).where(
+            ImportJob.import_file_id == import_file_id,
+            ImportJob.status.not_in(RETRYABLE_STATUSES),
+        )
+        if source_sheet is not None:
+            statement = statement.where(
+                or_(ImportJob.source_sheet == source_sheet, ImportJob.source_sheet.is_(None))
             )
+        return self.session.execute(
+            statement.options(selectinload(ImportJob.import_file))
+            .order_by(ImportJob.created_at, ImportJob.id)
+            .limit(1)
         ).scalar_one_or_none()
 
     def get_job(self, job_id: uuid.UUID) -> ImportJob | None:

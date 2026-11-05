@@ -356,7 +356,7 @@ class _Matcher:
     def _input_of(self, row: ImportJobRow) -> MatchInput:
         data = row.normalized_data
         return MatchInput(
-            normalized_upc=row.normalized_upc,
+            normalized_upc=None if data.get("upc_shared_by_offers") else row.normalized_upc,
             upc_valid_checksum=data.get("upc_valid_checksum"),
             catalog_item_number=row.catalog_item_number,
             vendor_id=self.job.vendor_id,

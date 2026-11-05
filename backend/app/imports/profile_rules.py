@@ -38,6 +38,7 @@ class ColumnTarget(StrEnum):
     UNIT_COST = "unit_cost"
     PACK_SIZE = "pack_size"
     UNIT_OF_MEASURE = "unit_of_measure"
+    OFFER_VARIANT = "offer_variant"
     IGNORE = "ignore"
 
 
@@ -119,6 +120,31 @@ class NormalizationRules(BaseModel):
             "Only a valid, checksummed UPC is eligible; original UPC text is retained."
         ),
     )
+    vendor_sku_from_offer: bool = Field(
+        default=False,
+        title="Derive separate offer keys",
+        description=(
+            "For files without supplier SKUs, derive an OFFER key from barcode, description, "
+            "variant and pack fields. Prices, quantities and row positions are excluded. "
+            "These keys identify vendor offers, not catalog products."
+        ),
+    )
+    review_shared_upc_offers: bool = Field(
+        default=False,
+        title="Review barcodes shared by distinct offers",
+        description=(
+            "Keep distinct offers separate and require review before matching their shared UPC."
+        ),
+    )
+    skip_non_product_rows: bool = Field(
+        default=False,
+        title="Skip section headings",
+        description="Skip rows only when mapped description, quantity and price are all blank.",
+    )
+    description_prefix_columns: list[str] = Field(
+        default_factory=list,
+        description="Header names to prepend to the mapped description, such as BRAND.",
+    )
     decimal_separator: Literal[".", ","] = "."
     thousands_separator: Literal["", ",", "."] = ""
     currency_symbols_to_strip: list[str] = Field(default_factory=lambda: ["$"])
@@ -127,6 +153,10 @@ class NormalizationRules(BaseModel):
     def _separators_differ(self) -> NormalizationRules:
         if self.thousands_separator and self.thousands_separator == self.decimal_separator:
             raise ValueError("decimal_separator and thousands_separator must differ")
+        if self.vendor_sku_from_upc and self.vendor_sku_from_offer:
+            raise ValueError("choose only one derived vendor key strategy")
+        if self.review_shared_upc_offers and not self.vendor_sku_from_offer:
+            raise ValueError("shared offer review requires derived offer keys")
         return self
 
     @field_validator("currency_symbols_to_strip")
@@ -136,6 +166,15 @@ class NormalizationRules(BaseModel):
         if any(s.isdigit() or s in ".," for s in cleaned):
             raise ValueError("a currency symbol cannot be a digit or a separator")
         return cleaned
+
+    @field_validator("description_prefix_columns")
+    @classmethod
+    def _description_columns(cls, value: list[str]) -> list[str]:
+        if any(not v.strip() for v in value):
+            raise ValueError("description prefix column names must not be blank")
+        if len({normalize_header(v) for v in value}) != len(value):
+            raise ValueError("description prefix columns must be distinct")
+        return [v.strip() for v in value]
 
 
 # --- availability ------------------------------------------------------------------------
@@ -263,6 +302,13 @@ class ProfileRules(BaseModel):
     @model_validator(mode="after")
     def _cross_rules(self) -> ProfileRules:
         targets = self.column_map.targets()
+        norm = self.normalization_rules
+        if (
+            norm.vendor_sku_from_offer
+            or norm.skip_non_product_rows
+            or norm.description_prefix_columns
+        ) and (ColumnTarget.DESCRIPTION not in targets):
+            raise ValueError("offer keys and section-heading skips require a description column")
         if (
             self.availability_rules.available_when != "listed"
             and ColumnTarget.QUANTITY_AVAILABLE not in targets

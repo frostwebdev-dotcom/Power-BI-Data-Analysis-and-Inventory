@@ -5,7 +5,7 @@ Idempotency is enforced in two places (both required by the milestone brief):
 * ``import_files.sha256`` is unique per tenant, so the same bytes are stored
   once no matter how many times they are uploaded;
 * a partial unique index allows only one non-failed ``import_jobs`` row per
-  file, so a successful import can never be silently processed twice, while a
+  file/worksheet, so a successful import can never be silently processed twice, while a
   failed or cancelled one can still be retried.
 """
 
@@ -105,6 +105,9 @@ class ImportJob(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Ba
     # Denormalised so the job still records which profile version it ran under
     # even if the profile row is later superseded.
     profile_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Canonical worksheet title, resolved from the actual workbook. NULL keeps
+    # historical/CSV file-level idempotency. Different sheets retain one raw file.
+    source_sheet: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     status: Mapped[ImportJobStatus] = mapped_column(
         pg_enum(ImportJobStatus, "import_job_status"),
@@ -144,12 +147,13 @@ class ImportJob(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Ba
     )
 
     __table_args__ = (
-        # One live import per file. A FAILED or CANCELLED attempt may be retried;
+        # One live import per file/worksheet. FAILED or CANCELLED attempts may retry;
         # a completed one can never be silently re-processed.
         Index(
             "uq_import_jobs_active_import_file",
             "organization_id",
             "import_file_id",
+            text("coalesce(source_sheet, '')"),
             unique=True,
             postgresql_where=text("status not in ('FAILED', 'CANCELLED')"),
         ),

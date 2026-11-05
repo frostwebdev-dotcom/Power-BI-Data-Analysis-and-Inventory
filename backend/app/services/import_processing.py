@@ -26,6 +26,7 @@ audit row; rows already written stay as evidence of how far it got.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections import Counter
 from collections.abc import Iterator
@@ -39,7 +40,14 @@ from app.core.errors import ConflictError
 from app.core.logging import get_logger
 from app.core.security import Principal
 from app.db.transaction import transaction
-from app.imports.extract import ExtractedRow, IssueCode, Severity, extract_row, plan_columns
+from app.imports.extract import (
+    ExtractedRow,
+    IssueCode,
+    Severity,
+    extract_row,
+    plan_columns,
+    shared_offer_issue,
+)
 from app.imports.mapping import header_issues
 from app.imports.readers import SourceRow, UnreadableFile, open_rows
 from app.imports.storage import StorageBackend, StorageError, sha256_hex
@@ -203,6 +211,8 @@ class _Run:
 
         superseded = self._write_rows(rules, plan, stream.rows)
         self._mark_duplicates(superseded)
+        if rules.normalization_rules.review_shared_upc_offers:
+            self._flag_shared_offer_upcs()
         summary = self._reconcile(
             {**observed, "notes": stream.notes + notes, "duplicates_superseded": len(superseded)}
         )
@@ -330,6 +340,44 @@ class _Run:
         ]
         with transaction(self.session):
             self.session.execute(statement, params)
+
+    def _flag_shared_offer_upcs(self) -> None:
+        """A barcode shared by distinct offers cannot safely decide identity.
+
+        Keep the barcode searchable and its actual checksum result intact;
+        the matcher skips only UPC priority for these flagged rows.
+        """
+        issue = shared_offer_issue()
+        with transaction(self.session):
+            self.session.execute(
+                text("""
+                    update import_job_rows
+                       set status = case when status = 'ERROR' then status else 'WARNING' end,
+                           error_code = coalesce(error_code, :code),
+                           error_message = coalesce(error_message, :message),
+                           normalized_data = normalized_data || jsonb_build_object(
+                               'upc_shared_by_offers', true,
+                               'issues', coalesce(normalized_data -> 'issues', '[]'::jsonb)
+                                   || cast(:issue as jsonb))
+                     where organization_id = :organization_id and import_job_id = :job_id
+                       and normalized_upc in (
+                           select normalized_upc from import_job_rows
+                            where organization_id = :organization_id and import_job_id = :job_id
+                              and normalized_data ->> 'vendor_sku_from_offer' = 'true'
+                              and normalized_data ->> 'upc_valid_checksum' = 'true'
+                            group by normalized_upc
+                           having count(distinct normalized_vendor_sku) > 1
+                       )
+                       and status in ('OK', 'WARNING', 'ERROR')
+                """),
+                {
+                    "organization_id": self.organization_id,
+                    "job_id": self.job.id,
+                    "code": issue.code.value,
+                    "message": issue.message,
+                    "issue": json.dumps([issue.as_json()]),
+                },
+            )
 
     def _reconcile(self, extra: dict[str, Any]) -> dict[str, Any]:
         """Counters from the rows themselves, so the job never disagrees with
