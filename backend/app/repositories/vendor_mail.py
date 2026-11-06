@@ -51,7 +51,10 @@ class VendorMailRepository(ScopedRepository):
         return list(
             self.session.scalars(
                 self.select(VendorMailDelivery)
+                .join(VendorMailSource, VendorMailSource.id == VendorMailDelivery.source_id)
                 .where(
+                    VendorMailSource.organization_id == self.scope.organization_id,
+                    VendorMailSource.is_active.is_(True),
                     VendorMailDelivery.state_id == state_id,
                     VendorMailDelivery.status.in_(("PENDING", "RUNNING", "FAILED")),
                     or_(

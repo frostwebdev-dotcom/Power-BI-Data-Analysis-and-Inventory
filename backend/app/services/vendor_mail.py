@@ -514,22 +514,23 @@ def apply_delivery(
             job, duplicate = outcome.job, outcome.duplicate
             with transaction(session):
                 row.import_job_id = job.id
-            if duplicate and job.status is ImportJobStatus.COMPLETED:
-                # Reappearing historical bytes must not make a newer, different
-                # stock file look current merely because content was seen before.
-                latest = session.scalar(
-                    TenantScope(row.organization_id)
-                    .select(ImportJob)
-                    .where(
-                        ImportJob.vendor_id == source.vendor_id,
-                        ImportJob.source_sheet == job.source_sheet,
-                        ImportJob.status == ImportJobStatus.COMPLETED,
-                    )
-                    .order_by(ImportJob.completed_at.desc())
-                    .limit(1)
+        if job.status is ImportJobStatus.COMPLETED:
+            # Reappearing historical bytes must not make a newer, different
+            # stock file look current merely because content was seen before.
+            # Recheck linked jobs too: ordinary retries keep their original ID.
+            latest = session.scalar(
+                TenantScope(row.organization_id)
+                .select(ImportJob)
+                .where(
+                    ImportJob.vendor_id == source.vendor_id,
+                    ImportJob.source_sheet == job.source_sheet,
+                    ImportJob.status == ImportJobStatus.COMPLETED,
                 )
-                if latest and latest.id != job.id:
-                    raise IntakeError("OLDER_CONTENT_REAPPEARED", review=True)
+                .order_by(ImportJob.completed_at.desc())
+                .limit(1)
+            )
+            if latest and latest.id != job.id:
+                raise IntakeError("OLDER_CONTENT_REAPPEARED", review=True)
         job = _finish_job(session, storage, row, job)
         if job.status is ImportJobStatus.COMPLETED and job.error_rows == 0:
             with transaction(session):

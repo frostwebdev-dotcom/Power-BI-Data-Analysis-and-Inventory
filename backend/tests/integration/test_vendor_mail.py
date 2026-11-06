@@ -608,3 +608,81 @@ def test_operator_can_explicitly_retry_with_corrected_profile(
     assert (
         row.profile_id == replacement.id and row.import_job_id is None and row.status == "PENDING"
     )
+
+
+def test_paused_backlog_cannot_occupy_the_active_delivery_queue(
+    db_session: Session, context: Context, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reader = FakeMail()
+    reader.add("paused-backlog", csv())
+    original = reader.attachment
+
+    def unavailable(message: str, attachment: str, maximum: int) -> bytes:
+        raise IntakeError("GRAPH_CONNECTION_FAILED", retryable=True)
+
+    monkeypatch.setattr(reader, "attachment", unavailable)
+    context.settings.vendor_mail_max_deliveries = 1
+    run(db_session, context, reader, tmp_path)
+    [paused] = VendorMailRepository(db_session, context.org.id).history(None, 1, 50)[0]
+    assert paused.status == "FAILED"
+    context.source.is_active = False
+    other_vendor = factories.make_vendor(db_session, context.org)
+    other_profile = profile(db_session, other_vendor, context.actor)
+    active = save_source(
+        db_session,
+        context.actor,
+        MailSourceWrite(
+            name="Active vendor",
+            vendor_id=other_vendor.id,
+            profile_id=other_profile.id,
+            sender_addresses=["other@vendor.example"],
+            filename_pattern="*.csv",
+            is_active=True,
+        ),
+    )
+    active.starts_at = NOW - timedelta(days=1)
+    db_session.commit()
+    monkeypatch.setattr(reader, "attachment", original)
+    reader.add(
+        "active", csv("12"), received=NOW + timedelta(hours=1), sender="other@vendor.example"
+    )
+    run(db_session, context, reader, tmp_path, at=NOW + timedelta(hours=1))
+    rows, _ = VendorMailRepository(db_session, context.org.id).history(None, 1, 50)
+    applied = next(row for row in rows if row.message_id == "active")
+    assert applied.status == "COMPLETED" and paused.status == "FAILED" and paused.attempts == 1
+    assert not snapshots(db_session, context)
+    assert (
+        db_session.scalar(
+            select(func.count())
+            .select_from(VendorInventorySnapshot)
+            .where(VendorInventorySnapshot.vendor_id == other_vendor.id)
+        )
+        == 1
+    )
+
+
+def test_retrying_reappeared_historical_content_cannot_falsely_refresh_the_source(
+    db_session: Session, context: Context, tmp_path: Path
+) -> None:
+    reader = FakeMail()
+    reader.add("a", csv("5"))
+    run(db_session, context, reader, tmp_path)
+    reader.add("b", csv("10"), received=NOW + timedelta(hours=1))
+    run(db_session, context, reader, tmp_path, at=NOW + timedelta(hours=1))
+    reader.add("a-again", csv("5"), received=NOW + timedelta(hours=2))
+    run(db_session, context, reader, tmp_path, at=NOW + timedelta(hours=2))
+    rows, _ = VendorMailRepository(db_session, context.org.id).history(None, 1, 50)
+    old = next(row for row in rows if row.message_id == "a-again")
+    assert old.status == "NEEDS_REVIEW" and old.error_code == "OLDER_CONTENT_REAPPEARED"
+    assert old.import_job_id is not None
+    retry_delivery(db_session, context.actor, old.id)
+    run(db_session, context, reader, tmp_path, at=NOW + timedelta(hours=3))
+    assert old.status == "NEEDS_REVIEW" and old.error_code == "OLDER_CONTENT_REAPPEARED"
+    assert context.source.last_success_at == NOW + timedelta(hours=1)
+    assert len(snapshots(db_session, context)) == 2
+    reader.add("delayed-valid", csv("12"), received=NOW + timedelta(minutes=90))
+    run(db_session, context, reader, tmp_path, at=NOW + timedelta(hours=4))
+    rows, _ = VendorMailRepository(db_session, context.org.id).history(None, 1, 50)
+    assert next(row for row in rows if row.message_id == "delayed-valid").status == "COMPLETED"
+    assert context.source.last_success_at == NOW + timedelta(minutes=90)
+    assert len(snapshots(db_session, context)) == 3
