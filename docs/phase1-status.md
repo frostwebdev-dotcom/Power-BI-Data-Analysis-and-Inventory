@@ -1,3 +1,15 @@
+> 2026-11-06 vendor email intake: implemented read-only Microsoft 365 attachment
+> and approved public direct-link intake, organization-scoped routing, durable
+> checkpoints, profile-pinned retries, duplicate/order protection, source
+> freshness and an Automatic imports page. Local lint, strict types and all
+> 899 backend unit tests passed. PostgreSQL/Compose CI and deployment are pending.
+> Live email processing remains disabled until the exact client mailbox,
+> separately scoped read access and real sender/link examples are configured
+> and tested. This implements the explicitly authorized M1 inventory-intake
+> extension; RFQs, quote extraction, outgoing mail and portal logins remain out
+> of scope. See [setup and acceptance](vendor-mail-intake.md) and
+> [ADR 0019](decisions/0019-vendor-inventory-email-intake.md).
+>
 > 2026-11-05 vendor batch: deployed to Azure staging and reconciled all eight new
 > vendors through nine header-pinned v1 profiles/imports, including both Spectrum
 > product worksheets sharing one unchanged original workbook. All jobs completed

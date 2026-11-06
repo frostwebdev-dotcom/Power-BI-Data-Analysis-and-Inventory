@@ -104,6 +104,12 @@ Acceptance: the seven proof-of-concept points demonstrated on your account; your
 Acceptance: a budget entered and an allocation returned in seconds on your full catalog; changing a weight changes the ranking; editing a line and approving produces an audited decision record.
 
 ### Phase 4 — Vendor RFQ / Quotes / Purchase Orders
+Implementation scope update, 6 November 2026: the user authorized bringing
+bounded, read-only Microsoft 365 vendor inventory attachment/direct-link intake
+into Milestone 1 (ADR 0019). The original phase breakdown below is historical;
+RFQs, quote extraction, outgoing email and POs remain in Phase 4. No revised
+price or payment terms are established by this technical scope update.
+
 *Brief sections 4 (email intake), 11, 12, 13, 14, 15, 24 (basic), 32 (email). Price USD 1,900. 30 November 2026 – 8 January 2027 (includes the holiday period). Paid as two milestones: 4a USD 950 on RFQ and email intake; 4b USD 950 on quotes, vendor selection and POs.*
 
 - Email integration (Microsoft 365 / Graph, or SMTP/IMAP if you prefer) for sending and receiving.

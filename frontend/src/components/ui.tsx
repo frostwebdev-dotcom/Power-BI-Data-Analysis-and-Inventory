@@ -32,6 +32,9 @@ export function PageHeader({
 const TONES: Record<string, string> = {
   OK: "badge--ok",
   COMPLETED: "badge--ok",
+  DUPLICATE: "badge--ok",
+  NEEDS_REVIEW: "badge--warn",
+  SUPERSEDED: "",
   MATCHED: "badge--ok",
   APPROVED: "badge--ok",
   AVAILABLE: "badge--ok",

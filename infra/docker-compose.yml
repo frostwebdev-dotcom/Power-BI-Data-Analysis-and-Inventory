@@ -61,6 +61,16 @@ services:
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER:-prms}:${POSTGRES_PASSWORD:-local_dev_only_change_me}@postgres:5432/${POSTGRES_DB:-prms}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      # Independent, read-only Microsoft 365 inventory mailbox. Disabled until
+      # the real mailbox and scoped app credentials are supplied privately.
+      VENDOR_MAIL_ENABLED: ${VENDOR_MAIL_ENABLED:-false}
+      VENDOR_MAIL_TENANT_ID: ${VENDOR_MAIL_TENANT_ID:-}
+      VENDOR_MAIL_CLIENT_ID: ${VENDOR_MAIL_CLIENT_ID:-}
+      VENDOR_MAIL_CLIENT_SECRET: ${VENDOR_MAIL_CLIENT_SECRET:-}
+      VENDOR_MAIL_MAILBOX: ${VENDOR_MAIL_MAILBOX:-}
+      VENDOR_MAIL_FOLDER_ID: ${VENDOR_MAIL_FOLDER_ID:-Inbox}
+      VENDOR_MAIL_ORGANIZATION_SLUG: ${VENDOR_MAIL_ORGANIZATION_SLUG:-}
+      VENDOR_MAIL_POLL_MINUTES: ${VENDOR_MAIL_POLL_MINUTES:-5}
       # Nineyard credentials. The read-only client exchanges these for a
       # bearer token; values stay in the root .env and are never baked into
       # an image or committed to this file.

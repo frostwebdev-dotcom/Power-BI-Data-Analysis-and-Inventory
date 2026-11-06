@@ -115,7 +115,7 @@ The following are **not** built, stubbed, or depended upon in this milestone:
 | Analyzer.tools | No integration. |
 | Power BI | No datasets, gateways, or exports — despite the repository name. |
 | Walmart integration | No Walmart channel. |
-| Inbound vendor email monitoring | No mailbox polling, attachment harvesting, or email-triggered imports. Vendor files arrive by upload or drop-in (§2.5). |
+| General inbound email workflows | ADR 0019 admits bounded read-only vendor inventory intake from Microsoft 365. RFQs, replies, quotes, sending mail and arbitrary portal automation remain excluded. |
 
 ### Boundary clarifications
 
@@ -125,6 +125,13 @@ The following are **not** built, stubbed, or depended upon in this milestone:
   entry. Approval of a mapping is always a human action (§2.8).
 - **Scheduling**: a job runner sufficient to trigger catalog sync and process
   imports is in scope. A general workflow engine is not.
+- **Vendor inventory email intake**: authorized on 6 November 2026. Poll one
+  configured Microsoft 365 mailbox/folder, route approved senders and filenames
+  to pinned vendor profiles, retain/import new attachments or approved direct
+  HTTPS downloads, and record duplicates, failures, review requirements and
+  source freshness. A vendor sending no new file does not imply zero stock.
+  Live activation requires the exact mailbox, scoped read access and real
+  vendor sender/link rules. No mailbox access or connection is assumed.
 - **Notifications**: availability events are recorded and displayed in-app.
   Email/SMS/push delivery is out of scope.
 - **Auth**: minimal authentication and role separation sufficient to attribute
