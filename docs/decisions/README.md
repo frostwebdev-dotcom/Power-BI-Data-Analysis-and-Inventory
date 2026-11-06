@@ -31,5 +31,6 @@ otherwise be tempted to "fix" without knowing why it is the way it is.
 | [0012](0012-tenant-scoping-enforced-in-repository-layer.md) | Enforce tenant scoping in the repository layer until row-level security | Accepted |
 | [0013](0013-import-profile-rule-shapes.md) | Import-profile rule columns have fixed, validated shapes | Accepted |
 | [0018](0018-vendor-offer-and-worksheet-import-identity.md) | Separate vendor offers and worksheet imports while retaining original files | Accepted |
+| [0019](0019-vendor-inventory-email-intake.md) | Bounded read-only Microsoft 365 vendor inventory email intake | Accepted |
 
 Statuses: `Proposed` · `Accepted` · `Superseded by NNNN` · `Deprecated`

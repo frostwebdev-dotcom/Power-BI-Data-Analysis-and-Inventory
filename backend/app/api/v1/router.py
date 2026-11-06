@@ -19,6 +19,7 @@ from app.api.v1.routes import (
     import_profiles,
     imports,
     products,
+    vendor_mail,
     vendors,
     watchlist,
 )
@@ -37,3 +38,4 @@ api_router.include_router(watchlist.router)
 api_router.include_router(watchlist.availability_router)
 api_router.include_router(audit.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(vendor_mail.router)

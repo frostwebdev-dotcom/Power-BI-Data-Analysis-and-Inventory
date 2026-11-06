@@ -37,6 +37,8 @@ Authoritative scope documents:
 12. Basic audit logging
 13. Minimal administration interface
 14. Amazon SP-API read-only ingestion (ADR 0011)
+15. Read-only Microsoft 365 vendor inventory email intake (ADR 0019), authorized
+    on 6 November 2026: attachments and approved direct download links only.
 
 ## 3. Explicitly OUT of Milestone 1
 

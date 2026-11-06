@@ -24,6 +24,7 @@ from app.models.matching import ProductMappingException
 from app.models.organization import Organization
 from app.models.sync import NineyardSyncRun, SourceRecord
 from app.models.vendor import Vendor, VendorContact, VendorImportProfile, VendorProduct
+from app.models.vendor_mail import VendorMailDelivery, VendorMailSource, VendorMailState
 from app.models.watchlist import OosStatusHistory, OosWatchlistEntry
 
 __all__ = [
@@ -51,5 +52,8 @@ __all__ = [
     "VendorContact",
     "VendorImportProfile",
     "VendorInventorySnapshot",
+    "VendorMailDelivery",
+    "VendorMailSource",
+    "VendorMailState",
     "VendorProduct",
 ]

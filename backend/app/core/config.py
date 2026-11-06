@@ -130,6 +130,46 @@ class Settings(BaseSettings):
             and self.nineyard_company_id is not None
         )
 
+    # --- Microsoft 365 vendor inventory intake (ADR 0019) --------------------
+    vendor_mail_enabled: bool = False
+    vendor_mail_tenant_id: UUID | None = None
+    vendor_mail_client_id: UUID | None = None
+    vendor_mail_client_secret: SecretStr | None = None
+    vendor_mail_mailbox: str | None = None
+    vendor_mail_folder_id: str = "Inbox"
+    vendor_mail_organization_slug: str | None = None
+    vendor_mail_poll_minutes: int = Field(default=5, ge=1, le=1440)
+    vendor_mail_lookback_hours: int = Field(default=24, ge=1, le=168)
+    vendor_mail_max_pages: int = Field(default=10, ge=1, le=100)
+    vendor_mail_max_deliveries: int = Field(default=25, ge=1, le=500)
+
+    @field_validator(
+        "vendor_mail_tenant_id",
+        "vendor_mail_client_id",
+        "vendor_mail_client_secret",
+        "vendor_mail_mailbox",
+        "vendor_mail_organization_slug",
+        mode="before",
+    )
+    @classmethod
+    def _empty_mail_setting(cls, value: Any) -> Any:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @property
+    def vendor_mail_missing_settings(self) -> list[str]:
+        names = (
+            "vendor_mail_tenant_id",
+            "vendor_mail_client_id",
+            "vendor_mail_client_secret",
+            "vendor_mail_mailbox",
+            "vendor_mail_organization_slug",
+        )
+        return [name.upper() for name in names if not getattr(self, name)]
+
+    @property
+    def vendor_mail_configured(self) -> bool:
+        return not self.vendor_mail_missing_settings
+
     # --- Amazon SP-API (read-only ingestion, ADR 0011) -----------------------
     # Login with Amazon: a long-lived refresh token is exchanged for short-lived
     # access tokens. The client id is an identifier, not a secret, but it is
