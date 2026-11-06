@@ -2,6 +2,15 @@
 
 Implementation, 2026-11-06. Live mailbox connection and acceptance remain pending.
 
+Verified code: `1fca44d27bb202abf3755466e47a0df3ab7d81a2` passed all 1,381
+backend tests and all 20 browser tests, including the real PostgreSQL pipeline,
+migration/schema agreement and Compose stack. Backend/frontend lint, strict
+types, production builds and Windows storage checks also passed in
+[CI](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42274097348).
+This is test verification; the live Azure migration, deployment, mailbox
+connection and vendor sample acceptance are still pending. No source addresses
+or mailbox permissions have been guessed or created.
+
 1. Organization-scoped sources, mailbox checkpoints and delivery history.
 2. Read-only Graph authentication, incremental messages and raw attachment
    downloads, bounded retries and origin-checked pagination.
@@ -67,6 +76,11 @@ transient delivery failures retry with backoff up to five attempts, then require
 review. Explicit retry keeps the original profile unless the operator chooses
 the source's current profile, an audited action. A retired profile blocks auto
 processing instead of silently switching versions.
+
+Paused-source deliveries stay in history but are excluded before the active
+queue limit, so they cannot block other vendors. Retrying reappeared historical
+content repeats the latest-file check, including when a completed import ID is
+already linked; it cannot falsely advance the source's successful-update date.
 
 Invalid source rows hold an automatic import before matching/snapshotting,
 retaining the file and report without applying partial stock. Warnings such as

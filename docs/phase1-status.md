@@ -1,8 +1,14 @@
 > 2026-11-06 vendor email intake: implemented read-only Microsoft 365 attachment
 > and approved public direct-link intake, organization-scoped routing, durable
 > checkpoints, profile-pinned retries, duplicate/order protection, source
-> freshness and an Automatic imports page. Local lint, strict types and all
-> 899 backend unit tests passed. PostgreSQL/Compose CI and deployment are pending.
+> freshness and an Automatic imports page. All 1,381 backend tests, all 20 browser
+> tests, PostgreSQL migration/schema checks, backend/frontend lint and strict
+> types, production builds and Windows storage checks passed in
+> [CI](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42274097348)
+> for code commit `1fca44d27bb202abf3755466e47a0df3ab7d81a2`. Review fixes exclude
+> paused sources before limiting the delivery queue and recheck historical
+> content on retries; regression tests cover both. Azure deployment is pending
+> renewed operator sign-in and application of migration `a61106202601`.
 > Live email processing remains disabled until the exact client mailbox,
 > separately scoped read access and real sender/link examples are configured
 > and tested. This implements the explicitly authorized M1 inventory-intake
