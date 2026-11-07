@@ -1,3 +1,20 @@
+> 2026-11-07 vendor email intake deployment: released code
+> `4145feec84f020265046dbc9aad1d5958fb09bad` to both Azure staging apps through
+> [release #120](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42386823969).
+> API/web revisions end in `--gh-42386823969-1`. Migration `a61106202601` was
+> applied from the checksum-verified file before rollout; the deployed revision's
+> `alembic check` found no upgrade operations. Existing data stayed unchanged:
+> 19 vendors, 24 profiles, 25,701 vendor products, 23 files, 24 import jobs,
+> 30,927 staged rows and 28,909 inventory snapshots. All three new mail tables
+> remain empty. Verified Microsoft admin sign-in, the live Automatic imports
+> page, all 19 vendor choices and the saved Universal profile. The mailbox is
+> unconfigured, polling is disabled and the job returns `DISABLED`. All release
+> tests, image deployments, API/database health, Entra configuration and CORS
+> checks passed. Mailbox access, real sender/link rules and vendor email
+> acceptance still remain before automatic updates can operate. No mailbox
+> grants, integration credentials or source rules were created. See the
+> [setup guide](vendor-mail-intake.md).
+>
 > 2026-11-06 vendor email intake: implemented read-only Microsoft 365 attachment
 > and approved public direct-link intake, organization-scoped routing, durable
 > checkpoints, profile-pinned retries, duplicate/order protection, source

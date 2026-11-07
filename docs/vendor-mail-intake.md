@@ -7,9 +7,33 @@ backend tests and all 20 browser tests, including the real PostgreSQL pipeline,
 migration/schema agreement and Compose stack. Backend/frontend lint, strict
 types, production builds and Windows storage checks also passed in
 [CI](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42274097348).
-This is test verification; the live Azure migration, deployment, mailbox
-connection and vendor sample acceptance are still pending. No source addresses
-or mailbox permissions have been guessed or created.
+Azure staging deployment is verified separately below. The mailbox connection
+and vendor sample acceptance remain pending. No source addresses, mailbox
+permissions or integration credentials have been guessed or created.
+
+## Staging verification — 2026-11-07
+
+[Release #120](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42386823969)
+succeeded for deployed code `4145feec84f020265046dbc9aad1d5958fb09bad`.
+The API and web revisions are `ca-prms-api-staging--gh-42386823969-1` and
+`ca-prms-web-staging--gh-42386823969-1`. All release tests, builds, image updates,
+API/database health, Entra configuration and CORS checks passed.
+
+Migration `a61106202601` was applied before rollout using its exact tested file
+(SHA-256 `fb568fd656f5d9a19484919c7cf4d5ed43b10a5bff7f2e1ffd802f38ccb14a9c`).
+The new revision passed a live `alembic check` with no upgrade operations.
+At `2026-11-07T15:50:16Z`, the before/after counts matched: 19 vendors,
+24 profiles, 25,701 vendor products, 23 import files, 24 import jobs,
+30,927 staged rows and 28,909 inventory snapshots. Sources, checkpoints and
+email deliveries each contained zero rows. The disabled job returned `DISABLED`.
+
+Microsoft admin sign-in and the
+[live Automatic imports page](https://ca-prms-web-staging.thankfulground-2dc62bbd.eastus2.azurecontainerapps.io/automatic-imports)
+were verified. The source editor listed all 19 vendors and loaded Universal's
+saved v1 profile; the draft was cancelled without saving. The page correctly
+shows that the mailbox is not configured, no email sources or deliveries exist,
+and **Check mailbox now** is disabled. This verifies deployment and setup controls;
+actual email-arrival/import acceptance still requires the client inputs below.
 
 1. Organization-scoped sources, mailbox checkpoints and delivery history.
 2. Read-only Graph authentication, incremental messages and raw attachment
