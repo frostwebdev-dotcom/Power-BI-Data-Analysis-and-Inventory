@@ -2,7 +2,9 @@
 
 The Gmail importer is deployed. This one-time setup obtains the separate Google
 grant needed for that importer. It does not import stock or turn on polling.
-Use a client-owned Google Cloud project and the receiving mailbox's owner.
+Use a client-owned Google Cloud project where available. An operator-owned
+project can be used with the client's agreement and a plan for ownership/access
+at handover. The receiving mailbox's owner separately approves Gmail access.
 
 Validated in [CI #130](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42557320094):
 1,426 backend tests and 21 browser tests passed, including 20 authorization tests
@@ -37,6 +39,29 @@ In Google Cloud Console:
    refresh tokens with Gmail scopes expire in seven days. A successful setup is
    not proof of a durable unattended grant; complete the applicable Google
    publishing/verification process before promising daily operation.
+
+### Public Google Branding information
+
+Google can disable **Publish app** until Branding has a valid name, monitored
+support email, public homepage and public privacy-policy URL. The authenticated
+dashboard alone does not meet Google's public homepage requirements.
+
+The public-information release adds `/app-info.html` and `/privacy.html` on the
+existing frontend. Both are static HTML documents, readable without sign-in or
+JavaScript, and contain no private inventory or mailbox records. They are also
+linked from sign-in and automatic imports. After deploying and checking that
+release, use these paths as the homepage and privacy-policy URLs respectively.
+Do not enter a fabricated terms URL; no terms document is supplied by this change.
+
+Successful hosting does not establish authorized-domain ownership or Google
+verification. Complete Google's applicable domain and verification steps. Do
+not claim ownership of Microsoft's shared hosting domain. If Google requires a
+domain you control, configure a real owned domain before completing that step.
+
+After moving the project out of Testing, repeat the local authorization flow to
+obtain a grant issued under the new publishing state. Replace the private Azure
+refresh-token secret with that grant's value, then restart the referencing API
+revision or deploy a new one. Keep polling false until vendor acceptance passes.
 
 The mailbox owner must review and approve Google's read-only consent screen.
 Existing Microsoft/Entra sign-in and a connected ChatGPT Gmail account do not
@@ -109,13 +134,23 @@ attachment and a verified direct download through the existing import reports,
 including profile versions, raw hashes, duplicate replay and failed-file review,
 before enabling normal polling. No missing email clears previous stock.
 
-## Current live blocker
+## Latest owner-reported setup (9 November 2026)
 
-On this setup attempt, Google Cloud Console returned **Site Unavailable** in
-the cloud browser, including after one reload. No sign-in form was available.
-No Cloud project/client, mailbox permission or real token was created. This is
-an access limitation of this session, not evidence of a Gmail service outage.
-The actual client credentials and original vendor emails remain required.
+The owner created the Google OAuth configuration and ran the helper on the
+receiving mailbox owner's Windows computer. The displayed terminal result
+reported a verified mailbox and privately saved runtime settings. The owner
+configured Azure secrets and the API revision `gmail-setup-1`, which was shown
+running with all traffic. The app now displays Gmail configured with automatic
+checks paused, no sources, and no successful mailbox check yet.
+
+The Google project still shows Testing. Publishing is blocked by missing public
+Branding URLs. The public-information pages are being prepared for deployment;
+their existence alone does not prove Google publishing, domain verification or
+live email-import acceptance. No credentials have been supplied to this chat.
+
+Earlier cloud-browser attempts to open Google Cloud Console returned **Site
+Unavailable**; the owner successfully used their own browser instead. That
+session limitation is not evidence of a Google outage.
 
 References:
 - https://developers.google.com/identity/protocols/oauth2/web-server

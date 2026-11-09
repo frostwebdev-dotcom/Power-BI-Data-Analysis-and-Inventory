@@ -84,6 +84,7 @@ export default function AutomaticImportsPage() {
     {status.isPending ? <Loading what="Checking mailbox connection" /> : null}
     {connection ? <section className="card">
       <h2>Inventory mailbox</h2>
+      <p className="muted"><a href="/privacy.html">Gmail data use and privacy</a>: how inventory emails and files are accessed, retained and removed.</p>
       {connection.mailbox ? <p className="muted">{connection.provider === "gmail" ? "Gmail" : "Microsoft 365"} · Read-only access</p> : null}
       {!connection.configured ? <Note tone="warn">Mailbox connection required. An administrator must configure read-only access to the inventory mailbox before automatic checks can run. You can prepare vendor sources below.</Note> : !connection.enabled ? <Note tone="warn">Mailbox configured; automatic checks are paused.</Note> : <Note tone="ok">Automatic checks enabled every {connection.poll_minutes} minutes. Files are imported when vendors send them.</Note>}
       <dl className="detail-grid"><div><dt>Mailbox</dt><dd>{connection.mailbox ?? "Not configured"}</dd></div><div><dt>Last check</dt><dd>{fmtDate(connection.last_poll_at)}</dd></div><div><dt>Last successful mailbox check</dt><dd>{fmtDate(connection.last_success_at)}</dd></div></dl>
