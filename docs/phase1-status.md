@@ -4,7 +4,14 @@
 > non-overwriting runtime output outside Git. No new dependency, public callback,
 > database token store or automatic Azure configuration write was added. The
 > helper leaves polling false and reads only the Google profile during setup.
-> Twenty focused authorization tests passed locally; full/Windows CI is pending.
+> All 1,426 backend tests and 21 browser tests passed in
+> [CI #130](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42557320094),
+> including PostgreSQL/schema checks, backend/frontend lint and strict types,
+> builds, storage checks and the new Windows PowerShell 5.1 launcher tests.
+> The Windows harness restores native exit status after simulated failures.
+> PR #20 merged as `2f009d0b5d95e2442707ced7a37da39e4bc261fc`. This local setup
+> tooling needs no additional API/web deployment; the importer remains the
+> previously verified staging release #125.
 > Google Cloud Console returned Site Unavailable in this cloud browser after one
 > reload, so no project/client/grant or real token could be created. Client-owned
 > OAuth configuration, owner consent, original sender emails and live acceptance

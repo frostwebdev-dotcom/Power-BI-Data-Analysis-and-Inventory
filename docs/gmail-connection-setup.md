@@ -4,6 +4,13 @@ The Gmail importer is deployed. This one-time setup obtains the separate Google
 grant needed for that importer. It does not import stock or turn on polling.
 Use a client-owned Google Cloud project and the receiving mailbox's owner.
 
+Validated in [CI #130](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42557320094):
+1,426 backend tests and 21 browser tests passed, including 20 authorization tests
+with simulated Google responses and a real local callback listener. Windows
+PowerShell 5.1 tests verified launcher validation, private environment handling
+and restoration after success/failure. These tests do not constitute real
+mailbox consent. PR #20 merged as `2f009d0b5d95e2442707ced7a37da39e4bc261fc`.
+
 ## 1. Prepare the Google web client
 
 In Google Cloud Console:
