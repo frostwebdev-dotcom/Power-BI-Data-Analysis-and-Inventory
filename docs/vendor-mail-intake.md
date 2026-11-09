@@ -119,6 +119,12 @@ and explicit configuration and are not guessed from an email link.
 
 ## Gmail operator setup
 
+Use the [local connection walkthrough](gmail-connection-setup.md) and
+`infra/scripts/connect-gmail.ps1` (Windows) or
+`python -m app.cli.vendor_mail_authorize` after preparing the client-owned
+Google web client. The helper privately obtains/verifies the offline grant;
+it never enables polling, imports inventory or writes Azure settings.
+
 1. In a client-owned Google Cloud project, enable the Gmail API and configure
    the OAuth app/client for an owner-approved server-side authorization flow.
    Request only `https://www.googleapis.com/auth/gmail.readonly`, with

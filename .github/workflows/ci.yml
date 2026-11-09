@@ -49,6 +49,9 @@ jobs:
       - name: Check asynchronous storage updates on Windows PowerShell 5.1
         shell: powershell
         run: ./infra/tests/storage-attachment.test.ps1
+      - name: Check local Gmail authorization launcher on Windows PowerShell 5.1
+        shell: powershell
+        run: ./infra/tests/gmail-authorization.test.ps1
 
   backend:
     name: backend
