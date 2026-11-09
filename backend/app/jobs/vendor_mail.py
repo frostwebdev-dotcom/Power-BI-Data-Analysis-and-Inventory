@@ -9,6 +9,7 @@ from app.core.context import set_request_id
 from app.core.logging import get_logger
 from app.db.transaction import session_lifecycle
 from app.imports.storage import build_storage_backend
+from app.integrations.vendor_mail.gmail import GmailMailReader
 from app.integrations.vendor_mail.graph import GraphMailReader
 from app.integrations.vendor_mail.types import IntakeError
 from app.jobs.runner import JobRunner
@@ -24,7 +25,12 @@ def run_vendor_mail_job(settings: Settings | None = None) -> str:
     try:
         with session_lifecycle() as session:
             organization_id = configured_organization(session, settings)
-            with GraphMailReader(settings) as reader:
+            mail_reader = (
+                GmailMailReader(settings)
+                if settings.vendor_mail_provider == "gmail"
+                else GraphMailReader(settings)
+            )
+            with mail_reader as reader:
                 result = run_intake(
                     session, organization_id, settings, reader, build_storage_backend(settings)
                 )

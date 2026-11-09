@@ -58,6 +58,17 @@ class MailSourceConflict(ConflictError):  # noqa: N818
 
 
 def account_key(settings: Settings) -> str:
+    if settings.vendor_mail_provider == "gmail":
+        value = "|".join(
+            (
+                "gmail",
+                settings.vendor_mail_gmail_client_id or "",
+                (settings.vendor_mail_mailbox or "").lower(),
+                settings.vendor_mail_gmail_label_id,
+            )
+        )
+        return hashlib.sha256(value.encode()).hexdigest()
+    # Keep existing Microsoft 365 checkpoint identities stable across this upgrade.
     value = "|".join(
         (
             str(settings.vendor_mail_tenant_id),
@@ -191,7 +202,7 @@ def retry_delivery(
 
 
 def _delivery_snapshot(row: VendorMailDelivery) -> dict[str, object]:
-    # Graph IDs and private signed links never reach audit/public responses.
+    # Provider message IDs and signed links never reach audit/public responses.
     return {
         "status": row.status,
         "profile_id": str(row.profile_id),
@@ -297,12 +308,22 @@ def discover_message(
     matched = matching_sources(sources, message)
     if not matched:
         return
-    attachments = (
-        reader.attachments(message.id)
-        if message.has_attachments and any(s.mode == "ATTACHMENT" for s in matched)
-        else []
-    )
-    selected = [(source, _candidates(source, message, attachments)) for source in matched]
+    discovery_error: str | None = None
+    try:
+        if not message.body_loaded and any(s.mode == "LINK" for s in matched):
+            message = reader.message(message.id)
+        attachments = (
+            reader.attachments(message.id)
+            if message.has_attachments and any(s.mode == "ATTACHMENT" for s in matched)
+            else []
+        )
+        selected = [(source, _candidates(source, message, attachments)) for source in matched]
+    except IntakeError as intake_error:
+        if not intake_error.review:
+            raise
+        # Bad/oversized vendor mail must not block all subsequent mailbox pages.
+        discovery_error = intake_error.code
+        selected = [(source, []) for source in matched]
     vendors = {source.vendor_id for source, candidates in selected if candidates}
     any_candidates = any(candidates for _, candidates in selected)
     for source, candidates in selected:
@@ -312,7 +333,7 @@ def discover_message(
         # same message. Don't create spurious failures for those unmatched rules.
         if not candidates and any_candidates:
             continue
-        error = (
+        error = discovery_error or (
             "AMBIGUOUS_VENDOR"
             if len(vendors) > 1
             else (
@@ -628,7 +649,7 @@ def run_intake(
             session.rollback()
             with transaction(session):
                 state.error_code = error.code
-                if error.code == "GRAPH_CURSOR_EXPIRED":
+                if error.code in ("GRAPH_CURSOR_EXPIRED", "GMAIL_CURSOR_EXPIRED"):
                     state.checkpoint_url = None  # replay from original lower bound
         except Exception:
             session.rollback()

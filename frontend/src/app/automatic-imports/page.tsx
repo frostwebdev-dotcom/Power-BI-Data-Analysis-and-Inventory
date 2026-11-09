@@ -27,6 +27,7 @@ interface Delivery {
   import_job_id: string | null;
 }
 interface Connection {
+  provider: "microsoft365" | "gmail";
   enabled: boolean; configured: boolean; mailbox: string | null; poll_minutes: number;
   missing_settings: string[]; last_poll_at: string | null; last_success_at: string | null;
   error_code: string | null;
@@ -41,6 +42,11 @@ const FRESHNESS: Record<string, string> = { paused: "Paused", never_received: "W
 const REASONS: Record<string, string> = {
   MAILBOX_ACCESS_DENIED: "Mailbox access needs administrator attention.",
   MAILBOX_NOT_CONFIGURED: "The inventory mailbox has not been connected.",
+  GMAIL_AUTHORIZATION_REQUIRED: "The Gmail owner must authorize read-only access again.",
+  GMAIL_MAILBOX_MISMATCH: "The authorized Google account does not match the inventory mailbox.",
+  GMAIL_READONLY_SCOPE_REQUIRED: "Reconnect Gmail with read-only mail access.",
+  GMAIL_CURSOR_EXPIRED: "Gmail history expired. The next check will safely recheck recent email.",
+  GMAIL_TEMPORARILY_UNAVAILABLE: "Gmail is temporarily unavailable. Automatic checks will retry.",
   AMBIGUOUS_VENDOR: "More than one vendor rule matched this file. Correct the source rules.",
   MULTIPLE_MATCHING_FILES: "Several files matched. Narrow the filename or download rule.",
   NO_MATCHING_FILE_OR_LINK: "No approved inventory file or download link matched this email.",
@@ -71,13 +77,14 @@ export default function AutomaticImportsPage() {
   const sourceName = (id: string) => sources.data?.items.find((s) => s.id === id)?.name ?? "Source unavailable";
   const connection = status.data;
   return <>
-    <PageHeader title="Automatic imports" lede="Receive vendor inventory from Microsoft 365 attachments or approved download links. New files use your saved import profiles; earlier inventory remains when no update arrives."
+    <PageHeader title="Automatic imports" lede="Receive vendor inventory from Gmail or Microsoft 365 attachments and approved download links. New files use your saved import profiles; earlier inventory remains when no update arrives."
       actions={canWrite ? <button className="button button--primary" type="button" onClick={() => setEditing("new")}>Add email source</button> : null} />
     <ErrorNote error={status.error ?? sources.error ?? history.error ?? poll.error ?? retry.error} />
     {notice ? <p role="status" className="note note--info">{notice}</p> : null}
     {status.isPending ? <Loading what="Checking mailbox connection" /> : null}
     {connection ? <section className="card">
       <h2>Inventory mailbox</h2>
+      {connection.mailbox ? <p className="muted">{connection.provider === "gmail" ? "Gmail" : "Microsoft 365"} · Read-only access</p> : null}
       {!connection.configured ? <Note tone="warn">Mailbox connection required. An administrator must configure read-only access to the inventory mailbox before automatic checks can run. You can prepare vendor sources below.</Note> : !connection.enabled ? <Note tone="warn">Mailbox configured; automatic checks are paused.</Note> : <Note tone="ok">Automatic checks enabled every {connection.poll_minutes} minutes. Files are imported when vendors send them.</Note>}
       <dl className="detail-grid"><div><dt>Mailbox</dt><dd>{connection.mailbox ?? "Not configured"}</dd></div><div><dt>Last check</dt><dd>{fmtDate(connection.last_poll_at)}</dd></div><div><dt>Last successful mailbox check</dt><dd>{fmtDate(connection.last_success_at)}</dd></div></dl>
       {connection.error_code ? <Note tone="warn">{reason(connection.error_code)}</Note> : null}

@@ -10,7 +10,7 @@ const source = {
   last_received_at: "2026-11-06T11:00:00Z", last_success_at: null, freshness: "awaiting_import",
 };
 
-async function mockApp(page: Page, role = "ADMIN", populated = false) {
+async function mockApp(page: Page, role = "ADMIN", populated = false, connection: Record<string, unknown> = {}) {
   const calls: { path: string; method: string; body: Record<string, unknown> | null }[] = [];
   await page.addInitScript(() => localStorage.setItem("prms.token", "test-credential"));
   await page.route("**/api/v1/**", async (route) => {
@@ -22,8 +22,8 @@ async function mockApp(page: Page, role = "ADMIN", populated = false) {
     if (path === "/auth/me") return route.fulfill({ json: { user_id: "user", organization_id: "org", email: "user@example.test", display_name: "User", roles: [role] } });
     if (path === "/health") return route.fulfill({ json: { status: "ok", dependencies: [] } });
     if (path === "/vendor-mail/status") return route.fulfill({ json: {
-      enabled: false, configured: false, mailbox: null, poll_minutes: 5,
-      missing_settings: ["VENDOR_MAIL_MAILBOX"], last_poll_at: null, last_success_at: null, error_code: null,
+      provider: "microsoft365", enabled: false, configured: false, mailbox: null, poll_minutes: 5,
+      missing_settings: ["VENDOR_MAIL_MAILBOX"], last_poll_at: null, last_success_at: null, error_code: null, ...connection,
     } });
     if (path === "/vendors") return route.fulfill({ json: { items: [{ id: "vendor", code: "UNIVERSAL", name: "Universal", is_active: true }], total: 1 } });
     if (path === "/vendors/vendor/import-profiles") return route.fulfill({ json: { items: [{ id: "profile", name: "Universal stock", version: 2, is_active: true }], total: 1 } });
@@ -34,6 +34,15 @@ async function mockApp(page: Page, role = "ADMIN", populated = false) {
   });
   return calls;
 }
+
+test("Gmail identifies the mailbox and explains a wrong-account grant without enabling checks", async ({ page }) => {
+  await mockApp(page, "ADMIN", false, { provider: "gmail", mailbox: "inventory@example.test", error_code: "GMAIL_MAILBOX_MISMATCH" });
+  await page.goto("/automatic-imports");
+  await expect(page.getByText("Gmail · Read-only access", { exact: true })).toBeVisible();
+  await expect(page.getByText("inventory@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("The authorized Google account does not match the inventory mailbox.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Check mailbox now" })).toBeDisabled();
+});
 
 test("unconfigured mailbox cannot be polled and source preparation defaults to paused", async ({ page }) => {
   const calls = await mockApp(page);

@@ -72,6 +72,7 @@ def connection_status(
         else None
     )
     return MailConnectionStatus(
+        provider=settings.vendor_mail_provider,
         enabled=settings.vendor_mail_enabled and belongs,
         configured=configured,
         mailbox=settings.vendor_mail_mailbox if belongs else None,
