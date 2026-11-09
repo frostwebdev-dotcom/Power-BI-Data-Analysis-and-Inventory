@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How Global Supplies PRMS accesses, uses and retains Gmail vendor inventory data, and how to disconnect or request deletion.">
+  <title>Privacy policy — Global Supplies PRMS</title>
+  <link rel="stylesheet" href="/public-info.css">
+</head>
+<body>
+  <header class="info-header">
+    <a class="info-brand" href="/app-info.html"><span class="info-mark" aria-hidden="true">PR</span><span>Global Supplies PRMS</span></a>
+    <nav aria-label="Public information"><a href="/app-info.html">Application information</a><a href="/">Sign in to PRMS</a></nav>
+  </header>
+  <main class="info-main">
+    <p class="info-eyebrow">Global Supplies PRMS</p>
+    <h1>Privacy policy</h1>
+    <p class="info-updated">Effective <time datetime="2026-11-09">November 9, 2026</time></p>
+    <p>This notice explains the Gmail vendor-inventory connection and the related import records in Global Supplies PRMS, an application operated for authorized Global Supplies staff. The <a href="/app-info.html">application information page</a> describes its inventory and catalogue features.</p>
+    <h2>Permission and information accessed</h2>
+    <p>The mailbox owner authorizes Google's <code>gmail.readonly</code> permission. This is read-only access to the authorized mailbox, rather than permission limited to a particular vendor. PRMS verifies that the authorized Gmail account matches the configured receiving mailbox.</p>
+    <p>PRMS reads message metadata, including sender, subject, receipt time and message identifiers, to identify approved vendor sources. Matched messages may have their bodies read to locate approved download links, and their attachments retrieved as vendor inventory files. Labels, sender addresses and file rules control which messages are processed; these filters do not change the underlying Google permission.</p>
+    <p>PRMS does not send email, change labels, or edit or delete messages in Gmail. Full email messages are not retained as an email archive. Delivery records retain identifiers, file names, receipt times, processing outcomes and references to inventory imports.</p>
+    <h2>How the information is used</h2>
+    <p>Google data is used to retrieve vendor inventory files, validate them with the selected import profile, match products to the catalogue, update vendor availability and show import results or problems to authorized staff. Delivery identifiers and processing history support duplicate detection, retries and troubleshooting.</p>
+    <p>Google data is not sold, used for advertising or used to train general-purpose artificial intelligence models. Human review is limited to authorized staff operating the inventory workflow and authorized administrators resolving support or import issues.</p>
+    <h2>Storage, access and service providers</h2>
+    <p>Original vendor files are retained unchanged in PRMS's configured file storage. Parsed inventory, delivery records, connection checkpoints and audit history are retained in its database. The deployed application uses Microsoft Azure for hosting and storage, and Microsoft Entra for staff sign-in. Google provides the authorized Gmail API connection.</p>
+    <p>Access to operational data requires an approved PRMS account and the applicable organization and role permissions. OAuth credentials are managed privately by authorized operators and held in deployment secret configuration; they are not exposed in the public application pages or inventory reports. Service providers process information as needed to operate this application.</p>
+    <h2>Retention and deletion requests</h2>
+    <p>Inventory files and related records are retained for the organization's inventory operations, import traceability and audit needs until an authorized administrator arranges their removal. Normal import processing does not automatically purge original files or audit history.</p>
+    <p>To request access to, correction of, or deletion of data obtained through the Gmail connection, contact your Global Supplies administrator or the user support email displayed on the Google authorization screen. The administrator will review the requested records, arrange the appropriate action and explain any records that must be retained for the organization's business or audit requirements.</p>
+    <h2>Disconnecting Gmail</h2>
+    <p>The mailbox owner can remove PRMS access in their <a href="https://myaccount.google.com/connections" rel="noreferrer">Google Account's third-party connections</a>. An administrator can also pause PRMS mailbox checks. Revoking access stops subsequent Gmail access; it does not automatically remove files or inventory records already imported. Request removal of those records separately through the administrator.</p>
+    <h2>Google API data commitments</h2>
+    <p>PRMS's use and transfer of information received from Google APIs follows the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noreferrer">Google API Services User Data Policy</a>, including its Limited Use requirements. Google data is used for the inventory features described here and shared only as needed to operate them.</p>
+    <h2>Contact and changes</h2>
+    <p>For privacy questions or support, use your existing Global Supplies administrator contact or the user support email shown during Google authorization. Material changes to these data practices will be reflected in this notice and communicated through the organization's administrators.</p>
+  </main>
+  <footer class="info-footer"><p>Global Supplies PRMS · <a href="/app-info.html">Application information</a> · <a href="/privacy.html">Privacy policy</a></p></footer>
+</body>
+</html>

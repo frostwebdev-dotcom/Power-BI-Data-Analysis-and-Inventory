@@ -59,6 +59,9 @@ export function SignIn() {
         <button type="submit" className="button button--primary" disabled={busy || authMode === "disabled"}>
           {busy ? "Signing in…" : authMode === "entra" ? "Sign in with Microsoft" : "Sign in"}
         </button>
+        <p className="muted">
+          <a href="/app-info.html">About PRMS</a> · <a href="/privacy.html">Privacy policy</a>
+        </p>
       </form>
     </div>
   );

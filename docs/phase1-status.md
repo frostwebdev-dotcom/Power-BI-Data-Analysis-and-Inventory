@@ -1,3 +1,18 @@
+> 2026-11-09 owner setup and public Branding follow-up: the owner supplied
+> terminal evidence of verified Gmail authorization on the mailbox owner's
+> computer, configured Azure secrets, and showed API revision `gmail-setup-1`
+> running with all traffic. The app recognizes Gmail configuration but checks
+> remain paused, with no email sources, deliveries or successful mailbox check.
+> Google still reports Testing; Publish app is disabled pending public Branding
+> URLs. Preparing static public application information and privacy documents,
+> links from sign-in and automatic imports, anonymous browser/route-isolation
+> coverage and deployment checks under ADR 0021. Local frontend lint, strict
+> TypeScript, production build and static-document link checks passed. Browser
+> regression and deployment for this follow-up are pending. Domain ownership, applicable Google verification,
+> production-issued authorization and vendor attachment/link acceptance remain
+> outstanding. These observations do not establish live ingestion or Milestone
+> 1 acceptance. Earlier entries below record prior states.
+>
 > Gmail connection bootstrap follow-up: prepared a local confidential-client
 > authorization helper and Windows launcher with loopback/state/PKCE validation,
 > exact mailbox/read-only-scope checks, real refresh verification and private

@@ -39,6 +39,7 @@ test("Gmail identifies the mailbox and explains a wrong-account grant without en
   await mockApp(page, "ADMIN", false, { provider: "gmail", mailbox: "inventory@example.test", error_code: "GMAIL_MAILBOX_MISMATCH" });
   await page.goto("/automatic-imports");
   await expect(page.getByText("Gmail · Read-only access", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Gmail data use and privacy" })).toHaveAttribute("href", "/privacy.html");
   await expect(page.getByText("inventory@example.test", { exact: true })).toBeVisible();
   await expect(page.getByText("The authorized Google account does not match the inventory mailbox.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check mailbox now" })).toBeDisabled();

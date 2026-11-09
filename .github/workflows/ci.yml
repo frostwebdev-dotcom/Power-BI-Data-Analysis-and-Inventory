@@ -388,6 +388,16 @@ jobs:
           printf '%s\n' "$headers" | tr -d '\r' | \
             grep -Fxi "access-control-allow-origin: $WEB_BASE_URL"
 
+      - name: Check public Google app information without authentication
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 \
+            --connect-timeout 10 --max-time 30 "$WEB_BASE_URL/app-info.html" | \
+            python -c 'import sys; page = sys.stdin.read(); assert "<h1>Global Supplies PRMS</h1>" in page and "href=\"/privacy.html\"" in page, "Public application information missing"'
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 \
+            --connect-timeout 10 --max-time 30 "$WEB_BASE_URL/privacy.html" | \
+            python -c 'import sys; page = sys.stdin.read(); assert "<h1>Privacy policy</h1>" in page and "Retention and deletion requests" in page, "Public privacy policy missing"'
+
       - name: Deployment summary
         run: |
           {
