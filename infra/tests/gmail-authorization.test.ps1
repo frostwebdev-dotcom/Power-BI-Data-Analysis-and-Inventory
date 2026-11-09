@@ -18,6 +18,9 @@ $gmailOutputFile = Join-Path $gmailTestDirectory "runtime.json"
 $gmailSavedClientSecret = [Environment]::GetEnvironmentVariable("VENDOR_MAIL_GMAIL_CLIENT_SECRET", "Process")
 $gmailSavedEnabled = [Environment]::GetEnvironmentVariable("VENDOR_MAIL_ENABLED", "Process")
 $gmailInitialLocation = (Get-Location).Path
+$gmailNativeExitVariable = Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+$gmailHadNativeExit = $null -ne $gmailNativeExitVariable
+$gmailSavedNativeExit = if ($gmailHadNativeExit) { $gmailNativeExitVariable.Value } else { $null }
 $global:gmailTestNativeCalls = 0
 $global:gmailTestNativeFailure = $false
 function global:Invoke-GmailTestPython {
@@ -75,4 +78,9 @@ finally {
     [Environment]::SetEnvironmentVariable("VENDOR_MAIL_ENABLED", $gmailSavedEnabled, "Process")
     Remove-Item -LiteralPath $gmailTestDirectory -Recurse -Force
     Remove-Item Function:\Invoke-GmailTestPython
+    if ($gmailHadNativeExit) {
+        Set-Variable -Name LASTEXITCODE -Scope Global -Value $gmailSavedNativeExit
+    } else {
+        Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+    }
 }
