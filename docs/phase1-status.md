@@ -1,3 +1,18 @@
+> 2026-11-09 Gmail adaptation: the client confirmed a consumer Gmail receiving
+> mailbox and supplied MTZ download-link/workbook and HAZ attachment examples.
+> Added an owner-authorized, read-only Gmail reader to the existing inventory
+> pipeline, provider-specific configuration/status, bounded metadata-first
+> routing and MIME downloads, durable initial/history pagination, safe cursor
+> recovery and explicit wrong-account/revoked-grant errors. Existing Microsoft
+> 365 checkpoints stay compatible; no database migration is required. Unknown
+> senders do not load message bodies, and malformed known-vendor files are held
+> for review without blocking later mail. Validation/release is in progress.
+> Live Gmail access, exact sender headers and the MTZ final download host remain
+> unverified; polling stays disabled. No mailbox grant, credential, source rule
+> or new inventory import was created from these setup samples. See
+> [ADR 0020](decisions/0020-gmail-vendor-inventory-intake.md) and the
+> [connection guide](vendor-mail-intake.md).
+>
 > 2026-11-07 vendor email intake deployment: released code
 > `4145feec84f020265046dbc9aad1d5958fb09bad` to both Azure staging apps through
 > [release #120](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42386823969).

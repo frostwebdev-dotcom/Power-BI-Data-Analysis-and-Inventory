@@ -100,6 +100,7 @@ class MailRetry(BaseModel):
 
 
 class MailConnectionStatus(BaseModel):
+    provider: Literal["microsoft365", "gmail"] = "microsoft365"
     enabled: bool
     configured: bool
     mailbox: str | None

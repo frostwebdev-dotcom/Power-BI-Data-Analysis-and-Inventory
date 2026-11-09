@@ -130,13 +130,18 @@ class Settings(BaseSettings):
             and self.nineyard_company_id is not None
         )
 
-    # --- Microsoft 365 vendor inventory intake (ADR 0019) --------------------
+    # --- Read-only vendor inventory intake (ADRs 0019/0020) ------------------
     vendor_mail_enabled: bool = False
+    vendor_mail_provider: Literal["microsoft365", "gmail"] = "microsoft365"
     vendor_mail_tenant_id: UUID | None = None
     vendor_mail_client_id: UUID | None = None
     vendor_mail_client_secret: SecretStr | None = None
     vendor_mail_mailbox: str | None = None
     vendor_mail_folder_id: str = "Inbox"
+    vendor_mail_gmail_client_id: str | None = None
+    vendor_mail_gmail_client_secret: SecretStr | None = None
+    vendor_mail_gmail_refresh_token: SecretStr | None = None
+    vendor_mail_gmail_label_id: str = "INBOX"
     vendor_mail_organization_slug: str | None = None
     vendor_mail_poll_minutes: int = Field(default=5, ge=1, le=1440)
     vendor_mail_lookback_hours: int = Field(default=24, ge=1, le=168)
@@ -149,6 +154,9 @@ class Settings(BaseSettings):
         "vendor_mail_client_secret",
         "vendor_mail_mailbox",
         "vendor_mail_organization_slug",
+        "vendor_mail_gmail_client_id",
+        "vendor_mail_gmail_client_secret",
+        "vendor_mail_gmail_refresh_token",
         mode="before",
     )
     @classmethod
@@ -157,10 +165,21 @@ class Settings(BaseSettings):
 
     @property
     def vendor_mail_missing_settings(self) -> list[str]:
+        credentials = (
+            (
+                "vendor_mail_gmail_client_id",
+                "vendor_mail_gmail_client_secret",
+                "vendor_mail_gmail_refresh_token",
+            )
+            if self.vendor_mail_provider == "gmail"
+            else (
+                "vendor_mail_tenant_id",
+                "vendor_mail_client_id",
+                "vendor_mail_client_secret",
+            )
+        )
         names = (
-            "vendor_mail_tenant_id",
-            "vendor_mail_client_id",
-            "vendor_mail_client_secret",
+            *credentials,
             "vendor_mail_mailbox",
             "vendor_mail_organization_slug",
         )

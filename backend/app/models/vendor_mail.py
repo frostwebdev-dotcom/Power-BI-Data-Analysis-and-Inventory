@@ -73,7 +73,7 @@ class VendorMailDelivery(UUIDPrimaryKeyMixin, OrganizationScopedMixin, Timestamp
     profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("vendor_import_profiles.id", ondelete="RESTRICT")
     )
-    message_id: Mapped[str]  # Opaque Graph immutable ID; no body/subject retained.
+    message_id: Mapped[str]  # Opaque provider message ID; no body/subject retained.
     item_key: Mapped[str] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(20))
     attachment_id: Mapped[str | None]

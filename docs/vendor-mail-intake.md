@@ -2,6 +2,21 @@
 
 Implementation, 2026-11-06. Live mailbox connection and acceptance remain pending.
 
+## Gmail adaptation — 2026-11-09
+
+The client has confirmed a consumer Gmail mailbox and supplied both MTZ
+download-link and HAZ attachment examples. ADR 0020 adds a read-only Gmail
+reader behind the existing delivery/import pipeline. Microsoft 365 remains the
+default provider; its existing checkpoint identities are preserved. No schema
+change is required. Gmail validation/release status is tracked in phase1-status.
+
+The provided workbooks can be inspected; neither has been imported as new stock
+as part of email-connection setup. The MTZ tracking hostname could not resolve
+from this workspace, so its redirect chain/final file host remain unverified.
+The screenshot does not expose original sender headers. Do not invent sender
+rules or enable the link source until the original emails can be checked.
+No Gmail grant, product OAuth credential or live source has been created.
+
 Verified code: `1fca44d27bb202abf3755466e47a0df3ab7d81a2` passed all 1,381
 backend tests and all 20 browser tests, including the real PostgreSQL pipeline,
 migration/schema agreement and Compose stack. Backend/frontend lint, strict
@@ -54,13 +69,13 @@ No older retry overwrites newer inventory. Failures and unconfigured/ambiguous
 links remain visible; unknown messages do not route to an arbitrary vendor.
 Read-only users cannot change sources. No mail is sent, modified or deleted.
 
-Required live inputs: exact Microsoft 365 mailbox and folder; administrator
-approved/scoped Mail.Read access for a separate unattended integration; sample
-vendor sender addresses, attachment names and download-link emails. Do not
+Required live inputs: the chosen mailbox/label or folder; owner-authorized Gmail
+read-only offline access or administrator-scoped Microsoft 365 Mail.Read;
+original vendor sender headers, attachment names and download-link emails. Do not
 send passwords/client secrets in chat. Portal-login flows require inspection
 and explicit configuration and are not guessed from an email link.
 
-## Operator setup
+## Microsoft 365 operator setup
 
 1. Apply migration `a61106202601` before deploying/using the new routes. No
    existing vendor import, mapping, inventory or user row is changed by it.
@@ -73,7 +88,8 @@ and explicit configuration and are not guessed from an email link.
 3. Set VENDOR_MAIL_TENANT_ID, VENDOR_MAIL_CLIENT_ID, VENDOR_MAIL_CLIENT_SECRET,
    VENDOR_MAIL_MAILBOX and VENDOR_MAIL_ORGANIZATION_SLUG privately in runtime
    configuration. Set VENDOR_MAIL_FOLDER_ID if using a dedicated folder rather
-   than Inbox. Microsoft personal accounts and IMAP/Gmail are not this adapter.
+   than Inbox. Select `VENDOR_MAIL_PROVIDER=microsoft365` (the default).
+   Microsoft personal accounts and IMAP are not supported by this reader.
 4. In **Automatic imports**, add a source per vendor file layout/worksheet.
    Select a sample-validated, header-pinned active import profile. Configure
    exact sender addresses and a narrow attachment filename pattern; use a
@@ -92,6 +108,48 @@ and explicit configuration and are not guessed from an email link.
    import report, profile version, retained hash and stock. Repeat the same
    email/file and confirm DUPLICATE rather than additional snapshots. Spectrum
    uses two source rules for its two profiles and one retained workbook.
+
+## Gmail operator setup
+
+1. In a client-owned Google Cloud project, enable the Gmail API and configure
+   the OAuth app/client for an owner-approved server-side authorization flow.
+   Request only `https://www.googleapis.com/auth/gmail.readonly`, with
+   `access_type=offline`. Use the app's registered redirect URI, state validation
+   and Google's supported authorization-code flow. Obtain the refresh token
+   through that private flow, never a password, chat message or browser console.
+   Follow [Google's server-side guide](https://developers.google.com/identity/protocols/oauth2/web-server).
+2. Confirm the app's publishing/verification requirements before unattended use.
+   External **Testing** grants with Gmail scopes expire after seven days.
+   Do not claim durable daily operation based only on a Testing grant. Consumer
+   Gmail is not authorized by Workspace domain-wide delegation or Entra consent.
+3. Set these private backend runtime variables while polling is disabled:
+   `VENDOR_MAIL_PROVIDER=gmail`, `VENDOR_MAIL_GMAIL_CLIENT_ID`,
+   `VENDOR_MAIL_GMAIL_CLIENT_SECRET`, `VENDOR_MAIL_GMAIL_REFRESH_TOKEN`,
+   `VENDOR_MAIL_MAILBOX` and `VENDOR_MAIL_ORGANIZATION_SLUG`. No Google credential
+   goes in a frontend variable. The reader checks the authorized profile email
+   against the configured mailbox before accessing messages.
+4. Set `VENDOR_MAIL_GMAIL_LABEL_ID=INBOX` (default) or an exact Gmail label ID.
+   Use an empty string to include received mail across labels if vendor mail is
+   automatically archived. Sent, draft, spam and trash messages are excluded.
+   Microsoft tenant/folder credentials are unnecessary for Gmail.
+5. Follow the source, host verification and live acceptance steps 4–7 above.
+   Get each vendor's real From address and distinguish stock emails from other
+   messages. The client can forward the original emails as `.eml` attachments
+   for inspection; forwarding a screenshot or a downloaded workbook alone
+   does not preserve the sender and actual download-button destination.
+6. Observe one authorized attachment and one approved download importing with
+   pinned profiles; replay and refresh the grant without another login. A revoked
+   or expired grant displays `GMAIL_AUTHORIZATION_REQUIRED`. A different account
+   displays `GMAIL_MAILBOX_MISMATCH`; neither can import stock.
+
+Gmail captures a history anchor before listing initial mail, keeps it across
+pages/restarts, and then requests message-added history. A lost history/page
+cursor replays from the retained initial lower bound. Gmail labels are filters,
+not OAuth permission boundaries: the read-only grant covers that mailbox, while
+only configured vendor messages are routed into inventory. Neither provider
+loads email images or passes mailbox credentials to vendor downloads.
+
+## Shared operating behavior
 
 New sources start at their creation time; they do not silently backfill old
 mail. Unknown senders are ignored. The cursor survives restarts. Page retries
@@ -114,7 +172,7 @@ are superseded, and previously seen content reappearing after a newer different
 file requires review. Missing mail never clears inventory. The UI separately
 shows file receipt and successful processing, using email receipt timestamps.
 
-No email bodies, subjects, raw signed links, OAuth tokens or Graph cursor URLs
+No email bodies, subjects, raw signed links, OAuth tokens or private cursors
 are exposed through the history API or audit trail. Mail is read only: this
 feature never sends, marks read, moves or deletes messages. The mailbox-scoped
 PostgreSQL advisory lock prevents concurrent polls by replicas. Recommended

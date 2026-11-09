@@ -23,6 +23,7 @@ class MailMessage:
     received_at: datetime
     has_attachments: bool = False
     body: str = ""
+    body_loaded: bool = True
 
 
 @dataclass(frozen=True)

@@ -51,7 +51,7 @@ class GraphMailReader:
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        if not settings.vendor_mail_configured:
+        if settings.vendor_mail_provider != "microsoft365" or not settings.vendor_mail_configured:
             raise IntakeError("MAILBOX_NOT_CONFIGURED")
         self.settings = settings
         self.root = f"{GRAPH}/users/{quote(settings.vendor_mail_mailbox or '', safe='')}"
