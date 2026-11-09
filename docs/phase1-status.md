@@ -1,3 +1,16 @@
+> Gmail connection bootstrap follow-up: prepared a local confidential-client
+> authorization helper and Windows launcher with loopback/state/PKCE validation,
+> exact mailbox/read-only-scope checks, real refresh verification and private
+> non-overwriting runtime output outside Git. No new dependency, public callback,
+> database token store or automatic Azure configuration write was added. The
+> helper leaves polling false and reads only the Google profile during setup.
+> Twenty focused authorization tests passed locally; full/Windows CI is pending.
+> Google Cloud Console returned Site Unavailable in this cloud browser after one
+> reload, so no project/client/grant or real token could be created. Client-owned
+> OAuth configuration, owner consent, original sender emails and live acceptance
+> remain pending. The existing deployed importer remains available. See the
+> [local connection walkthrough](gmail-connection-setup.md).
+>
 > 2026-11-09 Gmail adaptation: the client confirmed a consumer Gmail receiving
 > mailbox and supplied MTZ download-link/workbook and HAZ attachment examples.
 > Added an owner-authorized, read-only Gmail reader to the existing inventory

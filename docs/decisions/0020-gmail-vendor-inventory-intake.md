@@ -37,6 +37,19 @@ Google's external Testing refresh tokens with Gmail scopes expire after seven
 days. Confirm an appropriate publishing/verification configuration before
 claiming a durable unattended connection. Revoked/expired grants fail visibly.
 
+Provide a one-time local setup command for the confidential web OAuth client.
+Its registered redirect is `http://127.0.0.1:8765/oauth/callback`; Google permits
+loopback redirects for this flow. The operator runs it on their own computer,
+using existing typed environment settings. Bind IPv4 loopback only, validate
+state and PKCE, and verify the exact mailbox and read-only scope before retaining
+the refresh token. Never print credentials or callback codes. Write a new private
+JSON mapping of runtime environment variables outside any Git checkout, with
+polling explicitly false; do not overwrite existing files or change Azure secrets
+automatically. The helper cannot run its callback in a separate cloud browser.
+This closes the manual bootstrap gap without adding public callback routes or
+database token storage. A Google Cloud access failure does not justify using
+another person's account or guessing OAuth credentials.
+
 Acceptance requires real authorized emails from verified vendor senders: one
 attachment and one approved public download, duplicate replay and observed
 refresh without further login. No live import is inferred from a workbook sample
