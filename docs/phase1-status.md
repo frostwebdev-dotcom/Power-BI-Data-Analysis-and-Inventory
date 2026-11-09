@@ -6,7 +6,15 @@
 > recovery and explicit wrong-account/revoked-grant errors. Existing Microsoft
 > 365 checkpoints stay compatible; no database migration is required. Unknown
 > senders do not load message bodies, and malformed known-vendor files are held
-> for review without blocking later mail. Validation/release is in progress.
+> for review without blocking later mail. All 1,406 backend tests and 21 browser
+> tests passed, including PostgreSQL imports, migration/schema agreement, cursor
+> recovery, tenant/role isolation and Compose workflows. Lint, strict types,
+> production builds and Windows storage checks also passed. Merged PR #19 as
+> `cb9fac36e1d358f044dcffc6de40847d30f33f1f` and deployed both apps through
+> [release #125](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42551624969).
+> API/web revisions end in `--gh-42551624969-1`; both became Healthy, and release
+> API/database, web, Entra configuration and CORS checks passed. Runtime mailbox
+> credentials and source settings were not changed by this release.
 > Live Gmail access, exact sender headers and the MTZ final download host remain
 > unverified; polling stays disabled. No mailbox grant, credential, source rule
 > or new inventory import was created from these setup samples. See

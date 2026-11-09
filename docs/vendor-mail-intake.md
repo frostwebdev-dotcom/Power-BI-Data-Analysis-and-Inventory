@@ -8,7 +8,15 @@ The client has confirmed a consumer Gmail mailbox and supplied both MTZ
 download-link and HAZ attachment examples. ADR 0020 adds a read-only Gmail
 reader behind the existing delivery/import pipeline. Microsoft 365 remains the
 default provider; its existing checkpoint identities are preserved. No schema
-change is required. Gmail validation/release status is tracked in phase1-status.
+change is required. PR #19 was merged as
+`cb9fac36e1d358f044dcffc6de40847d30f33f1f` and deployed to both Azure staging
+apps by [release #125](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42551624969).
+All 1,406 backend tests, 21 browser tests, lint, strict types, builds,
+PostgreSQL migration/schema checks and Windows storage checks passed. Both new
+revisions (`--gh-42551624969-1`) became Healthy; API/database, web, Entra
+configuration and CORS checks passed. This release did not change runtime
+mailbox credentials or source settings. Interactive Microsoft sign-in was not
+repeated for a live signed-in source/history inspection in this session.
 
 The provided workbooks can be inspected; neither has been imported as new stock
 as part of email-connection setup. The MTZ tracking hostname could not resolve
