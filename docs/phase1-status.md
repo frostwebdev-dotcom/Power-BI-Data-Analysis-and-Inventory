@@ -1,17 +1,24 @@
-> 2026-11-09 owner setup and public Branding follow-up: the owner supplied
-> terminal evidence of verified Gmail authorization on the mailbox owner's
-> computer, configured Azure secrets, and showed API revision `gmail-setup-1`
-> running with all traffic. The app recognizes Gmail configuration but checks
-> remain paused, with no email sources, deliveries or successful mailbox check.
-> Google still reports Testing; Publish app is disabled pending public Branding
-> URLs. Preparing static public application information and privacy documents,
-> links from sign-in and automatic imports, anonymous browser/route-isolation
-> coverage and deployment checks under ADR 0021. Local frontend lint, strict
-> TypeScript, production build and static-document link checks passed. Browser
-> regression and deployment for this follow-up are pending. Domain ownership, applicable Google verification,
-> production-issued authorization and vendor attachment/link acceptance remain
-> outstanding. These observations do not establish live ingestion or Milestone
-> 1 acceptance. Earlier entries below record prior states.
+> 2026-11-09 public Google Branding release: PR #21 is merged at
+> `799472f47a3b7a9151397b5447f513f32c0b9048`. CI #134 and the manual
+> [staging release #136](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42667199712)
+> passed all checks: 1,426 backend tests, 23 browser tests, frontend lint/types/build,
+> PostgreSQL/schema/Compose checks and Windows PowerShell/storage checks.
+> API and web revisions `gh-42667199712-1` became Healthy; health, Microsoft
+> sign-in configuration, CORS and both unauthenticated public-document checks
+> passed. Browser review confirmed the application homepage and its privacy link
+> at `/app-info.html` and `/privacy.html` on the existing staging frontend.
+> Static documents work without JavaScript; private operational routes remain
+> guarded. The deployment updates images without replacing private Gmail settings.
+>
+> The owner previously showed verified Gmail setup on the mailbox owner's computer,
+> Azure secret configuration and revision `gmail-setup-1` running with all traffic.
+> The app recognized Gmail configuration with polling paused, no sources, deliveries
+> or successful mailbox check. Google still showed Testing and a disabled Publish
+> app control. The public pages are now deployed, but Google publishing, an owned
+> authorized domain and applicable verification, a fresh production-issued grant,
+> real attachment/link acceptance and unattended polling remain unverified.
+> Do not claim Microsoft's shared domain or infer live ingestion or Milestone 1
+> acceptance from this release. Earlier entries below record prior states.
 >
 > Gmail connection bootstrap follow-up: prepared a local confidential-client
 > authorization helper and Windows launcher with loopback/state/PKCE validation,

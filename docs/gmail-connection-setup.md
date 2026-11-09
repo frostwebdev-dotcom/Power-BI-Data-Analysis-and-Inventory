@@ -49,8 +49,15 @@ dashboard alone does not meet Google's public homepage requirements.
 The public-information release adds `/app-info.html` and `/privacy.html` on the
 existing frontend. Both are static HTML documents, readable without sign-in or
 JavaScript, and contain no private inventory or mailbox records. They are also
-linked from sign-in and automatic imports. After deploying and checking that
-release, use these paths as the homepage and privacy-policy URLs respectively.
+linked from sign-in and automatic imports. Release #136 (9 November 2026) deployed
+these pages and passed unauthenticated checks; browser review confirmed both.
+The deployed page URLs are:
+
+- https://ca-prms-web-staging.thankfulground-2dc62bbd.eastus2.azurecontainerapps.io/app-info.html
+- https://ca-prms-web-staging.thankfulground-2dc62bbd.eastus2.azurecontainerapps.io/privacy.html
+
+Use them as the homepage and privacy-policy page locations only in conjunction
+with Google's applicable authorized-domain requirements described below.
 Do not enter a fabricated terms URL; no terms document is supplied by this change.
 
 Successful hosting does not establish authorized-domain ownership or Google
@@ -144,9 +151,10 @@ running with all traffic. The app now displays Gmail configured with automatic
 checks paused, no sources, and no successful mailbox check yet.
 
 The Google project still shows Testing. Publishing is blocked by missing public
-Branding URLs. The public-information pages are being prepared for deployment;
-their existence alone does not prove Google publishing, domain verification or
-live email-import acceptance. No credentials have been supplied to this chat.
+Branding URLs in the latest owner screenshot. Public-information pages are now
+deployed and verified in release #136, but no later Google publishing result has
+been observed. Their existence alone does not prove Google publishing, domain
+verification or live email-import acceptance. No credentials have been supplied to this chat.
 
 Earlier cloud-browser attempts to open Google Cloud Console returned **Site
 Unavailable**; the owner successfully used their own browser instead. That
