@@ -71,6 +71,8 @@ class ReadOptions:
     skip_rows: int = 0
     sheet_name: str | None = None
     sheet_index: int | None = None
+    strict_row_width: bool = False
+    strict_csv_quoting: bool = False
 
 
 @dataclass(slots=True)
@@ -199,15 +201,21 @@ def _open_csv(content: bytes, options: ReadOptions) -> RowStream:
         io.StringIO(text, newline=""),
         delimiter=delimiter,
         quotechar=options.quote_char or '"',
+        strict=options.strict_csv_quoting,
     )
 
     def numbered() -> Iterator[tuple[int, list[str]]]:
         # A record may span lines when quoted; it is numbered by the line it
         # starts on, which is the line a person would look for.
         last_line = 0
-        for record in reader:
-            yield last_line + 1, record
-            last_line = reader.line_num
+        try:
+            for record in reader:
+                yield last_line + 1, record
+                last_line = reader.line_num
+        except csv.Error as exc:
+            raise UnreadableFile(
+                f"CSV quoting or field error near physical line {reader.line_num}"
+            ) from exc
 
     stream = _assemble(numbered(), options, encoding=encoding)
     if eof_markers:
@@ -371,6 +379,8 @@ def _assemble(
             if not any(cell.strip() for cell in cells):
                 yield SourceRow(row_number=number, cells=[""] * width, is_blank=True)
                 continue
+            if options.strict_row_width and len(cells) != width:
+                raise UnreadableFile(f"row {number} has {len(cells)} cells for {width} headers")
             # Pad or trim to the header width so every row is addressable by column.
             if len(cells) < width:
                 cells.extend([""] * (width - len(cells)))
