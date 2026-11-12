@@ -11,9 +11,14 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   worked example returning 20 units/day, 280 required units and 210 suggested units.
 - All 1,000 local unit tests passed, including 61 new quantity/CLI cases.
 - Backend Ruff and strict mypy passed (216 source files). The CLI example ran
-  successfully without a database or credentials. Full PostgreSQL/browser CI
-  remains pending; no integration-test success is inferred from unit tests.
-- Draft PR preparation is in progress. Nothing has been merged or deployed.
+  successfully without a database or credentials.
+- Code commit `d3e13b493cb3a41e2db1dd1121ac760df8911daf` passed
+  [CI #139](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/43148423639):
+  1,487 backend tests including PostgreSQL integration, 23 browser tests,
+  backend/frontend lint and strict types, builds, migration/schema/Compose and
+  Windows PowerShell/storage checks. Deployment was skipped as intended.
+- [Draft PR #22](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/pull/22)
+  contains the first module. Nothing has been merged or deployed.
 
 ## Remaining Milestone 2 work
 
