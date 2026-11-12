@@ -108,6 +108,11 @@ JSON numbers. No credentials, network connection or database are required.
 
 ## Dependencies before the next deliverables
 
+An explicitly mapped, non-persistent financial CSV preview is the second
+increment; see [profitability-csv-preview.md](profitability-csv-preview.md) and
+ADR 0023. Its synthetic fixture does not establish a real ConnectBooks layout,
+cost basis, canonical SKU binding or persisted profitability import.
+
 - A real ConnectBooks CSV, with reporting dates, currency and per-unit versus
   period-total cost semantics. Do not fabricate a production import mapping.
 - Purchasing-manager decisions on target coverage, velocity window, lead time,
