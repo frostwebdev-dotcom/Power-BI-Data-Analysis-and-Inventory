@@ -128,6 +128,7 @@ def check_amazon_readiness(
     request: AmazonReadinessRequest,
     *,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    lock_sources: bool = False,
 ) -> AmazonReadinessResponse:
     principal.require_roles(
         (RoleCode.ADMIN, RoleCode.PURCHASING_MANAGER, RoleCode.DATA_OPERATOR, RoleCode.VIEWER)
@@ -136,7 +137,9 @@ def check_amazon_readiness(
     if at.tzinfo is None or at.utcoffset() is None:
         raise ValueError("Evaluation time must be timezone-aware")
     at = at.astimezone(UTC)
-    repository = AmazonReadinessRepository(session, principal.organization_id)
+    repository = AmazonReadinessRepository(
+        session, principal.organization_id, lock_sources=lock_sources
+    )
     product = repository.product(request.product_id)
     if product is None:
         raise ReadinessProductNotFound()

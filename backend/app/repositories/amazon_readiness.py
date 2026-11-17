@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import Session, aliased
 
 from app.models.amazon import AmazonInventorySnapshot, AmazonOrderLine, AmazonSyncRun
 from app.models.catalog import MarketplaceListing, Product
@@ -18,6 +18,10 @@ MAX_ORDER_LINES = 50000
 
 
 class AmazonReadinessRepository(ScopedRepository):
+    def __init__(self, session: Session, organization_id: uuid.UUID, *, lock_sources: bool = False):
+        super().__init__(session, organization_id)
+        self.lock_sources = lock_sources
+
     def product(self, identifier: uuid.UUID) -> Product | None:
         row = self.session.scalar(
             self.select(Product).where(Product.id == identifier).with_for_update(read=True)
@@ -40,25 +44,24 @@ class AmazonReadinessRepository(ScopedRepository):
         )
 
     def runs(self, marketplace: str, job: AmazonSyncJobType) -> list[AmazonSyncRun]:
-        return list(
-            self.session.scalars(
-                self.select(AmazonSyncRun)
-                .where(AmazonSyncRun.marketplace_id == marketplace, AmazonSyncRun.job_type == job)
-                .order_by(AmazonSyncRun.started_at.desc().nulls_last(), AmazonSyncRun.id)
-                .limit(MAX_RUNS + 1)
-            )
+        query = (
+            self.select(AmazonSyncRun)
+            .where(AmazonSyncRun.marketplace_id == marketplace, AmazonSyncRun.job_type == job)
+            .order_by(AmazonSyncRun.started_at.desc().nulls_last(), AmazonSyncRun.id)
+            .limit(MAX_RUNS + 1)
         )
+        if self.lock_sources:
+            query = query.with_for_update(read=True).execution_options(populate_existing=True)
+        return list(self.session.scalars(query))
 
     def snapshots(self, run_id: uuid.UUID, skus: set[str]) -> dict[str, AmazonInventorySnapshot]:
-        return {
-            row.seller_sku: row
-            for row in self.session.scalars(
-                self.select(AmazonInventorySnapshot).where(
-                    AmazonInventorySnapshot.sync_run_id == run_id,
-                    AmazonInventorySnapshot.seller_sku.in_(skus),
-                )
-            )
-        }
+        query = self.select(AmazonInventorySnapshot).where(
+            AmazonInventorySnapshot.sync_run_id == run_id,
+            AmazonInventorySnapshot.seller_sku.in_(skus),
+        )
+        if self.lock_sources:
+            query = query.with_for_update(read=True).execution_options(populate_existing=True)
+        return {row.seller_sku: row for row in self.session.scalars(query)}
 
     def orders(
         self, marketplace: str, skus: set[str], start: datetime, end: datetime
@@ -82,4 +85,10 @@ class AmazonReadinessRepository(ScopedRepository):
             .order_by(AmazonOrderLine.id)
             .limit(MAX_ORDER_LINES + 1)
         )
+        if self.lock_sources:
+            # The joined run is nullable; PostgreSQL cannot lock that side of an
+            # outer join. Relevant run rows were locked by runs() above.
+            query = query.with_for_update(read=True, of=AmazonOrderLine).execution_options(
+                populate_existing=True
+            )
         return [(row[0], row[1]) for row in self.session.execute(query)]

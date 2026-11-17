@@ -877,3 +877,19 @@ commit with audit events. Latest non-draft decision selects the approved snapsho
 a later draft does not revoke it. No row authorizes purchases or certifies current
 data. Downgrade refuses to discard recorded policy history. The complete empty
 schema now has 33 business tables plus alembic_version, 23 enums and 14 triggers.
+
+## Milestone 2 saved replenishment evaluations
+
+Migration a61117202605 adds replenishment_recommendations: an immutable UUID
+snapshot with organization, current policy approval, product/vendor-product,
+marketplace, actor/time/reason, client request UUID and request/evidence/content
+digests. A unique organization/request key supports exact successful retries.
+Policy/recorded-time indexing supports bounded history; snapshots retain the
+approved definition, identity/source evidence and per-pool inputs/results.
+Supplier/profitability adapters remain unintegrated; no record authorizes a purchase.
+
+The insert guard serializes with policy review and requires the scoped current
+approval, matching snapshot references, active actor/organization and valid
+chronology. A second trigger refuses updates/deletes; downgrade refuses to
+discard snapshots. The schema now has 34 business tables plus alembic_version
+(35 total), 23 enums and 16 triggers.

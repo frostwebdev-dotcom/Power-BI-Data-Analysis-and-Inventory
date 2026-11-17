@@ -92,6 +92,10 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/purchasing-policies/{policy_id}/revisions",
         "/api/v1/purchasing-policies/{policy_id}/review-preview",
         "/api/v1/purchasing-policies/{policy_id}/reviews",
+        "/api/v1/purchasing-policies/{policy_id}/recommendation-preview",
+        "/api/v1/purchasing-policies/{policy_id}/recommendations",
+        "/api/v1/replenishment-recommendations",
+        "/api/v1/replenishment-recommendations/{identifier}",
         "/api/v1/financial-imports",
         "/api/v1/financial-imports/{identifier}",
         "/api/v1/financial-imports/{identifier}/rows",
@@ -142,6 +146,7 @@ def test_every_vendor_route_documents_403(client: TestClient) -> None:
                 "/api/v1/amazon",
                 "/api/v1/vendor-mail",
                 "/api/v1/purchasing-policies",
+                "/api/v1/replenishment-recommendations",
             )
         ):
             continue

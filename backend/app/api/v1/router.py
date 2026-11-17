@@ -21,6 +21,7 @@ from app.api.v1.routes import (
     imports,
     products,
     purchasing_policies,
+    recommendations,
     vendor_mail,
     vendors,
     watchlist,
@@ -37,6 +38,7 @@ api_router.include_router(imports.router)
 api_router.include_router(financial_imports.router)
 api_router.include_router(products.router)
 api_router.include_router(purchasing_policies.router)
+api_router.include_router(recommendations.router)
 api_router.include_router(exceptions.router)
 api_router.include_router(watchlist.router)
 api_router.include_router(watchlist.availability_router)

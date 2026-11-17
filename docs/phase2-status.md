@@ -178,15 +178,34 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   against the source in draft PR #22. No client policy, recommendation calculation,
   financial upload, migration, merge or deployment is included in this increment.
 
+## Eleventh deliverable: saved replenishment evaluations
+
+- ADR 0032 and [the evaluation guide](replenishment-recommendations.md) connect
+  current manager approvals to Amazon readiness and exact per-pool quantity
+  calculations, with scoped preview/record/history/detail APIs.
+- Immutable snapshots preserve reviewed policy, current mapping evidence,
+  run/snapshot references, normalized inputs, blockers and replayable arithmetic.
+  New drafts preserve approval; revoked/replaced approvals are refused.
+- Recording rechecks preview evidence. Reason/acknowledgement and request UUID
+  support review and exact retries; snapshot and audit commit atomically.
+  Migration a61117202605 preserves immutable history.
+- Supplier availability/quantity and profitability are explicitly not integrated.
+  Positive shortfalls retain required/uncapped quantities but no usable order
+  suggestion. Unknown inbound stays blocked; clean zero shortfalls may show
+  NO_REORDER. Every result remains purchasing-ineligible.
+- Local and full PostgreSQL/migration/regression evidence are recorded against
+  the source in draft PR #22. No new UI, client policy/financial upload,
+  live sync, merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
-  merchant inbound), integrated recommendations and three-real-SKU acceptance.
+  merchant inbound), supplier-aware recommendations and three-real-SKU acceptance.
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
-- Audited recommendation snapshots using reviewed policy plus independently
-  verified current source data.
+- Supplier availability/unit/freshness constraints and financial context in saved
+  recommendations, and the staff recommendation review interface.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
 

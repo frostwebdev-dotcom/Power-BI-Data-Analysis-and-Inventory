@@ -97,7 +97,7 @@ def _root(
     return root
 
 
-def _actor(repository: PurchasingPolicyRepository, actor: Principal) -> None:
+def validate_actor(repository: PurchasingPolicyRepository, actor: Principal) -> None:
     user = repository.owned(User, actor.user_id)
     # Organizations are the scope itself, not organization-owned records.
     organization = repository.session.scalar(
@@ -232,7 +232,7 @@ def create_policy(
         with transaction(session):
             amazon = payload.definition.amazon
             repository.lock(amazon.product_id, payload.vendor_product_id, amazon.marketplace_id)
-            _actor(repository, actor)
+            validate_actor(repository, actor)
             _identities(repository, amazon.product_id, payload.vendor_product_id)
             row = _record(
                 repository,
@@ -259,7 +259,7 @@ def record_draft(
     try:
         with transaction(session):
             root = _root(repository, identifier, lock=True)
-            _actor(repository, actor)
+            validate_actor(repository, actor)
             head = repository.head(identifier)
             if payload.expected_head_id != head.id:
                 raise PolicyConflict(details={"code": "POLICY_HEAD_CHANGED"})
@@ -294,7 +294,11 @@ def _reference(value: str | None) -> bool:
 
 
 def _review(
-    repository: PurchasingPolicyRepository, root: PurchasingPolicyRevision, action: Action
+    repository: PurchasingPolicyRepository,
+    root: PurchasingPolicyRevision,
+    action: Action,
+    *,
+    revalidate_approval: bool = False,
 ) -> PolicyReviewPreview:
     head = repository.head(root.id)
     decision = repository.decision(root.id)
@@ -335,8 +339,8 @@ def _review(
         "mapping_approver_ids": sorted(str(identifier) for identifier in approvers),
     }
     blocked: set[str] = set()
-    if action == "APPROVE":
-        if head.kind != "DRAFT":
+    if action == "APPROVE" or revalidate_approval:
+        if action == "APPROVE" and head.kind != "DRAFT":
             blocked.add("CURRENT_HEAD_NOT_DRAFT")
         if not product.is_active or product.status != ProductStatus.ACTIVE:
             blocked.add("PRODUCT_INACTIVE")
@@ -410,7 +414,7 @@ def preview_review(
     actor.require_roles(REVIEW)
     repository = PurchasingPolicyRepository(session, actor.organization_id)
     root = _root(repository, identifier, lock=True)
-    _actor(repository, actor)
+    validate_actor(repository, actor)
     return _review(repository, root, action)
 
 
@@ -422,7 +426,7 @@ def record_review(
     try:
         with transaction(session):
             root = _root(repository, identifier, lock=True)
-            _actor(repository, actor)
+            validate_actor(repository, actor)
             preview = _review(repository, root, payload.action)
             if (
                 payload.expected_head_id != preview.expected_head_id
@@ -453,4 +457,91 @@ def record_review(
         if getattr(exc.orig, "sqlstate", None) != "23505":
             raise
         raise PolicyConflict(details={"code": "POLICY_CHANGED"}) from None
+    return result
+
+
+def calculation_policy(
+    session: Session, actor: Principal, identifier: uuid.UUID, expected_approval: uuid.UUID
+) -> tuple[PolicyRevisionResponse, dict[str, Any], tuple[str, ...]]:
+    """Lock the stream and compare identity evidence to its current approval.
+
+    A later draft is deliberately ignored. Descriptions, prices and last-seen
+    timestamps are not mapping identity; none can renew or revoke an approval.
+    Callers retain the transaction until evaluation/recording has finished.
+    """
+    actor.require_roles(READ)
+    repository = PurchasingPolicyRepository(session, actor.organization_id)
+    root = _root(repository, identifier, lock=True)
+    validate_actor(repository, actor)
+    approved = repository.decision(identifier)
+    if approved is None or approved.kind != "APPROVED":
+        raise PolicyConflict(details={"code": "NO_APPROVED_POLICY"})
+    if approved.id != expected_approval:
+        raise PolicyConflict(details={"code": "POLICY_APPROVAL_CHANGED"})
+    if (
+        digest(approved.definition_snapshot) != approved.definition_sha256
+        or approved.review_context is None
+        or digest(approved.review_context) != approved.context_sha256
+    ):
+        raise PolicyConflict(details={"code": "POLICY_EVIDENCE_INVALID"})
+    preview = _review(repository, root, "REVOKE", revalidate_approval=True)
+    current = preview.review_context
+    original = mapping_evidence(approved.review_context)
+    observed = mapping_evidence(current)
+    blocked = tuple(
+        sorted(
+            {
+                *preview.blocking_reasons,
+                *(("POLICY_IDENTITY_EVIDENCE_CHANGED",) if observed != original else ()),
+            }
+        )
+    )
+    return _response(approved), observed, blocked
+
+
+def mapping_evidence(context: dict[str, Any]) -> dict[str, Any]:
+    """Stable identity/approval fields shared by review and calculation snapshots."""
+    fields = {
+        "product": ("id", "organization_id", "catalog_item_number", "is_active", "status"),
+        "vendor": ("id", "is_active", "status"),
+        "vendor_product": (
+            "id",
+            "organization_id",
+            "vendor_id",
+            "product_id",
+            "vendor_sku",
+            "is_active",
+            "mapping_status",
+            "mapping_method",
+            "mapping_approved_by_user_id",
+            "mapping_approved_at",
+        ),
+    }
+    result: dict[str, Any] = {
+        key: {field: context.get(key, {}).get(field) for field in names}
+        for key, names in fields.items()
+    }
+    listing_fields = (
+        "id",
+        "organization_id",
+        "product_id",
+        "marketplace",
+        "marketplace_id",
+        "seller_sku",
+        "asin",
+        "is_active",
+        "listing_status",
+        "mapping_status",
+        "mapping_method",
+        "approved_by_user_id",
+        "approved_at",
+    )
+    result["listings"] = sorted(
+        (
+            {field: row.get(field) for field in listing_fields}
+            for row in context.get("listings", [])
+        ),
+        key=lambda row: str(row["id"]),
+    )
+    result["mapping_approver_ids"] = sorted(context.get("mapping_approver_ids", []))
     return result
