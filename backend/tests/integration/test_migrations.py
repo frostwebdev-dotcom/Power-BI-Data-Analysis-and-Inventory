@@ -76,13 +76,13 @@ def test_upgrade_then_downgrade_then_upgrade_succeeds(scratch_database_url: URL)
     run_migrations(scratch_database_url)
     after_first_upgrade = _counts(scratch_database_url)
 
-    # 32 business tables plus alembic_version; 23 enum types (21 from the
+    # 33 business tables plus alembic_version; 23 enum types (21 from the
     # initial schema, amazon_sync_job_type from 3767ee979011 — sync_status and
     # trigger_type are shared, not duplicated — and import_job_stage from
     # fadb756b1b85).
-    assert after_first_upgrade["tables"] == 33
+    assert after_first_upgrade["tables"] == 34
     assert after_first_upgrade["enums"] == 23
-    assert after_first_upgrade["triggers"] == 12
+    assert after_first_upgrade["triggers"] == 14
 
     downgrade_migrations(scratch_database_url)
     after_downgrade = _counts(scratch_database_url)

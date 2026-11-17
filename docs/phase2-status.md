@@ -142,6 +142,24 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   request confirmations are not persisted as approved policy.
 - There is no new UI, migration, live client upload, merge or deployment.
 
+## Ninth deliverable: explicit purchasing policies and manager review
+
+- ADR 0030 and [the policy guide](purchasing-policies.md) add authenticated policy
+  draft/history/approval/revocation APIs with explicit quantity, Amazon readiness,
+  vendor-unit and coverage assumptions. No client defaults or policies are seeded.
+- A single immutable ledger retains full definitions and decisions. A later draft
+  preserves prior approval; an explicit reviewed replacement switches it, and
+  revocation clears it without deleting history. Only managers/admins review.
+- Reviews recompute scoped identity and definition evidence under locks. Stale
+  head/content/mapping reviews are rejected. Mutations and audit commit together;
+  PostgreSQL guards preserve ownership, chain integrity and immutable snapshots.
+- Migration a61117202604 creates the ledger but has not been deployed. Downgrade
+  refuses to discard recorded history. No recommendations or current data are
+  certified; every output remains purchasing-ineligible.
+- Local contract/type/lint/migration-SQL checks and full PostgreSQL/browser CI
+  are recorded against the source in draft PR #22. No policy UI, live client
+  policy, financial upload, merge or deployment is included in this increment.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
@@ -149,7 +167,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
-- Persisted purchasing policy and audited recommendation snapshots.
+- Staff purchasing-policy editor and audited recommendation snapshots using
+  reviewed policy plus independently verified current source data.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
 

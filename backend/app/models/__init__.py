@@ -28,6 +28,7 @@ from app.models.ingestion import ImportFile, ImportJob, ImportJobRow
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
 from app.models.matching import ProductMappingException
 from app.models.organization import Organization
+from app.models.purchasing import PurchasingPolicyRevision
 from app.models.sync import NineyardSyncRun, SourceRecord
 from app.models.vendor import Vendor, VendorContact, VendorImportProfile, VendorProduct
 from app.models.vendor_mail import VendorMailDelivery, VendorMailSource, VendorMailState
@@ -54,6 +55,7 @@ __all__ = [
     "Product",
     "ProductIdentifier",
     "ProductMappingException",
+    "PurchasingPolicyRevision",
     "Role",
     "SourceRecord",
     "User",

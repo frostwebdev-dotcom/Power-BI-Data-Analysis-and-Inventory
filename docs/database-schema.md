@@ -862,3 +862,18 @@ Overlaps outside the predecessor ancestry remain blocked. The extra binding
 insertion guard rejects new revisions on superseded reports. Source-head status
 is derived, not mutable; financial history must be filtered to heads before
 aggregating amounts. Downgrade refuses to drop recorded replacement lineage.
+
+
+## Milestone 2 purchasing-policy history
+
+ADR 0030 and [the purchasing policy guide](purchasing-policies.md) define the
+purchasing_policy_revisions ledger, added by a61117202604. Its UUID stream records
+immutable DRAFT/APPROVED/REVOKED snapshots, scope/identity keys, sequence and
+predecessor, reviewed revision, definition/context SHA-256 values, actor, reason
+and UTC time. The first entry is unique per product/vendor-product/marketplace.
+PostgreSQL enforces ownership, contiguous ancestry, one successor and legal
+review-copy transitions. Insert and mutation guards preserve history; revisions
+commit with audit events. Latest non-draft decision selects the approved snapshot;
+a later draft does not revoke it. No row authorizes purchases or certifies current
+data. Downgrade refuses to discard recorded policy history. The complete empty
+schema now has 33 business tables plus alembic_version, 23 enums and 14 triggers.
