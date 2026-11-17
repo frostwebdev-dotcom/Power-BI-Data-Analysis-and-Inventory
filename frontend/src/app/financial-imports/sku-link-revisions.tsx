@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { financialError, financialReason, useFinancialBindingHistory } from "@/lib/financial-imports";
 import type { FinancialBindingEvidence, FinancialBindingPreview, FinancialBindingRevision } from "@/lib/financial-imports";
 
-export function FinancialBindings({ identifier, selectedId, onSelect }: { identifier: string; selectedId: string; onSelect: (id: string) => void }) {
+export function FinancialBindings({ identifier, selectedId, onSelect, current = true }: { identifier: string; selectedId: string; onSelect: (id: string) => void; current?: boolean }) {
   const { hasRole } = useAuth();
   const cache = useQueryClient();
   const [page, setPage] = useState(1);
@@ -61,7 +61,7 @@ export function FinancialBindings({ identifier, selectedId, onSelect }: { identi
       {selection.status === "REVIEW_REQUIRED" ? <Note tone="warn">This revision still requires review. Check source cost warnings, row issues and batch controls.</Note> : null}
       <KeyValues rows={[["Approved SKU links", selection.linked_rows.toLocaleString()], ["Rows needing review", selection.review_rows.toLocaleString()], ["Recorded by user", selection.recorded_by_user_id], ["Recorded", fmtDate(selection.created_at)], ["Reason", selection.reason]]} />
     </div> : null}
-    {hasRole("DATA_OPERATOR") ? <div className="financial-binding-action">
+    {hasRole("DATA_OPERATOR") && current ? <div className="financial-binding-action">
       <h3>Review current approved links</h3>
       <p className="muted small">The preview compares current approvals with the latest recorded links, even if you are viewing an older revision. No changes are saved until you record the preview.</p>
       <button className="button" type="button" disabled={busy || history.isPending || history.isError} onClick={() => runPreview(1)}>{propose.isPending ? "Checking links…" : "Preview current SKU links"}</button>

@@ -5,7 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
+from sqlalchemy.orm import aliased
 
 from app.models.catalog import MarketplaceListing, Product
 from app.models.enums import MappingStatus, Marketplace, ProductStatus
@@ -20,6 +21,19 @@ from app.repositories.scoping import ScopedRepository
 
 
 class FinancialRepository(ScopedRepository):
+    def successors(self, identifiers: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+        return {
+            row[0]: row[1]
+            for row in self.session.execute(
+                self.select(
+                    FinancialImport, FinancialImport.supersedes_import_id, FinancialImport.id
+                ).where(FinancialImport.supersedes_import_id.in_(identifiers))
+            )
+        }
+
+    def has_successor(self, identifier: uuid.UUID) -> bool:
+        return bool(self.successors([identifier]))
+
     def binding_head(self, identifier: uuid.UUID) -> FinancialBindingRevision | None:
         row = self.session.scalar(
             self.select(FinancialBindingRevision)
@@ -189,8 +203,20 @@ class FinancialRepository(ScopedRepository):
         self.session.add_all(rows)
         self.session.flush()
 
-    def history(self, page: int, page_size: int) -> tuple[list[FinancialImport], int]:
+    def history(
+        self, page: int, page_size: int, *, current_only: bool = False
+    ) -> tuple[list[FinancialImport], int]:
         query = self.select(FinancialImport)
+        if current_only:
+            successor = aliased(FinancialImport)
+            query = query.where(
+                ~exists(
+                    select(successor.id).where(
+                        successor.supersedes_import_id == FinancialImport.id,
+                        successor.organization_id == self.scope.organization_id,
+                    )
+                )
+            )
         total = self.session.scalar(query.with_only_columns(func.count()).order_by(None)) or 0
         return list(
             self.session.scalars(

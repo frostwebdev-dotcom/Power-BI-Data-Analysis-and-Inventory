@@ -38,6 +38,8 @@ All paths below are under /api/v1 and require authentication.
 | GET /financial-imports/{id}/binding-revisions | Existing read roles | Paginated immutable SKU-link revision history |
 | POST /financial-imports/{id}/binding-revisions/preview | DATA_OPERATOR or ADMIN | No-write comparison against current approved mappings; paginated changed rows |
 | POST /financial-imports/{id}/binding-revisions | DATA_OPERATOR or ADMIN | Record the reviewed proposal with expected head, digest and reason |
+| POST /financial-imports/{id}/replacement-preview | DATA_OPERATOR or ADMIN | Retain/preview a corrected XLSX using the source profile; no database record |
+| POST /financial-imports/{id}/replacements | DATA_OPERATOR or ADMIN | Record a reviewed corrected source; 201 new or 200 exact successful-request replay |
 
 Page size is bounded at 200. Unknown and foreign-organization IDs return the
 same 404 for detail, rows and raw access. No update/delete endpoint is provided.
@@ -136,7 +138,53 @@ Operators preview current links, inspect changes, give a reason and acknowledge
 the proposal before saving. A stale proposal is discarded and must be previewed
 again. Viewers can inspect history but cannot preview or record revisions.
 
-Corrected/replacement financial reports and cost corrections still require a
-separate source-report supersession workflow. Do not work around overlap or
-context conflicts by changing dates/store labels or treating a link revision as
-a corrected report. The original October reporting year/timezone remain unconfirmed.
+## Corrected source report replacement
+
+ADR 0028 adds a reasoned preview/record workflow for a corrected XLSX. It creates
+a new immutable import with supersedes_import_id, replacement_reason and the
+reviewed replacement_preview_sha256. The previous source, all original rows,
+raw file and link revisions remain unchanged and accessible. A unique predecessor
+constraint and insertion guards prohibit branching. Only the current source head
+can be replaced. Reporting periods may overlap inside this explicit ancestry;
+ordinary uploads still cannot bypass the original overlap rule.
+
+The full source profile is inherited, including confirmed year/month/timezone,
+store/account, currency, worksheet and coverage assertions. This workflow cannot
+relabel dates, change the account or change a coverage assertion. Use it for
+corrected source contents; context corrections require a separate explicit flow.
+
+POST replacement-preview with multipart file and optional page/page_size. Preview
+retains the corrected bytes before parsing but creates no batch or audit event.
+It verifies retained original-file integrity, compares old/new report totals
+with exact differences, shows replacement detail/control checks, added/removed
+seller-SKU counts, full row/link/review counts, batch warnings and candidate rows.
+Missing costs/amounts remain unknown; Unitemized stays unallocated. A review
+status is permitted but never grants eligibility for purchasing.
+
+POST replacements with the same file/name, preview_sha256 and a reason of
+10-1000 characters. Recording reparses and rebinds under the marketplace lock,
+checks the source's current binding head and complete proposal digest, then
+commits the successor, every row and audit event atomically. Changed bytes,
+approvals or source binding head invalidate the preview. A replaced predecessor
+cannot receive another successor. An exact successful-request retry returns its
+original successor with duplicate true and no second audit event, even if a later
+replacement exists. File bytes already recorded elsewhere cannot be reused as
+a new version. Stored raw bytes are never overwritten or deleted.
+
+Import responses expose direct supersedes_import_id and replaced_by_import_id;
+the latter is derived from immutable successor records. Financial history retains
+all versions by default. current_only=true selects source heads and must be used
+before aggregating financial amounts; do not sum history across replacements.
+The staff screen identifies historical sources, links previous/next reports and
+offers a current-only history filter. It requires preview, a reason and explicit
+acknowledgement before recording, and discards a changed/stale proposal. Viewers
+inspect history but cannot preview/record. Changing the file clears its preview.
+
+New SKU-binding revisions on replaced sources are blocked by both service and
+database; existing revisions remain readable. Use the corrected source for new
+link reviews. Database downgrade refuses to discard existing replacement lineage;
+empty scratch-schema upgrade/downgrade roundtrips remain supported.
+
+This work remains on the draft branch. No client report has been uploaded or
+live migration executed. The original October reporting year/timezone remain
+unconfirmed. Replacements do not approve cost completeness or enable purchasing.

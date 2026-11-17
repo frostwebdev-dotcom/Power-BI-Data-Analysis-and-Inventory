@@ -15,6 +15,8 @@ from app.api.deps import get_storage, require_roles
 from app.core.security import Principal, RoleCode
 from app.db.session import get_db
 from app.imports.storage import StorageBackend
+from app.models.financial import FinancialImport
+from app.repositories.financial import FinancialRepository
 from app.schemas.connectbooks import ConnectBooksXlsxProfile
 from app.schemas.financial_imports import (
     FinancialBindingPreview,
@@ -24,18 +26,35 @@ from app.schemas.financial_imports import (
     FinancialImportPage,
     FinancialImportResponse,
     FinancialMappingStatus,
+    FinancialReplacementPreview,
+    FinancialReplacementRecordRequest,
     FinancialRowPage,
     FinancialRowResponse,
     FinancialUploadResponse,
 )
 from app.services import financial_bindings as bindings
 from app.services import financial_imports as service
+from app.services import financial_replacements as replacements
 from app.services.connectbooks import MAX_XLSX_BYTES
 from app.services.profitability import ProfitabilityPreviewError
 
 router = APIRouter(prefix="/financial-imports", tags=["financial imports"])
 _read = Depends(require_roles(*service.FINANCIAL_READ_ROLES))
 _write = Depends(require_roles(RoleCode.DATA_OPERATOR))
+
+
+def _financial_responses(
+    session: Session, principal: Principal, rows: list[FinancialImport]
+) -> list[FinancialImportResponse]:
+    successors = FinancialRepository(session, principal.organization_id).successors(
+        [row.id for row in rows]
+    )
+    return [
+        FinancialImportResponse.model_validate(row).model_copy(
+            update={"replaced_by_import_id": successors.get(row.id)}
+        )
+        for row in rows
+    ]
 
 
 def _profile_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -74,7 +93,8 @@ def upload_financial(
     if outcome.duplicate:
         response.status_code = 200
     return FinancialUploadResponse(
-        batch=FinancialImportResponse.model_validate(outcome.batch), duplicate=outcome.duplicate
+        batch=_financial_responses(session, principal, [outcome.batch])[0],
+        duplicate=outcome.duplicate,
     )
 
 
@@ -82,12 +102,15 @@ def upload_financial(
 def list_financial(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    current_only: bool = Query(False),
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> FinancialImportPage:
-    rows, total = service.financial_history(session, principal, page, page_size)
+    rows, total = service.financial_history(
+        session, principal, page, page_size, current_only=current_only
+    )
     return FinancialImportPage(
-        items=[FinancialImportResponse.model_validate(r) for r in rows],
+        items=_financial_responses(session, principal, rows),
         page=page,
         page_size=page_size,
         total=total,
@@ -100,8 +123,64 @@ def get_financial(
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> FinancialImportResponse:
-    return FinancialImportResponse.model_validate(
-        service.get_financial_import(session, principal, identifier)
+    return _financial_responses(
+        session, principal, [service.get_financial_import(session, principal, identifier)]
+    )[0]
+
+
+@router.post("/{identifier}/replacement-preview", response_model=FinancialReplacementPreview)
+def preview_replacement(
+    identifier: uuid.UUID,
+    file: Annotated[UploadFile, File()],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+    principal: Principal = _write,
+    session: Session = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> FinancialReplacementPreview:
+    return replacements.preview_replacement(
+        session,
+        storage,
+        principal,
+        identifier,
+        file.filename or "",
+        file.file.read(MAX_XLSX_BYTES + 1),
+        page,
+        page_size,
+    )
+
+
+@router.post("/{identifier}/replacements", response_model=FinancialUploadResponse, status_code=201)
+def record_replacement(
+    response: Response,
+    identifier: uuid.UUID,
+    file: Annotated[UploadFile, File()],
+    preview_sha256: Annotated[str, Form(min_length=64, max_length=64)],
+    reason: Annotated[str, Form(min_length=10, max_length=1000)],
+    principal: Principal = _write,
+    session: Session = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> FinancialUploadResponse:
+    try:
+        payload = FinancialReplacementRecordRequest(preview_sha256=preview_sha256, reason=reason)
+    except ValidationError:
+        raise service.FinancialInputInvalid(
+            details={"code": "INVALID_REPLACEMENT_REQUEST"}
+        ) from None
+    outcome = replacements.record_replacement(
+        session,
+        storage,
+        principal,
+        identifier,
+        file.filename or "",
+        file.file.read(MAX_XLSX_BYTES + 1),
+        payload,
+    )
+    if outcome.duplicate:
+        response.status_code = 200
+    return FinancialUploadResponse(
+        batch=_financial_responses(session, principal, [outcome.batch])[0],
+        duplicate=outcome.duplicate,
     )
 
 

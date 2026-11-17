@@ -139,6 +139,74 @@ def _row(
     )
 
 
+def financial_filename(filename: str, content: bytes) -> str:
+    name = PurePosixPath(filename.replace("\\", "/")).name
+    if (
+        not name
+        or len(name) > 255
+        or any(ord(c) < 32 or ord(c) == 127 for c in name)
+        or PurePosixPath(name).suffix.lower() != ".xlsx"
+        or not content
+        or len(content) > MAX_XLSX_BYTES
+    ):
+        raise FinancialInputInvalid(details={"code": "INVALID_FILENAME_OR_SIZE"})
+    return name
+
+
+def prepare_financial_import(
+    repository: FinancialRepository,
+    principal: Principal,
+    name: str,
+    content: bytes,
+    profile: ConnectBooksXlsxProfile,
+    uri: str,
+    received_at: datetime,
+) -> tuple[FinancialImport, list[FinancialImportRow]]:
+    """Parse and snapshot approved links inside the caller's locked transaction."""
+    start, end = reporting_bounds(profile)
+    digest = sha256_hex(content)
+    profile_data = profile.model_dump(mode="json")
+    profile_digest = hashlib.sha256(
+        json.dumps(profile_data, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    try:
+        preview = preview_connectbooks_xlsx(content, profile)
+    except ProfitabilityPreviewError as exc:
+        raise FinancialInputInvalid(details={"code": str(exc)}) from None
+    listings = repository.approved_listings(
+        profile.marketplace_id,
+        {r.seller_sku for r in preview.rows if r.seller_sku is not None and r.status != "INVALID"},
+    )
+    identifier = uuid.uuid4()
+    rows = [_row(r, identifier, principal.organization_id, listings) for r in preview.rows]
+    review_rows = sum(r.review_required for r in rows)
+    batch = FinancialImport(
+        id=identifier,
+        organization_id=principal.organization_id,
+        original_filename=name,
+        storage_uri=uri,
+        raw_sha256=digest,
+        profile_sha256=profile_digest,
+        profile_snapshot=profile_data,
+        report_snapshot=preview.model_dump(mode="json", exclude={"rows", "profile"}),
+        marketplace_id=profile.marketplace_id,
+        store_name=profile.store_name,
+        currency=profile.currency,
+        period_start=start,
+        period_end=end,
+        received_at=received_at,
+        uploaded_by_user_id=principal.user_id,
+        status="REVIEW_REQUIRED"
+        if review_rows or preview.status == "REVIEW_REQUIRED"
+        else "RECORDED",
+        row_count=len(rows),
+        linked_rows=sum(r.mapping_status == "LINKED" for r in rows),
+        review_rows=review_rows,
+        purchasing_eligible=False,
+    )
+    return batch, rows
+
+
 def receive_financial_import(
     session: Session,
     storage: StorageBackend,
@@ -150,16 +218,7 @@ def receive_financial_import(
 ) -> FinancialImportOutcome:
     principal.require_roles((RoleCode.DATA_OPERATOR,))
     start, end = reporting_bounds(profile)
-    name = PurePosixPath(filename.replace("\\", "/")).name
-    if (
-        not name
-        or len(name) > 255
-        or any(ord(c) < 32 or ord(c) == 127 for c in name)
-        or PurePosixPath(name).suffix.lower() != ".xlsx"
-        or not content
-        or len(content) > MAX_XLSX_BYTES
-    ):
-        raise FinancialInputInvalid(details={"code": "INVALID_FILENAME_OR_SIZE"})
+    name = financial_filename(filename, content)
     digest = sha256_hex(content)
     profile_data = profile.model_dump(mode="json")
     profile_digest = hashlib.sha256(
@@ -198,45 +257,10 @@ def receive_financial_import(
             uri = storage.put(
                 content, name, organization_id=principal.organization_id, at=received_at
             )
-            try:
-                preview = preview_connectbooks_xlsx(content, profile)
-            except ProfitabilityPreviewError as exc:
-                raise FinancialInputInvalid(details={"code": str(exc)}) from None
-            listings = repository.approved_listings(
-                profile.marketplace_id,
-                {
-                    r.seller_sku
-                    for r in preview.rows
-                    if r.seller_sku is not None and r.status != "INVALID"
-                },
+            batch, rows = prepare_financial_import(
+                repository, principal, name, content, profile, uri, received_at
             )
-            identifier = uuid.uuid4()
-            rows = [_row(r, identifier, principal.organization_id, listings) for r in preview.rows]
-            review_rows = sum(r.review_required for r in rows)
-            batch = FinancialImport(
-                id=identifier,
-                organization_id=principal.organization_id,
-                original_filename=name,
-                storage_uri=uri,
-                raw_sha256=digest,
-                profile_sha256=profile_digest,
-                profile_snapshot=profile_data,
-                report_snapshot=preview.model_dump(mode="json", exclude={"rows", "profile"}),
-                marketplace_id=profile.marketplace_id,
-                store_name=profile.store_name,
-                currency=profile.currency,
-                period_start=start,
-                period_end=end,
-                received_at=received_at,
-                uploaded_by_user_id=principal.user_id,
-                status="REVIEW_REQUIRED"
-                if review_rows or preview.status == "REVIEW_REQUIRED"
-                else "RECORDED",
-                row_count=len(rows),
-                linked_rows=sum(r.mapping_status == "LINKED" for r in rows),
-                review_rows=review_rows,
-                purchasing_eligible=False,
-            )
+            review_rows = batch.review_rows
             repository.add(batch, rows)
             audit.record(
                 session,
@@ -281,10 +305,12 @@ def open_financial_raw(storage: StorageBackend, batch: FinancialImport) -> bytes
 
 
 def financial_history(
-    session: Session, principal: Principal, page: int, page_size: int
+    session: Session, principal: Principal, page: int, page_size: int, *, current_only: bool = False
 ) -> tuple[list[FinancialImport], int]:
     principal.require_roles(FINANCIAL_READ_ROLES)
-    return FinancialRepository(session, principal.organization_id).history(page, page_size)
+    return FinancialRepository(session, principal.organization_id).history(
+        page, page_size, current_only=current_only
+    )
 
 
 def financial_rows(

@@ -26,6 +26,9 @@ export interface FinancialControl {
 }
 export interface FinancialImport {
   id: string;
+  supersedes_import_id?: string | null;
+  replaced_by_import_id?: string | null;
+  replacement_reason?: string | null;
   original_filename: string;
   raw_sha256: string;
   profile_sha256: string;
@@ -83,6 +86,24 @@ export interface FinancialRow {
   computed_profit: string | null;
 }
 export interface FinancialUpload { batch: FinancialImport; duplicate: boolean }
+export interface FinancialReplacementPreview {
+  preview_only: true;
+  source_import_id: string;
+  preview_sha256: string;
+  original_filename: string;
+  status: "RECORDED" | "REVIEW_REQUIRED";
+  previous_row_count: number;
+  row_count: number;
+  linked_rows: number;
+  review_rows: number;
+  added_skus: number;
+  removed_skus: number;
+  controls: { field: string; previous_total: string | null; replacement_total: string | null; difference: string | null; replacement_detail_total: string | null; replacement_check: string }[];
+  issues: FinancialIssue[];
+  rows: FinancialRow[];
+  page: number;
+  page_size: number;
+}
 export interface FinancialBindingEvidence {
   mapping_status: FinancialMappingStatus;
   listing_id: string | null;
@@ -169,18 +190,21 @@ export function financialReason(code: string): string {
 export function financialError(error: unknown): unknown {
   if (!(error instanceof ApiError)) return error;
   const detail = error.details.code;
-  if (detail === "OVERLAPPING_REPORTING_PERIOD") return new Error("A report already covers this period. Open the existing import to review it. Replacement reports are not available yet.");
+  if (detail === "OVERLAPPING_REPORTING_PERIOD") return new Error("A report already covers this period. Open the current import and preview a corrected source report from its replacement section.");
   if (detail === "REPLAY_CONTEXT_MISMATCH") return new Error("This file was already recorded with different reporting details. Open the original import; its reporting context cannot be changed by re-uploading.");
   if (detail === "RAW_INTEGRITY_MISMATCH") return new Error("The original file could not be verified. Ask an administrator to check the retained file.");
   if (["BINDING_HEAD_CHANGED", "BINDING_PROPOSAL_CHANGED", "CONCURRENT_OR_INVALID_BINDING_REVISION"].includes(String(detail))) return new Error("SKU links changed since this preview. Preview the current links again before recording a revision.");
   if (detail === "BINDING_NO_CHANGES") return new Error("No SKU links have changed. There is no new revision to record.");
+  if (detail === "SOURCE_REPORT_REPLACED") return new Error("This source report was already replaced. Refresh this page and open its replacement before making more changes.");
+  if (detail === "REPLACEMENT_FILE_ALREADY_RECORDED") return new Error("These file bytes are already recorded. Select a different corrected workbook; original records cannot be relabelled.");
+  if (["REPLACEMENT_PROPOSAL_CHANGED", "CONCURRENT_OR_INVALID_REPLACEMENT"].includes(String(detail))) return new Error("The source report or approved SKU links changed. Preview the corrected workbook again before recording it.");
   return error;
 }
 
-export function useFinancialImports(page: number) {
+export function useFinancialImports(page: number, currentOnly = false) {
   return useQuery({
-    queryKey: ["financial-imports", "history", page],
-    queryFn: () => api.get<Page<FinancialImport>>("/financial-imports", { page, page_size: 25 }),
+    queryKey: ["financial-imports", "history", page, currentOnly],
+    queryFn: () => api.get<Page<FinancialImport>>("/financial-imports", { page, page_size: 25, current_only: currentOnly }),
   });
 }
 export function useFinancialImport(id: string) {

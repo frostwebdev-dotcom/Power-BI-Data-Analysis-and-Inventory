@@ -52,10 +52,28 @@ class FinancialImport(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMix
     recording_transaction_id: Mapped[int] = mapped_column(
         BigInteger, server_default=text("txid_current()")
     )
+    supersedes_import_id: Mapped[uuid.UUID | None]
+    replacement_reason: Mapped[str | None] = mapped_column(String(1000))
+    replacement_preview_sha256: Mapped[str | None] = mapped_column(String(64))
 
     __table_args__ = (
         UniqueConstraint("id", "organization_id"),
         UniqueConstraint("organization_id", "raw_sha256"),
+        UniqueConstraint("supersedes_import_id"),
+        ForeignKeyConstraint(
+            ["supersedes_import_id", "organization_id"],
+            ["financial_imports.id", "financial_imports.organization_id"],
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(supersedes_import_id is null and replacement_reason is null "
+            "and replacement_preview_sha256 is null) or (supersedes_import_id is not null "
+            "and replacement_reason is not null "
+            "and length(btrim(replacement_reason)) between 10 and 1000 "
+            "and replacement_preview_sha256 is not null "
+            "and replacement_preview_sha256 ~ '^[0-9a-f]{64}$')",
+            name="valid_replacement",
+        ),
         Index(
             "ix_financial_imports_period",
             "organization_id",

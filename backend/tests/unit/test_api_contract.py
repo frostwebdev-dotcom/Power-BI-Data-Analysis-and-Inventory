@@ -92,6 +92,8 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/financial-imports/{identifier}/raw",
         "/api/v1/financial-imports/{identifier}/binding-revisions",
         "/api/v1/financial-imports/{identifier}/binding-revisions/preview",
+        "/api/v1/financial-imports/{identifier}/replacement-preview",
+        "/api/v1/financial-imports/{identifier}/replacements",
         "/api/v1/imports/{job_id}",
         "/api/v1/imports/{job_id}/raw",
         "/api/v1/imports/{job_id}/report",

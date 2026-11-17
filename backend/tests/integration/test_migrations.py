@@ -82,7 +82,7 @@ def test_upgrade_then_downgrade_then_upgrade_succeeds(scratch_database_url: URL)
     # fadb756b1b85).
     assert after_first_upgrade["tables"] == 33
     assert after_first_upgrade["enums"] == 23
-    assert after_first_upgrade["triggers"] == 11
+    assert after_first_upgrade["triggers"] == 12
 
     downgrade_migrations(scratch_database_url)
     after_downgrade = _counts(scratch_database_url)

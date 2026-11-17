@@ -111,11 +111,24 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Validation for this source is recorded in draft PR #22 after local checks and
   PostgreSQL/browser CI. No client report upload, merge or deployment is included.
 
+## Seventh deliverable: reviewed corrected source reports
+
+- ADR 0028 adds immutable predecessor/successor source lineage, inherited
+  reporting context and preview/reason/acknowledgement before correction.
+- Preview shows exact total changes, reconciliation checks, added/removed SKUs
+  and row/batch warnings. Save rechecks source/binding state and records the
+  new report, full row set and audit atomically. Exact retries are idempotent.
+- Current-only history avoids double counting versions. Historical money/raw
+  files and bindings remain readable; superseded sources cannot be rebound.
+- Local unit, type/lint/build and migration-SQL evidence, and full PostgreSQL/
+  browser/desktop/mobile verification, are recorded in draft PR #22 for its
+  current source. No client report upload, merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Amazon freshness, inventory-pool and pack normalization adapter.
-- Client reporting year/timezone and cost review, and a controlled financial
-  source-report replacement workflow before real-file operational acceptance.
+- Client reporting year/timezone, coverage assertions and cost review before
+  real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
 - Persisted purchasing policy and audited recommendation snapshots.
 - Tenant-scoped APIs and application dashboard/search/filtering.

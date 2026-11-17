@@ -81,6 +81,8 @@ def _proposal(session: Session, principal: Principal, identifier: uuid.UUID) -> 
     if not repository.actor_exists(principal.user_id):
         raise AuthorizationError("The operator must be active in this organization.")
     repository.lock_marketplace(batch.marketplace_id)
+    if repository.has_successor(identifier):
+        raise FinancialImportConflict(details={"code": "SOURCE_REPORT_REPLACED"})
     head = repository.binding_head(identifier)
     source = repository.source_rows(identifier)
     previous = repository.binding_rows(head.id) if head else {}

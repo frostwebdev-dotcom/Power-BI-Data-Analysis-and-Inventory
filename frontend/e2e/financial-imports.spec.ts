@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 const ID = "00000000-0000-0000-0000-000000000042";
+const REPLACEMENT_ID = "00000000-0000-0000-0000-000000000045";
 const FIXTURE = Buffer.from(readFileSync(join(process.cwd(), "e2e/fixtures/financial-report.base64"), "utf8").trim(), "base64");
 const PROFILE = {
   layout_version: "connectbooks-signed-pnl-xlsx-v1", sheet_name: "Main sheet",
@@ -60,10 +61,12 @@ interface MockOptions {
   bindingHistory?: typeof REVISION[];
   bindingChanges?: boolean;
   bindingStale?: boolean;
+  replacementStale?: boolean;
 }
 async function mockFinancial(page: Page, options: MockOptions = {}) {
   const calls: { path: string; method: string; params: URLSearchParams; body: string }[] = [];
   let revisions = [...(options.bindingHistory ?? [])];
+  let replacement: object | null = null;
   const batch = options.batch ?? (options.bindingChanges ? { ...BATCH, linked_rows: 51, review_rows: 1 } : BATCH);
   await page.addInitScript(() => localStorage.setItem("prms.token", "synthetic-browser-credential"));
   await page.route("**/api/v1/**", async (route) => {
@@ -79,7 +82,20 @@ async function mockFinancial(page: Page, options: MockOptions = {}) {
       return route.fulfill({ status: options.duplicate ? 200 : 201, json: { batch, duplicate: options.duplicate ?? false } });
     }
     if (path === "/financial-imports") return route.fulfill({ json: { items: [batch], page: 1, page_size: 25, total: 1 } });
-    if (path === "/financial-imports/" + ID) return route.fulfill({ json: batch });
+    if (path === "/financial-imports/" + ID) return route.fulfill({ json: replacement ? { ...(batch as object), replaced_by_import_id: REPLACEMENT_ID } : batch });
+    if (path === "/financial-imports/" + REPLACEMENT_ID) return route.fulfill({ json: replacement ?? { ...BATCH, id: REPLACEMENT_ID, supersedes_import_id: ID, replacement_reason: "Correct reported product costs." } });
+    if (path === "/financial-imports/" + ID + "/replacement-preview") {
+      const number = Number(url.searchParams.get("page") ?? "1");
+      return route.fulfill({ json: { preview_only: true, source_import_id: ID, preview_sha256: "d".repeat(64), original_filename: "corrected.xlsx", status: "REVIEW_REQUIRED", previous_row_count: 52, row_count: 51, linked_rows: 50, review_rows: 1, added_skus: 0, removed_skus: 1, page: number, page_size: 25,
+        controls: BATCH.report_snapshot.controls.map((control) => ({ field: control.field, previous_total: control.reported_total, replacement_total: control.field === "cost" || control.field === "profit" ? "45" : control.reported_total, difference: control.field === "cost" ? "5" : control.field === "profit" ? "-5" : "0", replacement_detail_total: control.field === "cost" ? null : control.reported_total, replacement_check: control.field === "cost" ? "INCOMPLETE" : "MATCH" })),
+        issues: BATCH.report_snapshot.issues, rows: [{ ...ROW, source_row_number: number === 1 ? 2 : 27, cost: null, computed_profit: null, review_reasons: ["MISSING_AMOUNT"], review_required: true }],
+      } });
+    }
+    if (path === "/financial-imports/" + ID + "/replacements") {
+      if (options.replacementStale) return route.fulfill({ status: 409, json: { error: { code: "financial_import_conflict", message: "Changed", details: { code: "REPLACEMENT_PROPOSAL_CHANGED" } } } });
+      replacement = { ...BATCH, id: REPLACEMENT_ID, original_filename: "corrected.xlsx", supersedes_import_id: ID, replacement_reason: "Correct reported product costs." };
+      return route.fulfill({ status: 201, json: { batch: replacement, duplicate: false } });
+    }
     if (path === "/financial-imports/" + ID + "/binding-revisions/preview") return route.fulfill({ json: {
       import_id: ID, expected_revision_id: revisions[0]?.id ?? null, bindings_sha256: "c".repeat(64),
       status: "REVIEW_REQUIRED", row_count: 52, linked_rows: 52, review_rows: 0, purchasing_eligible: false,
@@ -334,5 +350,85 @@ test("viewers inspect historical links with row filters reset when changing revi
   await expect(page.getByTestId("financial-binding-revisions")).toContainText("Showing original import links");
   // Returning to the original query can reuse its immutable cached rows.
   await expect(page.getByTestId("financial-rows").getByText("unresolved", { exact: true })).toBeVisible();
+  expect(calls.some((call) => call.method === "POST")).toBeFalsy();
+});
+
+async function correctedFile(page: Page, name = "corrected.xlsx") {
+  await page.getByLabel("Corrected source workbook").setInputFiles({ name, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: FIXTURE });
+}
+
+test("corrected source preview preserves context and requires reviewed reason before replacement", async ({ page }, testInfo) => {
+  const calls = await mockFinancial(page);
+  await page.goto("/financial-imports?import=" + ID);
+  await correctedFile(page);
+  await page.getByRole("button", { name: "Preview corrected report", exact: true }).click();
+  const preview = page.getByTestId("financial-replacement-preview");
+  await expect(preview).toContainText("52 previous rows → 51 replacement rows");
+  await expect(preview).toContainText("1 removed seller SKUs");
+  await expect(preview).toContainText("Unknown");
+  await expect(preview).toContainText("Advertising cost coverage has not been confirmed");
+  await expect(page.getByTestId("financial-replacement-controls").getByRole("row")).toHaveCount(12);
+  const save = preview.getByRole("button", { name: "Record corrected report", exact: true });
+  await expect(save).toBeDisabled();
+  await page.getByLabel("Reason for source report replacement").fill("Correct reported product costs.");
+  await expect(save).toBeDisabled();
+  await page.getByLabel("I reviewed the changed totals, removed SKUs and remaining warnings").check();
+  await expect(save).toBeEnabled();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("financial-replacement-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: testInfo.outputPath("financial-replacement-mobile.png"), fullPage: true });
+  await save.click();
+  await expect(page).toHaveURL(new RegExp("import=" + REPLACEMENT_ID));
+  await expect(page.getByText("This report replaces an earlier source", { exact: false })).toBeVisible();
+  const body = calls.find((call) => call.path.endsWith("/replacements") && call.method === "POST")?.body ?? "";
+  expect(body).toContain('name="preview_sha256"'); expect(body).toContain("d".repeat(64));
+  expect(body).toContain("Correct reported product costs."); expect(body).not.toContain('name="profile_json"');
+  await page.getByRole("link", { name: "View the previous report", exact: true }).click();
+  await expect(page.getByText("Historical report: this source was replaced", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("financial-source-replacement")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Preview current SKU links", exact: true })).toHaveCount(0);
+});
+
+test("changing a corrected file or receiving a stale preview clears the reviewed proposal", async ({ page }) => {
+  const calls = await mockFinancial(page, { replacementStale: true });
+  await page.goto("/financial-imports?import=" + ID);
+  await correctedFile(page);
+  await page.getByRole("button", { name: "Preview corrected report", exact: true }).click();
+  await expect(page.getByTestId("financial-replacement-preview")).toBeVisible();
+  await correctedFile(page, "another-correction.xlsx");
+  await expect(page.getByTestId("financial-replacement-preview")).toHaveCount(0);
+  await page.getByRole("button", { name: "Preview corrected report", exact: true }).click();
+  await page.getByLabel("Reason for source report replacement").fill("Correct reported product costs.");
+  await page.getByLabel("I reviewed the changed totals, removed SKUs and remaining warnings").check();
+  await page.getByRole("button", { name: "Record corrected report", exact: true }).click();
+  await expect(page.getByTestId("financial-source-replacement").getByRole("alert")).toContainText("Preview the corrected workbook again");
+  await expect(page.getByTestId("financial-replacement-preview")).toHaveCount(0);
+  expect(calls.filter((call) => call.path.endsWith("/replacements") && call.method === "POST")).toHaveLength(1);
+});
+
+test("viewer can filter to current sources and navigate superseded report history", async ({ page }) => {
+  const calls = await mockFinancial(page, { role: "VIEWER", batch: { ...BATCH, replaced_by_import_id: REPLACEMENT_ID } });
+  await page.goto("/financial-imports");
+  await page.getByLabel("Only current source reports").check();
+  await expect.poll(() => calls.filter((call) => call.path === "/financial-imports").at(-1)?.params.get("current_only")).toBe("true");
+  await page.getByRole("link", { name: BATCH.original_filename, exact: true }).click();
+  await expect(page.getByText("Historical report: this source was replaced", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("financial-source-replacement")).toHaveCount(0);
+  await page.getByRole("link", { name: "Open its replacement", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp("import=" + REPLACEMENT_ID));
+  await expect(page.getByRole("link", { name: "View the previous report", exact: true })).toBeVisible();
+  expect(calls.some((call) => call.method === "POST")).toBeFalsy();
+});
+
+test("invalid corrected workbooks do not reach preview API", async ({ page }) => {
+  const calls = await mockFinancial(page);
+  await page.goto("/financial-imports?import=" + ID);
+  for (const file of [{ name: "empty.xlsx", buffer: Buffer.alloc(0) }, { name: "report.csv", buffer: Buffer.from("x") }, { name: "huge.xlsx", buffer: Buffer.alloc(8 * 1024 * 1024 + 1) }]) {
+    await page.getByLabel("Corrected source workbook").setInputFiles({ ...file, mimeType: "application/octet-stream" });
+    await page.getByRole("button", { name: "Preview corrected report", exact: true }).click();
+    await expect(page.getByTestId("financial-source-replacement").getByRole("alert")).toContainText("nonempty corrected Excel .xlsx file up to 8 MiB");
+  }
   expect(calls.some((call) => call.method === "POST")).toBeFalsy();
 });

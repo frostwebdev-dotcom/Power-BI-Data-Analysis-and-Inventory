@@ -235,6 +235,8 @@ jobs:
             frontend/test-results/**/financial-mobile.png
             frontend/test-results/**/financial-binding-desktop.png
             frontend/test-results/**/financial-binding-mobile.png
+            frontend/test-results/**/financial-replacement-desktop.png
+            frontend/test-results/**/financial-replacement-mobile.png
           if-no-files-found: ignore
           retention-days: 3
 

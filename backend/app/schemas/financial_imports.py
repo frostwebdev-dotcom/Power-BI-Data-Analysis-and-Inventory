@@ -9,7 +9,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.connectbooks import ConnectBooksPreviewRow, ConnectBooksXlsxProfile
+from app.schemas.connectbooks import (
+    ConnectBooksField,
+    ConnectBooksPreviewRow,
+    ConnectBooksXlsxProfile,
+)
+from app.schemas.profitability import ProfitabilityIssue
 
 FinancialMappingStatus = Literal[
     "LINKED", "UNRESOLVED", "UNALLOCATED", "INVALID_SOURCE", "ASIN_CONFLICT"
@@ -34,6 +39,10 @@ class FinancialImportResponse(BaseModel):
     linked_rows: int
     review_rows: int
     purchasing_eligible: Literal[False]
+    supersedes_import_id: uuid.UUID | None = None
+    replaced_by_import_id: uuid.UUID | None = None
+    replacement_reason: str | None = None
+    replacement_preview_sha256: str | None = None
     profile_snapshot: ConnectBooksXlsxProfile
     report_snapshot: dict[str, Any] = Field(
         description="Original pre-binding preview metadata and financial controls."
@@ -155,3 +164,44 @@ class FinancialBindingRevisionPage(BaseModel):
     page: int
     page_size: int
     total: int
+
+
+class FinancialReplacementControl(BaseModel):
+    field: ConnectBooksField
+    previous_total: Decimal | None
+    replacement_total: Decimal | None
+    difference: Decimal | None
+    replacement_detail_total: Decimal | None
+    replacement_check: Literal["MATCH", "MISMATCH", "INCOMPLETE"]
+
+
+class FinancialReplacementPreview(BaseModel):
+    preview_only: Literal[True] = True
+    source_import_id: uuid.UUID
+    preview_sha256: str
+    original_filename: str
+    raw_sha256: str
+    status: Literal["RECORDED", "REVIEW_REQUIRED"]
+    previous_row_count: int
+    row_count: int
+    linked_rows: int
+    review_rows: int
+    added_skus: int
+    removed_skus: int
+    controls: list[FinancialReplacementControl]
+    issues: list[ProfitabilityIssue]
+    rows: list[FinancialRowResponse]
+    page: int
+    page_size: int
+    purchasing_eligible: Literal[False] = False
+
+
+class FinancialReplacementRecordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    preview_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reason: str = Field(max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def meaningful_reason(cls, value: str) -> str:
+        return FinancialBindingRecordRequest.meaningful_reason(value)

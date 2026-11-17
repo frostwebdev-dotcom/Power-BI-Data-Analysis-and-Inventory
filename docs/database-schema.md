@@ -853,3 +853,12 @@ and import composite UUID foreign keys. Binding rows contain no money. Insert
 guards enforce ownership, active approved links, preserved source warnings,
 complete/changed counters and original-transaction insertion. Headers and rows
 are append-only; a reasoned revision and its audit event commit together.
+
+ADR 0028 adds nullable immutable source lineage to financial_imports in revision
+a61117202603: supersedes_import_id is a unique composite tenant FK to the source
+report, with a bounded replacement reason and preview digest. A source can have
+one successor with the same full profile/period/context and distinct bytes.
+Overlaps outside the predecessor ancestry remain blocked. The extra binding
+insertion guard rejects new revisions on superseded reports. Source-head status
+is derived, not mutable; financial history must be filtered to heads before
+aggregating amounts. Downgrade refuses to drop recorded replacement lineage.

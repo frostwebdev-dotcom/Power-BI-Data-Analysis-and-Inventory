@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { financialError, financialNumber, financialPeriod, financialReason, MAX_FINANCIAL_BYTES, MONTHS, useFinancialImport, useFinancialImports, useFinancialRows } from "@/lib/financial-imports";
 import type { FinancialControl, FinancialProfile, FinancialRow, FinancialUpload } from "@/lib/financial-imports";
 import { FinancialBindings } from "./sku-link-revisions";
+import { FinancialReplacement } from "./source-replacement";
 
 const MAPPINGS = ["LINKED", "UNRESOLVED", "UNALLOCATED", "INVALID_SOURCE", "ASIN_CONFLICT"];
 const LABELS: Record<string, string> = {
@@ -35,12 +36,15 @@ function FinancialImports() {
 function ImportHistory() {
   const { hasRole } = useAuth();
   const [page, setPage] = useState(1);
-  const history = useFinancialImports(page);
+  const [currentOnly, setCurrentOnly] = useState(false);
+  const history = useFinancialImports(page, currentOnly);
   return <>
     <PageHeader title="Financial imports" lede="Import ConnectBooks profit-and-loss reports and review source totals, approved SKU links and cost warnings." />
     {hasRole("DATA_OPERATOR") ? <UploadFinancial /> : null}
     <section className="card">
       <h2>Import history</h2>
+      <label className="financial-check"><input type="checkbox" checked={currentOnly} onChange={(event) => { setCurrentOnly(event.target.checked); setPage(1); }} />Only current source reports</label>
+      <p className="muted small">History includes earlier source versions. Use current reports when comparing or aggregating financial results.</p>
       <ErrorNote error={history.error} />
       {history.isPending ? <Loading what="Loading financial imports" /> : null}
       {history.data?.items.length === 0 ? <EmptyState title="No financial imports yet" /> : null}
@@ -48,7 +52,7 @@ function ImportHistory() {
         <table className="table" data-testid="financial-history"><thead><tr>
           <th>Report</th><th>Store</th><th>Period</th><th>Original status</th><th>Rows</th><th>Original links</th><th>Original row reviews</th><th>Received</th>
         </tr></thead><tbody>{history.data.items.map((batch) => <tr key={batch.id}>
-          <td><Link href={"/financial-imports?import=" + encodeURIComponent(batch.id)}>{batch.original_filename}</Link></td>
+          <td><Link href={"/financial-imports?import=" + encodeURIComponent(batch.id)}>{batch.original_filename}</Link><div className="muted small">{batch.replaced_by_import_id ? <Link href={"/financial-imports?import=" + batch.replaced_by_import_id}>Superseded · Open replacement</Link> : "Current source report"}</div></td>
           <td>{batch.store_name}</td><td>{financialPeriod(batch.profile_snapshot)}<div className="muted small">{batch.profile_snapshot.reporting_timezone}</div></td>
           <td><StatusBadge value={batch.status} /></td><td>{batch.row_count.toLocaleString()}</td><td>{batch.linked_rows.toLocaleString()}</td>
           <td>{batch.review_rows.toLocaleString()}</td><td>{fmtDate(batch.received_at)}</td>
@@ -155,6 +159,8 @@ function ImportDetail({ identifier, duplicate }: { identifier: string; duplicate
     {query.isPending ? <Loading what="Loading financial report" /> : null}
     {batch ? <>
       <PageHeader title={batch.original_filename} lede={batch.store_name + " · " + financialPeriod(batch.profile_snapshot) + " · USD"} actions={<button type="button" className="button" disabled={downloading} onClick={download}>{downloading ? "Downloading…" : "Download original workbook"}</button>} />
+      {batch.replaced_by_import_id ? <Note tone="warn">Historical report: this source was replaced. <Link href={"/financial-imports?import=" + batch.replaced_by_import_id}>Open its replacement</Link>. Original amounts and evidence remain available below.</Note> : null}
+      {batch.supersedes_import_id ? <Note>This report replaces an earlier source. <Link href={"/financial-imports?import=" + batch.supersedes_import_id}>View the previous report</Link>. Reason: {batch.replacement_reason}</Note> : null}
       {duplicate ? <p className="note note--info" role="status">This file was already imported. You are viewing the existing record.</p> : null}
       <ErrorNote error={downloadError} />
       <section className="card" data-testid="financial-summary">
@@ -187,7 +193,8 @@ function ImportDetail({ identifier, duplicate }: { identifier: string; duplicate
           ? <ControlsTable controls={batch.report_snapshot.controls} />
           : <EmptyState title="Financial controls unavailable" text="This report needs review before its totals can be verified." />}
       </section>
-      <FinancialBindings identifier={identifier} selectedId={bindingRevisionId} onSelect={setBindingRevisionId} />
+      <FinancialReplacement batch={batch} />
+      <FinancialBindings identifier={identifier} selectedId={bindingRevisionId} onSelect={setBindingRevisionId} current={!batch.replaced_by_import_id} />
       <FinancialRows key={bindingRevisionId} identifier={identifier} revisionId={bindingRevisionId} />
     </> : null}
   </>;
