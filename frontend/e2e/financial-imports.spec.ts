@@ -64,6 +64,7 @@ interface MockOptions {
 async function mockFinancial(page: Page, options: MockOptions = {}) {
   const calls: { path: string; method: string; params: URLSearchParams; body: string }[] = [];
   let revisions = [...(options.bindingHistory ?? [])];
+  const batch = options.batch ?? (options.bindingChanges ? { ...BATCH, linked_rows: 51, review_rows: 1 } : BATCH);
   await page.addInitScript(() => localStorage.setItem("prms.token", "synthetic-browser-credential"));
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -75,10 +76,10 @@ async function mockFinancial(page: Page, options: MockOptions = {}) {
     if (path === "/health") return route.fulfill({ json: { status: "ok", dependencies: [] } });
     if (path === "/financial-imports" && request.method() === "POST") {
       if (options.conflict) return route.fulfill({ status: 409, json: { error: { code: "financial_import_conflict", message: "Conflict", details: { code: "OVERLAPPING_REPORTING_PERIOD" } } } });
-      return route.fulfill({ status: options.duplicate ? 200 : 201, json: { batch: options.batch ?? BATCH, duplicate: options.duplicate ?? false } });
+      return route.fulfill({ status: options.duplicate ? 200 : 201, json: { batch, duplicate: options.duplicate ?? false } });
     }
-    if (path === "/financial-imports") return route.fulfill({ json: { items: [options.batch ?? BATCH], page: 1, page_size: 25, total: 1 } });
-    if (path === "/financial-imports/" + ID) return route.fulfill({ json: options.batch ?? BATCH });
+    if (path === "/financial-imports") return route.fulfill({ json: { items: [batch], page: 1, page_size: 25, total: 1 } });
+    if (path === "/financial-imports/" + ID) return route.fulfill({ json: batch });
     if (path === "/financial-imports/" + ID + "/binding-revisions/preview") return route.fulfill({ json: {
       import_id: ID, expected_revision_id: revisions[0]?.id ?? null, bindings_sha256: "c".repeat(64),
       status: "REVIEW_REQUIRED", row_count: 52, linked_rows: 52, review_rows: 0, purchasing_eligible: false,
@@ -94,7 +95,8 @@ async function mockFinancial(page: Page, options: MockOptions = {}) {
     if (path === "/financial-imports/" + ID + "/binding-revisions") return route.fulfill({ json: { items: revisions, page: 1, page_size: 25, total: revisions.length } });
     if (path === "/financial-imports/" + ID + "/rows") {
       const number = Number(url.searchParams.get("page") ?? "1");
-      return route.fulfill({ json: { items: url.searchParams.has("binding_revision_id") ? [{ ...ROW, binding_revision_id: url.searchParams.get("binding_revision_id") }] : options.rows ?? [{ ...ROW, source_row_number: number === 1 ? 2 : 27 }], page: number, page_size: 25, total: options.total ?? 52 } });
+      const originalRow = { ...ROW, ...(options.bindingChanges ? { mapping_status: "UNRESOLVED", listing_id: null, product_id: null, review_required: true } : {}), source_row_number: number === 1 ? 2 : 27 };
+      return route.fulfill({ json: { items: url.searchParams.has("binding_revision_id") ? [{ ...ROW, binding_revision_id: url.searchParams.get("binding_revision_id") }] : options.rows ?? [originalRow], page: number, page_size: 25, total: options.total ?? 52 } });
     }
     if (path === "/financial-imports/" + ID + "/raw") {
       if (options.downloadFails) return route.fulfill({ status: 409, json: { error: { code: "financial_import_conflict", details: { code: "RAW_INTEGRITY_MISMATCH" }, message: "Integrity check failed" } } });
@@ -280,6 +282,7 @@ test("reviewed SKU link changes require a reason and acknowledgement before reco
   await expect(record).toBeDisabled();
   await page.getByLabel("I have reviewed the proposed SKU link changes").check();
   await expect(record).toBeEnabled();
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("financial-binding-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();

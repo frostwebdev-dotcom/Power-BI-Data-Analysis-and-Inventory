@@ -1283,3 +1283,9 @@ textarea:focus {
 @media (max-width: 640px) {
   .financial-fields .grid--2 { grid-template-columns: minmax(0, 1fr); }
 }
+
+.financial-binding-action { margin-top: 1.25rem; }
+.financial-binding-action h3 { margin-top: 1rem; }
+.financial-binding-action fieldset { border: 0; padding: 0; margin: 1rem 0 0; min-width: 0; display: grid; gap: .8rem; }
+.financial-binding-action fieldset > .button { justify-self: start; }
+.financial-revision-reason { max-width: 28rem; white-space: normal; overflow-wrap: anywhere; }
