@@ -477,8 +477,8 @@ def test_external_or_escaped_worksheet_relationships_are_not_followed(replacemen
         ("xl/worksheets/sheet1.xml", b'r="B2"', b'r="A2"', "DUPLICATE_CELL_REFERENCE"),
         (
             "xl/worksheets/sheet1.xml",
-            b'<ns0:row r="2">',
-            b'<ns0:row r="1">',
+            b'row r="2"',
+            b'row r="1"',
             "INVALID_ROW_SEQUENCE",
         ),
     ],
@@ -486,7 +486,11 @@ def test_external_or_escaped_worksheet_relationships_are_not_followed(replacemen
 def test_duplicate_or_misnumbered_cells_are_rejected(
     path: str, old: bytes, new: bytes, code: str
 ) -> None:
-    raw = rewrite_package(workbook(), path, lambda b: b.replace(old, new))
+    def corrupt(data: bytes) -> bytes:
+        assert old in data, "fixture corruption must actually change the worksheet"
+        return data.replace(old, new)
+
+    raw = rewrite_package(workbook(), path, corrupt)
     with pytest.raises(ProfitabilityPreviewError, match=code):
         preview_connectbooks_xlsx(raw, profile())
 
