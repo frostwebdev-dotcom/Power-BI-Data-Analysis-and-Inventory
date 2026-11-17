@@ -833,3 +833,15 @@ tests, all passing against PostgreSQL 16. Current totals are in
 
 They run against a real PostgreSQL and skip with an explanation when none is
 reachable, so the unit suite still runs anywhere.
+## Milestone 2 financial recording extension
+
+ADR 0025 and [financial-imports.md](financial-imports.md) describe
+financial_imports and financial_import_rows, added by revision a61117202601.
+Both are UUID-keyed, organization-scoped immutable snapshots with UTC timestamps.
+The rows have a composite import/organization foreign key and RESTRICT references
+to approved listing/product UUIDs. A batch records original-file/profile hashes,
+UTC calendar-month bounds, pre-binding controls and linkage/review counters.
+Rows preserve exact source JSON and NUMERIC(38,16) monetary values. Database
+guards enforce uploader/link tenancy, no overlapping periods, atomic row counts
+and no updates/deletes or later row appends. They do not change vendor inventory
+or grant eligibility for purchasing.

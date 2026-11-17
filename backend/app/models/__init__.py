@@ -17,6 +17,7 @@ from __future__ import annotations
 from app.models.amazon import AmazonInventorySnapshot, AmazonOrderLine, AmazonSyncRun
 from app.models.audit import AuditEvent
 from app.models.catalog import MarketplaceListing, Product, ProductIdentifier
+from app.models.financial import FinancialImport, FinancialImportRow
 from app.models.identity import Role, User, UserRole
 from app.models.ingestion import ImportFile, ImportJob, ImportJobRow
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
@@ -33,6 +34,8 @@ __all__ = [
     "AmazonSyncRun",
     "AuditEvent",
     "AvailabilityEvent",
+    "FinancialImport",
+    "FinancialImportRow",
     "ImportFile",
     "ImportJob",
     "ImportJobRow",

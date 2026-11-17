@@ -64,11 +64,29 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   PR #22. This increment does not persist financial data or add staff API/UI,
   canonical SKU binding, merge or deployment.
 
+## Fourth deliverable: recorded financial imports and approved SKU links
+
+- ADR 0025 and [the import guide](financial-imports.md) define two immutable,
+  organization-scoped financial tables, the migration, storage/replay policy,
+  period overlap checks and authenticated staff APIs.
+- Original bytes are retained before parsing. Batch, row snapshots, exact
+  approved SKU links and an audit event are committed together. Unknown and
+  conflicting mappings remain review items; source cost warnings are preserved.
+- Recorded imports require explicit year/timezone; they do not infer the missing
+  reporting context from the October workbook. No client financial data has been
+  persisted to a live database, and the migration has not been deployed.
+- Database integration, concurrency, immutability, API isolation and full-suite
+  evidence are recorded against the source commit in draft PR #22.
+- All 1,153 local unit tests passed; Ruff and strict mypy passed (231 source
+  files), and offline migration SQL generation passed. Local PostgreSQL is not
+  running, so the 23 new database tests require the PR's PostgreSQL CI job.
+
 ## Remaining Milestone 2 work
 
 - Amazon freshness, inventory-pool and pack normalization adapter.
-- Complete reporting context, cost review, approved SKU binding and a persisted,
-  period-aware profitability import using the received ConnectBooks layout.
+- Client reporting year/timezone and cost review, a staff financial import/review
+  interface, and a controlled supersession/re-binding workflow before real-file
+  operational acceptance. The database/API layer is implemented separately.
 - Persisted purchasing policy and audited recommendation snapshots.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
