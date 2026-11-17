@@ -39,8 +39,25 @@ All paths below are under /api/v1 and require authentication.
 Page size is bounded at 200. Unknown and foreign-organization IDs return the
 same 404 for detail, rows and raw access. No update/delete endpoint is provided.
 Invalid profiles, duplicate JSON keys and unsupported files return safe error
-codes without source cells. The staff UI is a later increment; these routes are
-not deployed by the development change.
+codes without source cells. The staff page at /financial-imports (ADR 0026)
+provides upload, history, totals, row review and original downloads on the same
+draft branch; neither the page nor the routes are deployed by this change.
+
+## Staff upload and review
+
+Financial imports appears under Ingestion. DATA_OPERATOR/ADMIN see the upload
+form; read-only users see recorded history and detail. Enter the source/canonical
+store labels, worksheet, marketplace and reporting month/year/timezone. Dates
+and zone are not inferred from the browser or filename. Only USD XLSX exports
+up to 8 MiB are supported. Advertising completeness is unchecked until confirmed.
+
+Batch detail shows source totals, differences and batch warnings even when the
+row issue count is zero. Filter rows by review requirement and mapping status;
+changing a filter resets pagination. Details preserve reported/calculated ratios,
+unknown amounts, exact decimal precision, source row numbers and mapping evidence.
+The original download is authenticated. There are no edit, delete, mapping
+approval or purchasing controls. A duplicate opens the existing record; an
+overlap error explains that a replacement workflow is still required.
 
 ## Mapping and review
 

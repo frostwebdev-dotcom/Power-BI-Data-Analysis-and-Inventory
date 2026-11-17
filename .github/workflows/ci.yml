@@ -225,6 +225,17 @@ jobs:
           E2E_ADMIN_EMAIL: admin@example.test
         run: npx playwright test
 
+      - name: Financial import layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-import-layouts
+          path: |
+            frontend/test-results/**/financial-desktop.png
+            frontend/test-results/**/financial-mobile.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

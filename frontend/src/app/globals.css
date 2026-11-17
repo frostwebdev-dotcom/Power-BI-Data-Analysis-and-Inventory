@@ -1270,3 +1270,16 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.financial-imports .card { margin-bottom: 20px; }
+.financial-imports h1 { overflow-wrap: anywhere; min-width: 0; }
+.financial-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.financial-fields .grid { align-items: start; }
+.financial-check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.financial-check input { width: auto; }
+.financial-number, .table td.financial-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.financial-digest { overflow-wrap: anywhere; }
+.financial-imports .kv__value { overflow-wrap: anywhere; }
+.financial-imports .drawer .financial-number { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .financial-fields .grid--2 { grid-template-columns: minmax(0, 1fr); }
+}

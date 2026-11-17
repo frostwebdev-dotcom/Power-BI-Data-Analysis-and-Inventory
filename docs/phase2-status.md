@@ -81,12 +81,29 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   files), and offline migration SQL generation passed. Local PostgreSQL is not
   running, so the 23 new database tests require the PR's PostgreSQL CI job.
 
+## Fifth deliverable: staff financial import and review screen
+
+- ADR 0026 adds /financial-imports to the authenticated navigation. It includes
+  role-aware upload, paginated history, original downloads, batch controls and
+  warnings, filtered review rows and a source/mapping detail drawer.
+- Report month/year/timezone start blank. USD, worksheet/store context and the
+  advertising-coverage assertion are visible; unsupported files are refused.
+- Monetary strings, including scientific Decimal representations, are displayed
+  without binary floating-point conversion or browser financial calculations.
+  Missing values, zero cost and unallocated rows retain their distinctions.
+- Type checking, lint and the production build passed locally. All 1,153 backend
+  unit tests, Ruff and strict mypy passed. Browser startup is restricted locally;
+  the PR CI runs nine new UI cases (including a real-API synthetic upload/replay)
+  and saves synthetic desktop/mobile screenshots for visual review.
+- Full source-commit CI and layout evidence are recorded in draft PR #22. No
+  owner workbook has been uploaded, and this change is not merged or deployed.
+
 ## Remaining Milestone 2 work
 
 - Amazon freshness, inventory-pool and pack normalization adapter.
-- Client reporting year/timezone and cost review, a staff financial import/review
-  interface, and a controlled supersession/re-binding workflow before real-file
-  operational acceptance. The database/API layer is implemented separately.
+- Client reporting year/timezone and cost review, and a controlled financial
+  supersession/re-binding workflow before real-file operational acceptance.
+  The database/API and staff interface are implemented on the draft branch.
 - Persisted purchasing policy and audited recommendation snapshots.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
