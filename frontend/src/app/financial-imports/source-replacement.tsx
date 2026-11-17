@@ -38,7 +38,7 @@ export function FinancialReplacement({ batch }: { batch: FinancialImport }) {
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (preview && confirmed && reason.trim().length >= 10) record.mutate(preview); }
   if (!hasRole("DATA_OPERATOR") || batch.replaced_by_import_id) return null;
   return <section className="card financial-binding-action" data-testid="financial-source-replacement">
-    <h2>Replace a corrected source report</h2>
+    <h2>Replace this source report</h2>
     <p className="muted">Use a corrected export for the same reporting context. A replacement preserves this report and its original file, rows and audit history.</p>
     <p className="small">Uses existing context: {batch.store_name} · {financialPeriod(batch.profile_snapshot)} · {batch.profile_snapshot.reporting_timezone} · USD. Coverage assertions and worksheet stay the same.</p>
     <label className="field"><span className="field__label">Corrected source workbook</span><input type="file" accept=".xlsx" disabled={busy} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); setReason(""); setConfirmed(false); propose.reset(); record.reset(); }} /><small>Original Excel .xlsx export, up to 8 MiB.</small></label>

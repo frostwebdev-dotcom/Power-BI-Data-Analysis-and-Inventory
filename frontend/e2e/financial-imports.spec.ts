@@ -87,7 +87,7 @@ async function mockFinancial(page: Page, options: MockOptions = {}) {
     if (path === "/financial-imports/" + ID + "/replacement-preview") {
       const number = Number(url.searchParams.get("page") ?? "1");
       return route.fulfill({ json: { preview_only: true, source_import_id: ID, preview_sha256: "d".repeat(64), original_filename: "corrected.xlsx", status: "REVIEW_REQUIRED", previous_row_count: 52, row_count: 51, linked_rows: 50, review_rows: 1, added_skus: 0, removed_skus: 1, page: number, page_size: 25,
-        controls: BATCH.report_snapshot.controls.map((control) => ({ field: control.field, previous_total: control.reported_total, replacement_total: control.field === "cost" || control.field === "profit" ? "45" : control.reported_total, difference: control.field === "cost" ? "5" : control.field === "profit" ? "-5" : "0", replacement_detail_total: control.field === "cost" ? null : control.reported_total, replacement_check: control.field === "cost" ? "INCOMPLETE" : "MATCH" })),
+        controls: BATCH.report_snapshot.controls.map((control) => ({ field: control.field, previous_total: control.reported_total, replacement_total: control.field === "cost" || control.field === "profit" ? "45" : control.reported_total, difference: control.field === "cost" ? "5" : control.field === "profit" ? "-5" : "0", replacement_detail_total: control.field === "cost" ? null : control.field === "profit" ? "45" : control.reported_total, replacement_check: control.field === "cost" ? "INCOMPLETE" : "MATCH" })),
         issues: BATCH.report_snapshot.issues, rows: [{ ...ROW, source_row_number: number === 1 ? 2 : 27, cost: null, computed_profit: null, review_reasons: ["MISSING_AMOUNT"], review_required: true }],
       } });
     }
