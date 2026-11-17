@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -43,7 +44,7 @@ class PurchasingPolicyRevision(UUIDPrimaryKeyMixin, OrganizationScopedMixin, Tim
     kind: Mapped[str] = mapped_column(String(16))
     definition_snapshot: Mapped[dict[str, Any]]
     definition_sha256: Mapped[str] = mapped_column(String(64))
-    review_context: Mapped[dict[str, Any] | None]
+    review_context: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     context_sha256: Mapped[str | None] = mapped_column(String(64))
     recorded_by_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT")

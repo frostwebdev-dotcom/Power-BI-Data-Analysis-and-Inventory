@@ -239,7 +239,9 @@ def create_policy(
                 reason=payload.reason,
             )
             result = _summary(repository, row.policy_id)
-    except IntegrityError:
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
         raise PolicyConflict(details={"code": "POLICY_ALREADY_EXISTS_OR_CHANGED"}) from None
     return result
 
@@ -275,7 +277,9 @@ def record_draft(
                 reason=payload.reason,
             )
             result = _summary(repository, identifier)
-    except IntegrityError:
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
         raise PolicyConflict(details={"code": "POLICY_CHANGED"}) from None
     return result
 
@@ -440,6 +444,8 @@ def record_review(
                 preview=preview,
             )
             result = _summary(repository, identifier)
-    except IntegrityError:
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
         raise PolicyConflict(details={"code": "POLICY_CHANGED"}) from None
     return result
