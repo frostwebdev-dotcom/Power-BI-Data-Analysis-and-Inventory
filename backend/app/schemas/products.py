@@ -78,3 +78,18 @@ class ListingResponse(BaseModel):
     approved_by_user_id: uuid.UUID | None
     approved_at: datetime | None
     is_active: bool
+
+
+class VendorProductChoice(BaseModel):
+    id: uuid.UUID
+    product_id: uuid.UUID
+    vendor_id: uuid.UUID
+    vendor_name: str
+    vendor_code: str
+    vendor_sku: str
+    is_active: bool
+    vendor_is_active: bool
+    mapping_status: MappingStatus
+    mapping_method: MatchMethod | None
+    approved_by_user_id: uuid.UUID | None
+    approved_at: datetime | None

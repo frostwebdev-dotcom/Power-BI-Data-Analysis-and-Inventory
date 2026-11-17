@@ -120,6 +120,7 @@ def test_openapi_schema_is_served(client: TestClient) -> None:
         "/api/v1/products/{product_id}",
         "/api/v1/products/{product_id}/identifiers",
         "/api/v1/products/{product_id}/listings",
+        "/api/v1/products/{product_id}/vendor-products",
     }
 
 

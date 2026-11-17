@@ -20,6 +20,33 @@ from app.repositories.scoping import ScopedRepository
 
 
 class PurchasingPolicyRepository(ScopedRepository):
+    def identity(
+        self, product_id: uuid.UUID, vendor_product_id: uuid.UUID
+    ) -> dict[str, Any] | None:
+        row = self.session.execute(
+            self.select(
+                VendorProduct,
+                Product.catalog_item_number,
+                Product.name.label("product_name"),
+                Vendor.id.label("vendor_id"),
+                Vendor.name.label("vendor_name"),
+                Vendor.code.label("vendor_code"),
+                VendorProduct.vendor_sku,
+            )
+            .join(
+                Product,
+                (Product.id == product_id)
+                & (Product.organization_id == self.scope.organization_id),
+            )
+            .join(
+                Vendor,
+                (Vendor.id == VendorProduct.vendor_id)
+                & (Vendor.organization_id == self.scope.organization_id),
+            )
+            .where(VendorProduct.id == vendor_product_id)
+        ).one_or_none()
+        return dict(row._mapping) if row else None
+
     def approval_owners(self, identifiers: set[uuid.UUID]) -> set[uuid.UUID]:
         return set(
             self.session.scalars(

@@ -240,6 +240,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      - name: Purchasing policy layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: purchasing-policy-layouts
+          path: |
+            frontend/test-results/**/policy-editor-desktop.png
+            frontend/test-results/**/policy-editor-mobile.png
+            frontend/test-results/**/policy-review-desktop.png
+            frontend/test-results/**/policy-review-mobile.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

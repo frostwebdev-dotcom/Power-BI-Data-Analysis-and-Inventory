@@ -190,6 +190,7 @@ export const NAV_ICONS: Record<string, (props: IconProps) => React.ReactElement>
   "/profiles": ProfilesIcon,
   "/imports": ImportsIcon,
   "/financial-imports": ImportsIcon,
+  "/purchasing-policies": ImportsIcon,
   "/exceptions": ExceptionsIcon,
   "/products": ProductsIcon,
   "/watchlist": WatchlistIcon,

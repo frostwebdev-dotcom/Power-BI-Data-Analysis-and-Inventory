@@ -111,8 +111,40 @@ unknown/stale refusal, tenant isolation, atomic audit, illegal mutations,
 concurrent approvals and protected downgrade. Exact-source CI evidence is kept
 in draft PR #22. No live client policy or Amazon baseline is created by tests.
 
-Next integration work includes the staff policy editor and immutable calculation
-snapshots that consume approved policy plus independently checked source data.
+## Staff policy editor
+
+ADR 0031 adds /purchasing-policies to the authenticated navigation. Product
+search requires explicit selection. The supplier chooser shows linked vendor
+names and exact SKUs; it does not create a mapping. New policy fields start
+blank, including demand/coverage/inbound choices, numeric limits and evidence.
+Conversions left blank stay null. The listing editor uses the complete scoped
+Amazon US set (maximum 200); incomplete lookups block saving. Stock pools have
+explicit membership, channel, one authoritative source and distinct-stock
+references. No pack_size is copied into conversions.
+
+The summary distinguishes the editing head from current approval. Paginated
+history shows full recorded definitions, reasons and local-zone timestamps.
+A historical definition can be used as a new draft against the latest head.
+Editing holds its original expected head; stale saves preserve unsaved fields
+until the operator explicitly closes/reopens the editor. Saved drafts do not
+revoke the prior approval.
+
+Manager review displays the complete server-returned definition, readable
+mapping evidence and blockers before requiring a reason and acknowledgement.
+It submits the server's exact version/content/context references. Rejected or
+changed reviews and explicit context changes clear the acknowledgement; unsaved
+edits cannot be approved. Viewer and operator controls follow their server roles.
+All summaries retain purchasing_eligible=false and current_data_verified=false.
+
+The product/vendor-product lookup is bounded, read-only and tenant-scoped;
+optional marketplace filters on the existing listing lookup preserve unfiltered
+history behavior. Policy summaries add current catalogue/vendor identity labels;
+those display labels are not immutable historical approval evidence. No new
+migration is added by the editor increment. Browser tests include mocked manager
+flows, a real-API synthetic draft/revision, and desktop/mobile screenshot evidence.
+
+Next integration work is immutable calculation snapshots that consume approved
+policy plus independently checked source data.
 Client values, inbound arrival evidence and three-real-SKU acceptance remain
 required. October financial year/timezone and coverage/cost review are still
 unconfirmed; Gmail remains paused.

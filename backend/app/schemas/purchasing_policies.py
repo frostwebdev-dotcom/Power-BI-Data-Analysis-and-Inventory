@@ -90,7 +90,17 @@ class PolicyRevisionResponse(PreviewModel):
     purchasing_eligible: Literal[False] = False
 
 
+class PolicyIdentity(PreviewModel):
+    catalog_item_number: str
+    product_name: str
+    vendor_id: uuid.UUID
+    vendor_name: str
+    vendor_code: str
+    vendor_sku: str
+
+
 class PolicySummary(PreviewModel):
+    identity: PolicyIdentity
     policy_id: uuid.UUID
     head: PolicyRevisionResponse
     approved: PolicyRevisionResponse | None

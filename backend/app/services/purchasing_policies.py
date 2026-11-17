@@ -22,6 +22,7 @@ from app.schemas.purchasing_policies import (
     Action,
     PolicyCreateRequest,
     PolicyDraftRequest,
+    PolicyIdentity,
     PolicyPage,
     PolicyReviewPreview,
     PolicyReviewRequest,
@@ -123,7 +124,11 @@ def _identities(
 def _summary(repository: PurchasingPolicyRepository, identifier: uuid.UUID) -> PolicySummary:
     head = repository.head(identifier)
     decision = repository.decision(identifier, through_revision=head.revision_number)
+    identity = repository.identity(head.product_id, head.vendor_product_id)
+    if identity is None:
+        raise PolicyNotFound()
     return PolicySummary(
+        identity=PolicyIdentity.model_validate(identity),
         policy_id=identifier,
         head=_response(head),
         approved=_response(decision) if decision and decision.kind == "APPROVED" else None,

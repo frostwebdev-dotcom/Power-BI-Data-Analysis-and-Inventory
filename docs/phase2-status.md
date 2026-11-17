@@ -160,6 +160,24 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   are recorded against the source in draft PR #22. No policy UI, live client
   policy, financial upload, merge or deployment is included in this increment.
 
+## Tenth deliverable: staff purchasing-policy editor
+
+- ADR 0031 adds policy list/filtering, explicit product/supplier-SKU selection,
+  blank-by-default policy fields, listing conversions and physical stock pools.
+  Optional conversions/evidence stay unknown; no customer defaults are inferred.
+- Current approval, editing head and paginated immutable history are distinct.
+  Operators/managers can append drafts; only managers/admins review and record
+  approval/revocation with complete server evidence, reason and acknowledgement.
+- Stale edits retain unsaved fields. Historical/context changes and stale reviews
+  clear acknowledgements; unsaved edits cannot be approved. Viewer controls are
+  read-only and server permissions remain authoritative.
+- Two bounded catalogue read improvements support readable supplier selection
+  and complete marketplace-specific listing reads. Summaries add current display
+  labels; the immutable definitions and approval evidence are unchanged.
+- Backend/types/lint/build and full PostgreSQL/browser/layout evidence are recorded
+  against the source in draft PR #22. No client policy, recommendation calculation,
+  financial upload, migration, merge or deployment is included in this increment.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
@@ -167,8 +185,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
-- Staff purchasing-policy editor and audited recommendation snapshots using
-  reviewed policy plus independently verified current source data.
+- Audited recommendation snapshots using reviewed policy plus independently
+  verified current source data.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
 

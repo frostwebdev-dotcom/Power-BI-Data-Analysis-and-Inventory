@@ -47,6 +47,8 @@ const TONES: Record<string, string> = {
   SUPERSEDED: "",
   MATCHED: "badge--ok",
   APPROVED: "badge--ok",
+  DRAFT: "badge--warn",
+  REVOKED: "badge--danger",
   AVAILABLE: "badge--ok",
   IN_STOCK: "badge--ok",
   BECAME_AVAILABLE: "badge--ok",
