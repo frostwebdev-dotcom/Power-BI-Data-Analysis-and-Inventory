@@ -1,16 +1,17 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import { cloneElement, useId, useState } from "react";
+import type { FormEvent, ReactElement } from "react";
 
 import { EmptyState, ErrorNote, Loading, Note, Pager, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { buildPolicy, policyError, policyForm, policyPath, US_MARKETPLACE, usePolicyListings, useVendorProductChoices } from "@/lib/purchasing-policies";
 import type { PolicyDefinition, PolicyForm, PolicySummary, PoolForm, UnitForm, VendorProductChoice } from "@/lib/purchasing-policies";
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <label className="field"><span className="field__label">{label}</span>{children}{hint ? <small>{hint}</small> : null}</label>;
+export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactElement<{ id?: string; "aria-describedby"?: string }> }) {
+  const id = useId();
+  return <div className="field"><label className="field__label" htmlFor={id}>{label}</label>{cloneElement(children, { id, "aria-describedby": hint ? id + "-hint" : undefined })}{hint ? <small id={id + "-hint"}>{hint}</small> : null}</div>;
 }
 export function VendorChoice({ productId, onSelect }: { productId: string; onSelect: (choice: VendorProductChoice) => void }) {
   const [text, setText] = useState(""), [search, setSearch] = useState(""), [page, setPage] = useState(1);

@@ -33,6 +33,7 @@ class PurchasingPolicyRepository(ScopedRepository):
                 Vendor.code.label("vendor_code"),
                 VendorProduct.vendor_sku,
             )
+            .select_from(VendorProduct)
             .join(
                 Product,
                 (Product.id == product_id)
