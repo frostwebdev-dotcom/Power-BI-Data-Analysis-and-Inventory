@@ -161,7 +161,7 @@ def upgrade() -> None:
             IF NEW.supersedes_revision_id IS DISTINCT FROM head.id OR NEW.revision_number <> coalesce(head.revision_number, 0) + 1 THEN
                 RAISE EXCEPTION 'Financial revision must extend the current head';
             END IF;
-            IF NEW.row_count <> source.row_count OR NEW.status <> CASE WHEN NEW.review_rows > 0 OR source.report_snapshot->>'status' = 'REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED' ELSE 'RECORDED' END THEN
+            IF NEW.row_count <> source.row_count OR NEW.status <> (CASE WHEN NEW.review_rows > 0 OR source.report_snapshot->>'status' = 'REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED' ELSE 'RECORDED' END) THEN
                 RAISE EXCEPTION 'Financial revision must retain source coverage and batch warnings';
             END IF;
             NEW.recording_transaction_id := txid_current();
