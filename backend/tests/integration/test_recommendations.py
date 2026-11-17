@@ -403,9 +403,9 @@ def test_unknown_zero_and_positive_inbound_remain_distinct(
 def test_missing_baseline_is_a_recordable_blocked_snapshot(
     db_session: Session, context: Context
 ) -> None:
-    db_session.delete(context.line)
     run = db_session.get(AmazonSyncRun, context.line.last_seen_sync_run_id)
     assert run is not None
+    db_session.delete(context.line)
     run.error_details = {}
     db_session.commit()
     result = preview(db_session, context)
