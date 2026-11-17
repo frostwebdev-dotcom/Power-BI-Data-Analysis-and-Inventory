@@ -107,9 +107,11 @@ test("shared pool editor saves membership and one authoritative source on deskto
   await pool.getByLabel("SINGLE-1", { exact: true }).check(); await pool.getByLabel("PACK-6", { exact: true }).check();
   await page.getByLabel("Authoritative stock listing · 1", { exact: true }).selectOption(LISTING);
   await page.getByLabel("Distinct stock evidence · 1", { exact: true }).fill("Synthetic shared stock: authoritative single-unit listing.");
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("policy-editor-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("policy-editor-mobile.png"), fullPage: true });
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByTestId("policy-editing-head")).toBeVisible();
@@ -134,8 +136,10 @@ test("approval reviews the current draft and requires a reason and acknowledgeme
   await expect(save).toBeDisabled();
   await preview.getByLabel("Reason for manager decision", { exact: true }).fill("Manager reviewed this synthetic coverage change."); await expect(save).toBeDisabled();
   await preview.getByText("Identity and mapping evidence checked for this review", { exact: true }).click();
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("policy-review-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("policy-review-mobile.png"), fullPage: true });
   await preview.getByLabel("I reviewed this complete saved definition and its current mapping evidence", { exact: true }).check(); await save.click();
   await expect(page.getByTestId("policy-current-approval")).toContainText("Version 4");

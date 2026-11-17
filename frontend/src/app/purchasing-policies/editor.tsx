@@ -99,7 +99,7 @@ export function PolicyEditor({ productId, vendorProductId, initial, expectedHead
       </div>; })}
       <h3>Physical stock pools</h3><p className="muted small">Put shared-stock aliases in the same pool. Choose one authoritative listing for stock; listing quantities are never added together here.</p>
       {form.pools.length === 0 ? <Note tone="warn">No stock pools defined. Approval will require their membership and evidence.</Note> : null}
-      {form.pools.map((pool, index) => <div className="policy-subcard" key={pool.key} aria-label={"Stock pool " + (index + 1)}>
+      {form.pools.map((pool, index) => <div className="policy-subcard" key={pool.key} role="group" aria-label={"Stock pool " + (index + 1)}>
         <div className="policy-actions"><h4>Stock pool {index + 1}</h4><button type="button" className="button button--ghost" onClick={() => field("pools", form.pools.filter(p => p.key !== pool.key))}>Remove pool {index + 1}</button></div>
         <div className="grid grid--2"><Field label={"Pool name · " + (index + 1)} hint="Unique name, e.g. main-warehouse. Letters, numbers, dot, dash or underscore."><input required maxLength={64} pattern="[A-Za-z0-9._-]+" value={pool.name} onChange={e => changePool(pool.key, { name: e.target.value })} /></Field>
         <Field label={"Fulfillment channel · " + (index + 1)}><select required value={pool.channel} onChange={e => changePool(pool.key, { channel: e.target.value })}><option value="">Choose channel</option><option value="FBA">FBA · Amazon fulfilled</option><option value="FBM">FBM · Merchant fulfilled</option></select></Field></div>

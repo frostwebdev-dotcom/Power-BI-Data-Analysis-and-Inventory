@@ -1320,6 +1320,8 @@ textarea:focus {
 .purchasing-policies .kv__key { flex: 0 0 38%; }
 .purchasing-policies .kv__value { flex: 1; white-space: normal; overflow: visible; text-overflow: clip; }
 .purchasing-policies .button { max-width: 100%; white-space: normal; }
+.purchasing-policies .table { min-width: 700px; }
+.purchasing-policies .table td { vertical-align: top; }
 @media (max-width: 720px) {
   .purchasing-policies .kv__row { display: grid; }
   .purchasing-policies .kv__value { text-align: left; }
