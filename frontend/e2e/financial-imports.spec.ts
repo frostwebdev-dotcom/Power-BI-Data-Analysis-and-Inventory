@@ -314,7 +314,7 @@ test("unchanged links cannot create a revision", async ({ page }) => {
 });
 
 test("viewers inspect historical links with row filters reset when changing revision", async ({ page }) => {
-  const calls = await mockFinancial(page, { role: "VIEWER", bindingHistory: [REVISION] });
+  const calls = await mockFinancial(page, { role: "VIEWER", bindingHistory: [REVISION], rows: [{ ...ROW, mapping_status: "UNRESOLVED", product_id: null, listing_id: null, review_required: true }] });
   await page.goto("/financial-imports?import=" + ID);
   await expect(page.getByRole("button", { name: "Preview current SKU links", exact: true })).toHaveCount(0);
   await page.getByLabel("Only rows needing review").check();
@@ -326,8 +326,10 @@ test("viewers inspect historical links with row filters reset when changing revi
   await expect(page.getByLabel("SKU link status")).toHaveValue("");
   await expect.poll(() => calls.filter((call) => call.path.endsWith("/rows")).at(-1)?.params.get("page")).toBe("1");
   expect(calls.filter((call) => call.path.endsWith("/rows")).at(-1)?.params.get("binding_revision_id")).toBe(REVISION.id);
+  await expect(page.getByTestId("financial-rows").getByText("linked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Show original links", exact: true }).click();
   await expect(page.getByTestId("financial-binding-revisions")).toContainText("Showing original import links");
-  await expect.poll(() => calls.filter((call) => call.path.endsWith("/rows")).at(-1)?.params.has("binding_revision_id")).toBeFalsy();
+  // Returning to the original query can reuse its immutable cached rows.
+  await expect(page.getByTestId("financial-rows").getByText("unresolved", { exact: true })).toBeVisible();
   expect(calls.some((call) => call.method === "POST")).toBeFalsy();
 });

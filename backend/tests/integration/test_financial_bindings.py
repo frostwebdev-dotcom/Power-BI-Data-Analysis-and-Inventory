@@ -157,6 +157,9 @@ def test_noop_and_stale_head_and_changed_proposal_are_rejected(
         record_binding_revision(db_session, context.actor, batch.id, request)
     assert noop.value.details["code"] == "BINDING_NO_CHANGES"
     approved(db_session, context)
+    # Mapping approval is a separate committed staff action. A rejected record
+    # request must not roll that action back along with its own transaction.
+    db_session.commit()
     with pytest.raises(FinancialImportConflict) as changed_proposal:
         record_binding_revision(db_session, context.actor, batch.id, request)
     assert changed_proposal.value.details["code"] == "BINDING_PROPOSAL_CHANGED"
