@@ -39,10 +39,36 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - There is no canonical product binding, persisted financial import, API/UI,
   real-file acceptance, merge or deployment for this increment.
 
+## Third deliverable: signed ConnectBooks XLSX preview
+
+- On 17 November the owner supplied the October XLSX and relayed confirmation
+  of USD, Item as Amazon seller SKU, and the canonical/source store labels.
+  The reporting year/timezone and advertising coverage remain explicitly
+  unconfirmed, rather than being inferred from workbook creation metadata.
+- ADR 0024 and [the Excel preview guide](connectbooks-xlsx-preview.md) document
+  the separate signed-source contract. Header order can change; duplicated
+  unused descriptive headers do not make mapped financial columns ambiguous.
+- The local service and CLI preserve Decimal precision, refund/cost credits and
+  signed fees, and independently reconcile profit, adjusted net sales and the
+  final control totals. Fee subcategories are not deducted a second time.
+- Unitemized remains unallocated, missing cost stays unknown, positive sales
+  with zero reported cost requires review, and duplicate/non-text SKUs are blocked.
+  All rows remain unresolved and ineligible for purchasing.
+- Original October-file CLI validation passed locally: all supported row and
+  footer controls reconciled within one cent; the expected unallocated and
+  zero-cost review cases were retained. Original bytes were verified unchanged.
+  No customer workbook, financial values or output JSON is committed.
+- All 1,124 local unit tests passed, including 57 signed-XLSX cases. Backend
+  Ruff formatting/lint and strict mypy passed (224 source files).
+- Local and full-CI verification are recorded with the source commit in draft
+  PR #22. This increment does not persist financial data or add staff API/UI,
+  canonical SKU binding, merge or deployment.
+
 ## Remaining Milestone 2 work
 
 - Amazon freshness, inventory-pool and pack normalization adapter.
-- Real ConnectBooks export, mapping and period-aware profitability import.
+- Complete reporting context, cost review, approved SKU binding and a persisted,
+  period-aware profitability import using the received ConnectBooks layout.
 - Persisted purchasing policy and audited recommendation snapshots.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.

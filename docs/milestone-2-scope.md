@@ -10,7 +10,7 @@ silently carried into a new commitment here.
 
 1. Reuse and validate existing read-only Amazon ingestion, SKU mapping, 7/14/30-day
    velocity, FBA/FBM inventory, inbound inventory and source freshness evidence.
-2. Import a real ConnectBooks CSV with explicit column and reporting-period
+2. Import a real ConnectBooks CSV or XLSX with explicit column and reporting-period
    mappings. Associate price, costs and fees with approved product/SKU identities;
    report profit, margin and ROI without treating unknown costs as zero.
 3. Explainable replenishment previews with configurable velocity window, target
@@ -113,8 +113,10 @@ increment; see [profitability-csv-preview.md](profitability-csv-preview.md) and
 ADR 0023. Its synthetic fixture does not establish a real ConnectBooks layout,
 cost basis, canonical SKU binding or persisted profitability import.
 
-- A real ConnectBooks CSV, with reporting dates, currency and per-unit versus
-  period-total cost semantics. Do not fabricate a production import mapping.
+- The owner supplied a real October XLSX on 17 November and confirmed USD,
+  Item as seller SKU and the store name. ADR 0024 defines the signed XLSX preview.
+  The reporting year/timezone, cost completeness and approved SKU bindings remain
+  prerequisites for a persisted financial import.
 - Purchasing-manager decisions on target coverage, velocity window, lead time,
   safety stock, pending-order demand and acceptable inbound timing.
 - Confirmed listing/pack conversion and shared-stock rules.
