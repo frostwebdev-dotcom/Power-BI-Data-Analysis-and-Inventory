@@ -124,9 +124,28 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   browser/desktop/mobile verification, are recorded in draft PR #22 for its
   current source. No client report upload, merge or deployment is included.
 
+## Eighth deliverable: Amazon input-readiness evidence
+
+- ADR 0029 and [the readiness guide](amazon-data-readiness.md) add a scoped
+  read-only API over ingested PostgreSQL. Explicit freshness limits, approved
+  mappings, listing-to-base-unit conversions and named FBA/FBM stock pools are
+  evaluated without purchasing defaults, external calls or database writes.
+- One stock-source listing supplies each pool's quantity. Shared aliases are
+  not summed; unknown/coerced quantities stay unknown and inbound without
+  arrival evidence cannot be credited. Missing latest-run SKUs do not fall back.
+- A new opt-in order-date baseline CLI mode and safe per-run/line provenance
+  establish complete purchase-window evidence. The default scheduler/report
+  and legacy velocity behavior remain unchanged. No live baseline was run.
+- Strict request/conversion tests, PostgreSQL freshness/coverage/pool/isolation
+  tests, ingestion provenance tests and full CI evidence are recorded against
+  the source in draft PR #22. All outputs remain purchasing-ineligible and
+  request confirmations are not persisted as approved policy.
+- There is no new UI, migration, live client upload, merge or deployment.
+
 ## Remaining Milestone 2 work
 
-- Amazon freshness, inventory-pool and pack normalization adapter.
+- Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
+  merchant inbound), integrated recommendations and three-real-SKU acceptance.
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
