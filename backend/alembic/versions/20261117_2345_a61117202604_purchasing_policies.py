@@ -131,7 +131,8 @@ BEGIN
                 OR NEW.review_context->>'policy_id' IS DISTINCT FROM NEW.policy_id::text
                 OR NEW.review_context->>'definition_sha256' IS DISTINCT FROM NEW.definition_sha256
                 OR NEW.review_context->>'reviewed_revision_id' IS DISTINCT FROM reviewed.id::text
-                OR NEW.review_context->>'action' IS DISTINCT FROM CASE NEW.kind WHEN 'APPROVED' THEN 'APPROVE' ELSE 'REVOKE' END THEN
+                OR (NEW.kind = 'APPROVED' AND NEW.review_context->>'action' IS DISTINCT FROM 'APPROVE')
+                OR (NEW.kind = 'REVOKED' AND NEW.review_context->>'action' IS DISTINCT FROM 'REVOKE') THEN
                 RAISE EXCEPTION 'Policy review context must agree with the reviewed transition';
             END IF;
             IF NEW.kind = 'APPROVED' THEN
