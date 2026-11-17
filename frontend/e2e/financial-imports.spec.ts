@@ -42,6 +42,12 @@ const ROW = {
   net_sales: "110.0000000000000000", fees: "-15.0000000000000000", cost: "40.0000000000000000",
   ad_spend: "5.0000000000000000", reported_profit: "50.0000000000000000", computed_profit: "50.0000000000000000",
 };
+const REVISION = {
+  id: "00000000-0000-0000-0000-000000000043", import_id: ID, revision_number: 1,
+  supersedes_revision_id: null, recorded_by_user_id: "operator", created_at: "2026-11-17T14:00:00Z",
+  reason: "Apply approved SKU links", status: "REVIEW_REQUIRED", row_count: 52,
+  linked_rows: 52, review_rows: 0, changed_rows: 1,
+};
 
 interface MockOptions {
   role?: string;
@@ -51,9 +57,13 @@ interface MockOptions {
   batch?: unknown;
   rows?: unknown[];
   total?: number;
+  bindingHistory?: typeof REVISION[];
+  bindingChanges?: boolean;
+  bindingStale?: boolean;
 }
 async function mockFinancial(page: Page, options: MockOptions = {}) {
   const calls: { path: string; method: string; params: URLSearchParams; body: string }[] = [];
+  let revisions = [...(options.bindingHistory ?? [])];
   await page.addInitScript(() => localStorage.setItem("prms.token", "synthetic-browser-credential"));
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -69,9 +79,22 @@ async function mockFinancial(page: Page, options: MockOptions = {}) {
     }
     if (path === "/financial-imports") return route.fulfill({ json: { items: [options.batch ?? BATCH], page: 1, page_size: 25, total: 1 } });
     if (path === "/financial-imports/" + ID) return route.fulfill({ json: options.batch ?? BATCH });
+    if (path === "/financial-imports/" + ID + "/binding-revisions/preview") return route.fulfill({ json: {
+      import_id: ID, expected_revision_id: revisions[0]?.id ?? null, bindings_sha256: "c".repeat(64),
+      status: "REVIEW_REQUIRED", row_count: 52, linked_rows: 52, review_rows: 0, purchasing_eligible: false,
+      changed_rows: options.bindingChanges ? 1 : 0, page: 1, page_size: 25,
+      changes: options.bindingChanges ? [{ source_row_number: 2, seller_sku: "0000123", before: { ...ROW, mapping_status: "UNRESOLVED", product_id: null, listing_id: null, mapping_snapshot: {}, review_reasons: ["MAPPING_UNRESOLVED"] }, after: ROW }] : [],
+    } });
+    if (path === "/financial-imports/" + ID + "/binding-revisions" && request.method() === "POST") {
+      if (options.bindingStale) return route.fulfill({ status: 409, json: { error: { code: "financial_import_conflict", message: "Changed", details: { code: "BINDING_PROPOSAL_CHANGED" } } } });
+      const revision = { ...REVISION, reason: (request.postDataJSON() as { reason: string }).reason };
+      revisions = [revision, ...revisions];
+      return route.fulfill({ status: 201, json: revision });
+    }
+    if (path === "/financial-imports/" + ID + "/binding-revisions") return route.fulfill({ json: { items: revisions, page: 1, page_size: 25, total: revisions.length } });
     if (path === "/financial-imports/" + ID + "/rows") {
       const number = Number(url.searchParams.get("page") ?? "1");
-      return route.fulfill({ json: { items: options.rows ?? [{ ...ROW, source_row_number: number === 1 ? 2 : 27 }], page: number, page_size: 25, total: options.total ?? 52 } });
+      return route.fulfill({ json: { items: url.searchParams.has("binding_revision_id") ? [{ ...ROW, binding_revision_id: url.searchParams.get("binding_revision_id") }] : options.rows ?? [{ ...ROW, source_row_number: number === 1 ? 2 : 27 }], page: number, page_size: 25, total: options.total ?? 52 } });
     }
     if (path === "/financial-imports/" + ID + "/raw") {
       if (options.downloadFails) return route.fulfill({ status: 409, json: { error: { code: "financial_import_conflict", details: { code: "RAW_INTEGRITY_MISMATCH" }, message: "Integrity check failed" } } });
@@ -243,4 +266,68 @@ test("synthetic financial report uploads through the real API and replays withou
   await expect(page.getByRole("status").filter({ hasText: "This file was already imported" })).toBeVisible();
   expect(new URL(page.url()).searchParams.get("import")).toBe(firstIdentifier);
   expect(new URL(page.url()).searchParams.get("duplicate")).toBe("1");
+});
+
+test("reviewed SKU link changes require a reason and acknowledgement before recording", async ({ page }, testInfo) => {
+  const calls = await mockFinancial(page, { bindingChanges: true });
+  await page.goto("/financial-imports?import=" + ID);
+  await page.getByRole("button", { name: "Preview current SKU links", exact: true }).click();
+  const preview = page.getByTestId("financial-binding-preview");
+  await expect(preview).toContainText("1 changed rows");
+  const record = preview.getByRole("button", { name: "Record SKU link revision", exact: true });
+  await expect(record).toBeDisabled();
+  await page.getByLabel("Reason for SKU link revision").fill("Apply the mappings approved after upload.");
+  await expect(record).toBeDisabled();
+  await page.getByLabel("I have reviewed the proposed SKU link changes").check();
+  await expect(record).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath("financial-binding-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: testInfo.outputPath("financial-binding-mobile.png"), fullPage: true });
+  await record.click();
+  await expect(page.getByTestId("financial-selected-revision")).toContainText("Selected revision 1");
+  await expect(preview).toHaveCount(0);
+  const saved = calls.find((call) => call.method === "POST" && call.path.endsWith("/binding-revisions"));
+  expect(JSON.parse(saved?.body ?? "{}")).toEqual({ expected_revision_id: null, bindings_sha256: "c".repeat(64), reason: "Apply the mappings approved after upload." });
+  await expect.poll(() => calls.some((call) => call.params.get("binding_revision_id") === REVISION.id)).toBeTruthy();
+  await expect(page.getByTestId("financial-batch-checks")).toContainText("Advertising cost coverage has not been confirmed");
+});
+
+test("stale SKU link preview is discarded and requires a fresh preview", async ({ page }) => {
+  const calls = await mockFinancial(page, { bindingChanges: true, bindingStale: true });
+  await page.goto("/financial-imports?import=" + ID);
+  await page.getByRole("button", { name: "Preview current SKU links", exact: true }).click();
+  await page.getByLabel("Reason for SKU link revision").fill("Apply reviewed approved links.");
+  await page.getByLabel("I have reviewed the proposed SKU link changes").check();
+  await page.getByRole("button", { name: "Record SKU link revision", exact: true }).click();
+  await expect(page.locator(".financial-imports").getByRole("alert")).toContainText("Preview the current links again");
+  await expect(page.getByTestId("financial-binding-preview")).toHaveCount(0);
+  expect(calls.filter((call) => call.method === "POST" && call.path.endsWith("/binding-revisions"))).toHaveLength(1);
+});
+
+test("unchanged links cannot create a revision", async ({ page }) => {
+  await mockFinancial(page);
+  await page.goto("/financial-imports?import=" + ID);
+  await page.getByRole("button", { name: "Preview current SKU links", exact: true }).click();
+  await expect(page.getByTestId("financial-binding-preview")).toContainText("No SKU links have changed");
+  await expect(page.getByRole("button", { name: "Record SKU link revision", exact: true })).toHaveCount(0);
+});
+
+test("viewers inspect historical links with row filters reset when changing revision", async ({ page }) => {
+  const calls = await mockFinancial(page, { role: "VIEWER", bindingHistory: [REVISION] });
+  await page.goto("/financial-imports?import=" + ID);
+  await expect(page.getByRole("button", { name: "Preview current SKU links", exact: true })).toHaveCount(0);
+  await page.getByLabel("Only rows needing review").check();
+  await page.getByLabel("SKU link status").selectOption("UNRESOLVED");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Show revision 1", exact: true }).click();
+  await expect(page.getByTestId("financial-selected-revision")).toContainText("This revision still requires review");
+  await expect(page.getByLabel("Only rows needing review")).not.toBeChecked();
+  await expect(page.getByLabel("SKU link status")).toHaveValue("");
+  await expect.poll(() => calls.filter((call) => call.path.endsWith("/rows")).at(-1)?.params.get("page")).toBe("1");
+  expect(calls.filter((call) => call.path.endsWith("/rows")).at(-1)?.params.get("binding_revision_id")).toBe(REVISION.id);
+  await page.getByRole("button", { name: "Show original links", exact: true }).click();
+  await expect(page.getByTestId("financial-binding-revisions")).toContainText("Showing original import links");
+  await expect.poll(() => calls.filter((call) => call.path.endsWith("/rows")).at(-1)?.params.has("binding_revision_id")).toBeFalsy();
+  expect(calls.some((call) => call.method === "POST")).toBeFalsy();
 });

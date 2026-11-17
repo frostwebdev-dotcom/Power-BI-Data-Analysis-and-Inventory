@@ -9,12 +9,118 @@ from sqlalchemy import func, select
 
 from app.models.catalog import MarketplaceListing, Product
 from app.models.enums import MappingStatus, Marketplace, ProductStatus
-from app.models.financial import FinancialImport, FinancialImportRow
+from app.models.financial import (
+    FinancialBindingRevision,
+    FinancialBindingRow,
+    FinancialImport,
+    FinancialImportRow,
+)
 from app.models.identity import User
 from app.repositories.scoping import ScopedRepository
 
 
 class FinancialRepository(ScopedRepository):
+    def binding_head(self, identifier: uuid.UUID) -> FinancialBindingRevision | None:
+        row = self.session.scalar(
+            self.select(FinancialBindingRevision)
+            .where(FinancialBindingRevision.import_id == identifier)
+            .order_by(FinancialBindingRevision.revision_number.desc())
+            .limit(1)
+        )
+        return row if isinstance(row, FinancialBindingRevision) else None
+
+    def binding_revision(
+        self, identifier: uuid.UUID, revision_id: uuid.UUID
+    ) -> FinancialBindingRevision | None:
+        row = self.session.scalar(
+            self.select(FinancialBindingRevision).where(
+                FinancialBindingRevision.import_id == identifier,
+                FinancialBindingRevision.id == revision_id,
+            )
+        )
+        return row if isinstance(row, FinancialBindingRevision) else None
+
+    def binding_history(
+        self, identifier: uuid.UUID, page: int, page_size: int
+    ) -> tuple[list[FinancialBindingRevision], int]:
+        query = self.select(FinancialBindingRevision).where(
+            FinancialBindingRevision.import_id == identifier
+        )
+        total = self.session.scalar(query.with_only_columns(func.count()).order_by(None)) or 0
+        return list(
+            self.session.scalars(
+                query.order_by(FinancialBindingRevision.revision_number.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ), total
+
+    def source_rows(self, identifier: uuid.UUID) -> list[FinancialImportRow]:
+        return list(
+            self.session.scalars(
+                self.select(FinancialImportRow)
+                .where(FinancialImportRow.import_id == identifier)
+                .order_by(FinancialImportRow.source_row_number)
+            )
+        )
+
+    def binding_rows(self, revision_id: uuid.UUID) -> dict[uuid.UUID, FinancialBindingRow]:
+        return {
+            row.source_row_id: row
+            for row in self.session.scalars(
+                self.select(FinancialBindingRow).where(
+                    FinancialBindingRow.revision_id == revision_id
+                )
+            )
+        }
+
+    def revised_rows(
+        self,
+        identifier: uuid.UUID,
+        revision_id: uuid.UUID,
+        page: int,
+        page_size: int,
+        *,
+        review_only: bool = False,
+        mapping_status: str | None = None,
+    ) -> tuple[list[tuple[FinancialImportRow, FinancialBindingRow]], int]:
+        query = (
+            self.select(FinancialImportRow, FinancialImportRow, FinancialBindingRow)
+            .join(FinancialBindingRow, FinancialBindingRow.source_row_id == FinancialImportRow.id)
+            .where(
+                FinancialImportRow.import_id == identifier,
+                FinancialBindingRow.organization_id == self.scope.organization_id,
+                FinancialBindingRow.import_id == identifier,
+                FinancialBindingRow.revision_id == revision_id,
+            )
+        )
+        if review_only:
+            query = query.where(FinancialBindingRow.review_required.is_(True))
+        if mapping_status is not None:
+            query = query.where(FinancialBindingRow.mapping_status == mapping_status)
+        total = self.session.scalar(query.with_only_columns(func.count()).order_by(None)) or 0
+        result = self.session.execute(
+            query.order_by(FinancialImportRow.source_row_number)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [(r[0], r[1]) for r in result], total
+
+    def add_binding_revision(
+        self, revision: FinancialBindingRevision, rows: list[FinancialBindingRow]
+    ) -> None:
+        if revision.organization_id != self.scope.organization_id or any(
+            row.organization_id != self.scope.organization_id
+            or row.revision_id != revision.id
+            or row.import_id != revision.import_id
+            for row in rows
+        ):
+            raise ValueError("binding revisions must belong to their repository scope")
+        self.session.add(revision)
+        self.session.flush()
+        self.session.add_all(rows)
+        self.session.flush()
+
     def lock_marketplace(self, marketplace_id: str) -> None:
         key = f"financial:{self.scope.organization_id}:{marketplace_id}"
         self.session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))

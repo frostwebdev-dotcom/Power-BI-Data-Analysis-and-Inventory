@@ -845,3 +845,11 @@ Rows preserve exact source JSON and NUMERIC(38,16) monetary values. Database
 guards enforce uploader/link tenancy, no overlapping periods, atomic row counts
 and no updates/deletes or later row appends. They do not change vendor inventory
 or grant eligibility for purchasing.
+
+ADR 0027 adds financial_binding_revisions and financial_binding_rows in revision
+a61117202602. Revision ancestry has one sequential head per original import;
+each complete binding set references its original financial rows through tenant
+and import composite UUID foreign keys. Binding rows contain no money. Insert
+guards enforce ownership, active approved links, preserved source warnings,
+complete/changed counters and original-transaction insertion. Headers and rows
+are append-only; a reasoned revision and its audit event commit together.

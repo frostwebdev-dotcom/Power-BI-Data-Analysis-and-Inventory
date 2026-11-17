@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { financialError, financialNumber, financialPeriod, financialReason, MAX_FINANCIAL_BYTES, MONTHS, useFinancialImport, useFinancialImports, useFinancialRows } from "@/lib/financial-imports";
 import type { FinancialControl, FinancialProfile, FinancialRow, FinancialUpload } from "@/lib/financial-imports";
+import { FinancialBindings } from "./sku-link-revisions";
 
 const MAPPINGS = ["LINKED", "UNRESOLVED", "UNALLOCATED", "INVALID_SOURCE", "ASIN_CONFLICT"];
 const LABELS: Record<string, string> = {
@@ -45,7 +46,7 @@ function ImportHistory() {
       {history.data?.items.length === 0 ? <EmptyState title="No financial imports yet" /> : null}
       {history.data && history.data.items.length > 0 ? <div className="table-wrap">
         <table className="table" data-testid="financial-history"><thead><tr>
-          <th>Report</th><th>Store</th><th>Period</th><th>Status</th><th>Rows</th><th>Linked</th><th>Row reviews</th><th>Received</th>
+          <th>Report</th><th>Store</th><th>Period</th><th>Original status</th><th>Rows</th><th>Original links</th><th>Original row reviews</th><th>Received</th>
         </tr></thead><tbody>{history.data.items.map((batch) => <tr key={batch.id}>
           <td><Link href={"/financial-imports?import=" + encodeURIComponent(batch.id)}>{batch.original_filename}</Link></td>
           <td>{batch.store_name}</td><td>{financialPeriod(batch.profile_snapshot)}<div className="muted small">{batch.profile_snapshot.reporting_timezone}</div></td>
@@ -130,6 +131,7 @@ function ImportDetail({ identifier, duplicate }: { identifier: string; duplicate
   const query = useFinancialImport(identifier);
   const [downloadError, setDownloadError] = useState<unknown>(null);
   const [downloading, setDownloading] = useState(false);
+  const [bindingRevisionId, setBindingRevisionId] = useState("");
   const batch = query.data;
   async function download() {
     setDownloadError(null);
@@ -156,7 +158,7 @@ function ImportDetail({ identifier, duplicate }: { identifier: string; duplicate
       {duplicate ? <p className="note note--info" role="status">This file was already imported. You are viewing the existing record.</p> : null}
       <ErrorNote error={downloadError} />
       <section className="card" data-testid="financial-summary">
-        <h2>Import summary</h2>
+        <h2>Original import summary</h2>
         <StatusBadge value={batch.status} />
         {batch.status === "REVIEW_REQUIRED" ? <Note tone="warn">Review required. Check batch warnings and financial totals below, even when the row review count is zero.</Note> : null}
         <KeyValues rows={[
@@ -185,7 +187,8 @@ function ImportDetail({ identifier, duplicate }: { identifier: string; duplicate
           ? <ControlsTable controls={batch.report_snapshot.controls} />
           : <EmptyState title="Financial controls unavailable" text="This report needs review before its totals can be verified." />}
       </section>
-      <FinancialRows identifier={identifier} />
+      <FinancialBindings identifier={identifier} selectedId={bindingRevisionId} onSelect={setBindingRevisionId} />
+      <FinancialRows key={bindingRevisionId} identifier={identifier} revisionId={bindingRevisionId} />
     </> : null}
   </>;
 }
@@ -197,14 +200,15 @@ function ControlsTable({ controls }: { controls: FinancialControl[] }) {
     </tr>; })}</tbody></table></div>;
 }
 
-function FinancialRows({ identifier }: { identifier: string }) {
+function FinancialRows({ identifier, revisionId }: { identifier: string; revisionId: string }) {
   const [page, setPage] = useState(1);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [mapping, setMapping] = useState("");
   const [selected, setSelected] = useState<FinancialRow | null>(null);
-  const rows = useFinancialRows(identifier, page, reviewOnly, mapping);
+  const rows = useFinancialRows(identifier, page, reviewOnly, mapping, revisionId);
   return <section className="card">
     <h2>Rows and review issues</h2>
+    <p className="muted small">{revisionId ? "Showing the selected SKU link revision with original financial amounts." : "Showing the original SKU links and financial amounts recorded at upload."}</p>
     <div className="toolbar">
       <label className="financial-check"><input type="checkbox" checked={reviewOnly} onChange={(e) => { setReviewOnly(e.target.checked); setPage(1); }} />Only rows needing review</label>
       <label className="field"><span className="field__label">SKU link status</span><select value={mapping} onChange={(e) => { setMapping(e.target.value); setPage(1); }}><option value="">All link statuses</option>{MAPPINGS.map((value) => <option key={value} value={value}>{value.replaceAll("_", " ").toLowerCase()}</option>)}</select></label>

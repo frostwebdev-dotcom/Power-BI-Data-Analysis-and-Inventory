@@ -83,6 +83,40 @@ export interface FinancialRow {
   computed_profit: string | null;
 }
 export interface FinancialUpload { batch: FinancialImport; duplicate: boolean }
+export interface FinancialBindingEvidence {
+  mapping_status: FinancialMappingStatus;
+  listing_id: string | null;
+  product_id: string | null;
+  mapping_snapshot: FinancialRow["mapping_snapshot"];
+  review_reasons: string[];
+  review_required: boolean;
+}
+export interface FinancialBindingRevision {
+  id: string;
+  import_id: string;
+  revision_number: number;
+  supersedes_revision_id: string | null;
+  recorded_by_user_id: string;
+  created_at: string;
+  reason: string;
+  status: "RECORDED" | "REVIEW_REQUIRED";
+  row_count: number;
+  linked_rows: number;
+  review_rows: number;
+  changed_rows: number;
+}
+export interface FinancialBindingPreview {
+  expected_revision_id: string | null;
+  bindings_sha256: string;
+  status: "RECORDED" | "REVIEW_REQUIRED";
+  row_count: number;
+  linked_rows: number;
+  review_rows: number;
+  changed_rows: number;
+  changes: { source_row_number: number; seller_sku: string | null; before: FinancialBindingEvidence; after: FinancialBindingEvidence }[];
+  page: number;
+  page_size: number;
+}
 
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const MAX_FINANCIAL_BYTES = 8 * 1024 * 1024;
@@ -114,7 +148,7 @@ const REASONS: Record<string, string> = {
   ZERO_COST_WITH_POSITIVE_SALES: "Positive net sales with zero reported cost. Confirm the product cost.",
   UNALLOCATED_FINANCIAL_ROW: "Unitemized amounts are included in totals without a product link.",
   MAPPING_UNALLOCATED: "Unallocated financial amount; no seller SKU or product is assigned.",
-  MAPPING_UNRESOLVED: "No active approved Amazon SKU mapping was available when this report was imported.",
+  MAPPING_UNRESOLVED: "No active approved Amazon SKU mapping was available for this snapshot.",
   MAPPING_ASIN_CONFLICT: "The report ASIN conflicts with the approved listing. Review the source and mapping.",
   MAPPING_INVALID_SOURCE: "Invalid source values prevented a product link.",
   ADVERTISING_COVERAGE_UNCONFIRMED: "Advertising cost coverage has not been confirmed for this report.",
@@ -138,6 +172,8 @@ export function financialError(error: unknown): unknown {
   if (detail === "OVERLAPPING_REPORTING_PERIOD") return new Error("A report already covers this period. Open the existing import to review it. Replacement reports are not available yet.");
   if (detail === "REPLAY_CONTEXT_MISMATCH") return new Error("This file was already recorded with different reporting details. Open the original import; its reporting context cannot be changed by re-uploading.");
   if (detail === "RAW_INTEGRITY_MISMATCH") return new Error("The original file could not be verified. Ask an administrator to check the retained file.");
+  if (["BINDING_HEAD_CHANGED", "BINDING_PROPOSAL_CHANGED", "CONCURRENT_OR_INVALID_BINDING_REVISION"].includes(String(detail))) return new Error("SKU links changed since this preview. Preview the current links again before recording a revision.");
+  if (detail === "BINDING_NO_CHANGES") return new Error("No SKU links have changed. There is no new revision to record.");
   return error;
 }
 
@@ -150,11 +186,14 @@ export function useFinancialImports(page: number) {
 export function useFinancialImport(id: string) {
   return useQuery({ queryKey: ["financial-imports", id], queryFn: () => api.get<FinancialImport>("/financial-imports/" + encodeURIComponent(id)) });
 }
-export function useFinancialRows(id: string, page: number, reviewOnly: boolean, mapping: string) {
+export function useFinancialRows(id: string, page: number, reviewOnly: boolean, mapping: string, revisionId = "") {
   return useQuery({
-    queryKey: ["financial-imports", id, "rows", page, reviewOnly, mapping],
+    queryKey: ["financial-imports", id, "rows", page, reviewOnly, mapping, revisionId],
     queryFn: () => api.get<Page<FinancialRow>>("/financial-imports/" + encodeURIComponent(id) + "/rows", {
-      page, page_size: 25, review_only: reviewOnly, mapping_status: mapping,
+      page, page_size: 25, review_only: reviewOnly, mapping_status: mapping, binding_revision_id: revisionId,
     }),
   });
+}
+export function useFinancialBindingHistory(id: string, page: number) {
+  return useQuery({ queryKey: ["financial-imports", id, "bindings", page], queryFn: () => api.get<Page<FinancialBindingRevision>>("/financial-imports/" + encodeURIComponent(id) + "/binding-revisions", { page, page_size: 25 }) });
 }

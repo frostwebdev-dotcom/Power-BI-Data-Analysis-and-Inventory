@@ -107,6 +107,7 @@ class FinancialImportRow(UUIDPrimaryKeyMixin, OrganizationScopedMixin, Timestamp
     computed_profit: Mapped[Decimal | None] = mapped_column(Numeric(38, 16))
 
     __table_args__ = (
+        UniqueConstraint("id", "import_id", "organization_id"),
         ForeignKeyConstraint(
             ["import_id", "organization_id"],
             ["financial_imports.id", "financial_imports.organization_id"],
@@ -137,6 +138,116 @@ class FinancialImportRow(UUIDPrimaryKeyMixin, OrganizationScopedMixin, Timestamp
         CheckConstraint(
             "(mapping_status = 'LINKED' and product_id is not null "
             "and listing_id is not null and match_priority is not null and match_priority = 4) "
+            "or (mapping_status <> 'LINKED' and product_id is null "
+            "and listing_id is null and match_priority is null)",
+            name="approved_links_only",
+        ),
+        CheckConstraint("not purchasing_eligible", name="not_purchasing_input"),
+    )
+
+
+class FinancialBindingRevision(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base):
+    __tablename__ = "financial_binding_revisions"
+
+    import_id: Mapped[uuid.UUID]
+    revision_number: Mapped[int] = mapped_column(Integer)
+    supersedes_revision_id: Mapped[uuid.UUID | None]
+    recorded_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    reason: Mapped[str] = mapped_column(String(1000))
+    bindings_sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32))
+    row_count: Mapped[int] = mapped_column(Integer)
+    linked_rows: Mapped[int] = mapped_column(Integer)
+    review_rows: Mapped[int] = mapped_column(Integer)
+    changed_rows: Mapped[int] = mapped_column(Integer)
+    purchasing_eligible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    recording_transaction_id: Mapped[int] = mapped_column(
+        BigInteger, server_default=text("txid_current()")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("id", "import_id", "organization_id"),
+        UniqueConstraint("import_id", "revision_number"),
+        UniqueConstraint("supersedes_revision_id"),
+        ForeignKeyConstraint(
+            ["import_id", "organization_id"],
+            ["financial_imports.id", "financial_imports.organization_id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["supersedes_revision_id", "import_id", "organization_id"],
+            [
+                "financial_binding_revisions.id",
+                "financial_binding_revisions.import_id",
+                "financial_binding_revisions.organization_id",
+            ],
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("revision_number > 0", name="positive_revision"),
+        CheckConstraint("length(btrim(reason)) between 10 and 1000", name="reason_required"),
+        CheckConstraint("bindings_sha256 ~ '^[0-9a-f]{64}$'", name="valid_digest"),
+        CheckConstraint("status in ('RECORDED', 'REVIEW_REQUIRED')", name="valid_status"),
+        CheckConstraint(
+            "row_count > 0 and linked_rows between 0 and row_count "
+            "and review_rows between 0 and row_count and changed_rows between 1 and row_count",
+            name="valid_counters",
+        ),
+        CheckConstraint("not purchasing_eligible", name="not_purchasing_input"),
+    )
+
+
+class FinancialBindingRow(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin, Base):
+    __tablename__ = "financial_binding_rows"
+
+    revision_id: Mapped[uuid.UUID]
+    import_id: Mapped[uuid.UUID]
+    source_row_id: Mapped[uuid.UUID]
+    mapping_status: Mapped[str] = mapped_column(String(32))
+    listing_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("marketplace_listings.id", ondelete="RESTRICT")
+    )
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("products.id", ondelete="RESTRICT")
+    )
+    match_priority: Mapped[int | None] = mapped_column(Integer)
+    mapping_snapshot: Mapped[dict[str, Any]]
+    review_reasons: Mapped[list[str]]
+    review_required: Mapped[bool] = mapped_column(Boolean)
+    purchasing_eligible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["revision_id", "import_id", "organization_id"],
+            [
+                "financial_binding_revisions.id",
+                "financial_binding_revisions.import_id",
+                "financial_binding_revisions.organization_id",
+            ],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["source_row_id", "import_id", "organization_id"],
+            [
+                "financial_import_rows.id",
+                "financial_import_rows.import_id",
+                "financial_import_rows.organization_id",
+            ],
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("revision_id", "source_row_id"),
+        Index(
+            "ix_financial_binding_rows_review", "organization_id", "revision_id", "review_required"
+        ),
+        CheckConstraint(
+            "mapping_status in ('LINKED', 'UNRESOLVED', 'UNALLOCATED', "
+            "'INVALID_SOURCE', 'ASIN_CONFLICT')",
+            name="valid_mapping_status",
+        ),
+        CheckConstraint(
+            "(mapping_status = 'LINKED' and product_id is not null and listing_id is not null "
+            "and match_priority is not null and match_priority = 4) "
             "or (mapping_status <> 'LINKED' and product_id is null "
             "and listing_id is null and match_priority is null)",
             name="approved_links_only",

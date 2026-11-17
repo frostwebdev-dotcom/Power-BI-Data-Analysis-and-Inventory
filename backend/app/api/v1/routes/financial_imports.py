@@ -17,6 +17,10 @@ from app.db.session import get_db
 from app.imports.storage import StorageBackend
 from app.schemas.connectbooks import ConnectBooksXlsxProfile
 from app.schemas.financial_imports import (
+    FinancialBindingPreview,
+    FinancialBindingRecordRequest,
+    FinancialBindingRevisionPage,
+    FinancialBindingRevisionResponse,
     FinancialImportPage,
     FinancialImportResponse,
     FinancialMappingStatus,
@@ -24,6 +28,7 @@ from app.schemas.financial_imports import (
     FinancialRowResponse,
     FinancialUploadResponse,
 )
+from app.services import financial_bindings as bindings
 from app.services import financial_imports as service
 from app.services.connectbooks import MAX_XLSX_BYTES
 from app.services.profitability import ProfitabilityPreviewError
@@ -107,9 +112,22 @@ def list_financial_rows(
     page_size: int = Query(50, ge=1, le=200),
     review_only: bool = Query(False),
     mapping_status: FinancialMappingStatus | None = Query(None),
+    binding_revision_id: uuid.UUID | None = Query(None),
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> FinancialRowPage:
+    if binding_revision_id is not None:
+        revised, total = bindings.revised_financial_rows(
+            session,
+            principal,
+            identifier,
+            binding_revision_id,
+            page,
+            page_size,
+            review_only=review_only,
+            mapping_status=mapping_status,
+        )
+        return FinancialRowPage(items=revised, page=page, page_size=page_size, total=total)
     rows, total = service.financial_rows(
         session,
         principal,
@@ -124,6 +142,50 @@ def list_financial_rows(
         page=page,
         page_size=page_size,
         total=total,
+    )
+
+
+@router.get("/{identifier}/binding-revisions", response_model=FinancialBindingRevisionPage)
+def list_binding_revisions(
+    identifier: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+    principal: Principal = _read,
+    session: Session = Depends(get_db),
+) -> FinancialBindingRevisionPage:
+    rows, total = bindings.binding_history(session, principal, identifier, page, page_size)
+    return FinancialBindingRevisionPage(
+        items=[FinancialBindingRevisionResponse.model_validate(row) for row in rows],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@router.post("/{identifier}/binding-revisions/preview", response_model=FinancialBindingPreview)
+def preview_bindings(
+    identifier: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+    principal: Principal = _write,
+    session: Session = Depends(get_db),
+) -> FinancialBindingPreview:
+    return bindings.preview_binding_revision(session, principal, identifier, page, page_size)
+
+
+@router.post(
+    "/{identifier}/binding-revisions",
+    response_model=FinancialBindingRevisionResponse,
+    status_code=201,
+)
+def record_bindings(
+    identifier: uuid.UUID,
+    payload: FinancialBindingRecordRequest,
+    principal: Principal = _write,
+    session: Session = Depends(get_db),
+) -> FinancialBindingRevisionResponse:
+    return FinancialBindingRevisionResponse.model_validate(
+        bindings.record_binding_revision(session, principal, identifier, payload)
     )
 
 

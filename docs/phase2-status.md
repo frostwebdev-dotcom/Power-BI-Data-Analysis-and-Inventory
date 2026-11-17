@@ -98,11 +98,24 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Full source-commit CI and layout evidence are recorded in draft PR #22. No
   owner workbook has been uploaded, and this change is not merged or deployed.
 
+## Sixth deliverable: reviewed SKU-link revisions
+
+- ADR 0027 defines append-only revision headers and binding rows, separate from
+  immutable original money, raw files and source warnings. Existing approvals
+  can be applied through a no-write preview followed by a reasoned staff action.
+- Recording checks the expected latest revision and full binding digest under
+  transaction/mapping locks. Stale/no-op proposals are rejected; a chain cannot
+  fork. All revised bindings and the audit event commit together.
+- API and staff history show original and revised links explicitly. Changing
+  revision resets row filters/pagination; viewers cannot preview or record.
+- Validation for this source is recorded in draft PR #22 after local checks and
+  PostgreSQL/browser CI. No client report upload, merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Amazon freshness, inventory-pool and pack normalization adapter.
 - Client reporting year/timezone and cost review, and a controlled financial
-  supersession/re-binding workflow before real-file operational acceptance.
+  source-report replacement workflow before real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
 - Persisted purchasing policy and audited recommendation snapshots.
 - Tenant-scoped APIs and application dashboard/search/filtering.

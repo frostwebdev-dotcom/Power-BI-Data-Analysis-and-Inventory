@@ -35,6 +35,9 @@ All paths below are under /api/v1 and require authentication.
 | GET /financial-imports/{id} | Existing read roles | Context, original pre-binding controls, linkage/review counts |
 | GET /financial-imports/{id}/rows | Existing read roles | Paginated immutable rows; review_only and mapping_status filters |
 | GET /financial-imports/{id}/raw | Existing read roles | Integrity-checked original XLSX download |
+| GET /financial-imports/{id}/binding-revisions | Existing read roles | Paginated immutable SKU-link revision history |
+| POST /financial-imports/{id}/binding-revisions/preview | DATA_OPERATOR or ADMIN | No-write comparison against current approved mappings; paginated changed rows |
+| POST /financial-imports/{id}/binding-revisions | DATA_OPERATOR or ADMIN | Record the reviewed proposal with expected head, digest and reason |
 
 Page size is bounded at 200. Unknown and foreign-organization IDs return the
 same 404 for detail, rows and raw access. No update/delete endpoint is provided.
@@ -101,6 +104,39 @@ row/link/review counts against the complete row set. Referenced historical
 products/listings/users cannot be deleted out from under snapshots. Changes to
 live mappings do not rewrite historical evidence.
 
-Replacement reports, re-binding after mapping approval and corrected cost data
-need an explicit audited supersession/revision workflow, which is not part of
-this increment. Do not work around a conflict by altering dates or store labels.
+## Reviewed SKU-link revisions
+
+ADR 0027 adds a separate append-only revision chain for product links. Original
+import rows and amounts remain unchanged. Preview compares every original row
+against the latest recorded binding snapshot and the current approved mappings.
+It returns expected_revision_id (null for original links), bindings_sha256, full
+counts and a paginated list of changes. Preview writes no revision or audit event.
+
+To record, submit those exact head/digest values and a reason of 10-1000
+characters. The service locks the marketplace, recalculates against current
+approvals, and rejects stale heads, changed proposals and no-ops. All binding
+rows and a financial_import.bindings_revised audit entry commit together. A
+concurrent save cannot fork the chain. Repeating a request after it succeeds
+returns a stale-head conflict; refresh history to inspect the saved revision.
+
+Only existing approved mappings are applied. A link can be gained, lost or
+become conflicting when mapping state changes; no product is guessed or mapping
+approved here. Every source cost/validation warning survives, Unitemized remains
+unallocated, and batch-level warnings keep the revision in review even if its
+row-review count is zero. Revisions contain no new financial amounts and remain
+ineligible for purchasing. Database guards enforce full coverage, ancestry,
+tenant ownership, original transaction insertion and immutable rows/headers.
+
+The staff detail initially shows original links. Select a recorded revision to
+inspect its counts, actor, reason and rows; original import counts are labelled
+separately. Changing revision resets row filters, pagination and the drawer.
+The rows API accepts binding_revision_id and projects original financial amounts
+with that revision's binding evidence. Invalid/foreign revision IDs return 404.
+Operators preview current links, inspect changes, give a reason and acknowledge
+the proposal before saving. A stale proposal is discarded and must be previewed
+again. Viewers can inspect history but cannot preview or record revisions.
+
+Corrected/replacement financial reports and cost corrections still require a
+separate source-report supersession workflow. Do not work around overlap or
+context conflicts by changing dates/store labels or treating a link revision as
+a corrected report. The original October reporting year/timezone remain unconfirmed.
