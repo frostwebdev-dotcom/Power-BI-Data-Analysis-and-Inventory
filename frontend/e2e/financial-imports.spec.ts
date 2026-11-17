@@ -180,7 +180,7 @@ test("duplicate upload opens existing record and overlap errors explain next act
   await page.goto("/financial-imports");
   await fillUpload(page);
   await page.getByRole("button", { name: "Import financial report", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("A report already covers this period");
+  await expect(page.locator(".financial-imports").getByRole("alert")).toContainText("A report already covers this period");
   await expect(page).not.toHaveURL(/import=/);
 });
 
@@ -188,7 +188,7 @@ test("download errors are shown without losing the report", async ({ page }) => 
   await mockFinancial(page, { downloadFails: true });
   await page.goto("/financial-imports?import=" + ID);
   await page.getByRole("button", { name: "Download original workbook" }).click();
-  await expect(page.getByRole("alert")).toContainText("The original file could not be verified");
+  await expect(page.locator(".financial-imports").getByRole("alert")).toContainText("The original file could not be verified");
   await expect(page.getByTestId("financial-controls")).toBeVisible();
 });
 
@@ -199,7 +199,7 @@ test("invalid time zone is rejected before upload and mobile form fits the viewp
   await fillUpload(page);
   await page.getByLabel("Report time zone").fill("Definitely/Invalid");
   await page.getByRole("button", { name: "Import financial report", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("reporting time zone used in ConnectBooks");
+  await expect(page.locator(".financial-imports").getByRole("alert")).toContainText("reporting time zone used in ConnectBooks");
   expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
@@ -213,7 +213,7 @@ test("empty, oversized and non-XLSX files are refused before a request", async (
     { name: "large.xlsx", buffer: Buffer.alloc(8 * 1024 * 1024 + 1) }]) {
     await page.getByLabel("Original Excel workbook").setInputFiles({ ...file, mimeType: "application/octet-stream" });
     await page.getByRole("button", { name: "Import financial report", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("nonempty Excel .xlsx file up to 8 MiB");
+    await expect(page.locator(".financial-imports").getByRole("alert")).toContainText("nonempty Excel .xlsx file up to 8 MiB");
   }
   expect(calls.filter((call) => call.method === "POST")).toHaveLength(0);
 });
