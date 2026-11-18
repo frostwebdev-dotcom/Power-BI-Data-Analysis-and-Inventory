@@ -5,8 +5,9 @@ Status: **PREPARATION ONLY — real-data walkthrough NOT RUN; client sign-off PE
 This runbook covers the authorized [Milestone 2 scope](milestone-2-scope.md).
 It does not accept Milestone 1, authorize a deployment/source sync or enable
 Gmail. The application changes are on draft PR #22. Their verified application
-source is `020cb23fd34cf42992b98781a16ac21e892e2202`, with CI #203 passing
-2,174 backend and 75 browser tests. Automated synthetic tests are separate from
+baseline source is `020cb23fd34cf42992b98781a16ac21e892e2202`, with CI #203 passing
+2,174 backend and 75 browser tests. The current-check increment's exact-source
+validation is maintained in PR #22. Automated synthetic tests are separate from
 client operational acceptance. Recheck the actual test environment/source when
 the walkthrough is scheduled; no hosted Milestone 2 deployment is evidenced here.
 
@@ -43,7 +44,7 @@ for profile identity, immutable original bytes and correction/replacement rules.
 | ConnectBooks profitability | Signed XLSX preview, original-file retention, financial review/binding/replacement UI and historical context | Confirm year/timezone; reconcile the real report and review cost/advertising coverage and exact links |
 | Replenishment | Exact per-pool arithmetic, manager-approved policies, source checks, immutable evaluations and finite supplier allocation | Independently reconcile real inputs/results and verify expected blockers |
 | Vendor comparison | Explicit selected policies; qualified exact current goods-price ordering; complete per-offer evidence | Two comparable supplier offers for the same product where available; preserve unknown/incompatible offers |
-| Dashboard/search/availability | Searchable historical saved-review queue, approval relation and historical stockout context; existing availability feed | Verify queue/feed evidence; current urgency/opportunity recalculation is not supplied by historical dashboard counts |
+| Dashboard/search/availability | Searchable saved-review queue, separate on-demand current selected-policy urgency/supplier check, and existing availability feed | Verify fresh selected-policy results, queue/feed evidence and scope; historical counts are not current urgency |
 | Real walkthrough/sign-off | This procedure and blank record | Run cases, retain evidence, resolve deviations and obtain client decision |
 
 Positive FBA inbound cannot currently become usable inbound: the adapter lacks
@@ -53,11 +54,12 @@ these as expected blockers and any needed follow-up implementation. Do not enter
 zero, use a calculator fixture, modify saved inputs or approve around a blocker.
 Explicit zero FBA inbound is supported only when the source proves zero.
 
-The saved dashboard is not a live urgency certification. Record a fresh policy
-preview for current observations and retain its time/cutoff. If full acceptance
-requires a current urgency/opportunity view, keep that scope item pending until
-implemented and exercised. Do not substitute the saved counts or remove the
-requirement from the agreed scope.
+The saved dashboard is not a live urgency certification. Use the separate
+[current replenishment check](current-replenishment.md) for 1–10 explicitly
+selected approved policies and retain its time/cutoff and full evidence. Its
+signals describe that selected observation, not catalogue-wide continuous
+monitoring. Current-view operational acceptance remains pending until exercised
+with real evidence; saved counts do not substitute for that check.
 
 Every saved/compared evaluation remains `purchasing_eligible=false`; stock is not
 reserved and no purchase order is generated. Complete landed cost and projected
@@ -90,7 +92,7 @@ Do not manufacture a second supplier or a new mapping for comparison coverage.
 | 4. Review identity and units | Check exact SKUs, product/listing/vendor UUIDs, ASINs and mapping approval evidence; confirm every conversion and pool | No description-only match; complete listing/pool membership; source, order and price units are separate decisions |
 | 5. Establish source readiness | Inspect already-ingested baseline/order/inventory and supplier job/file/row/snapshot evidence | Clean complete current sources within approved limits; no older fallback; unknown inbound remains blocked |
 | 6. Review purchasing policy | Enter client-confirmed window/coverage/lead/safety/minimum/multiple/freshness/supplier settings; manager reviews definition/context | Record exact approval UUID and evidence references; a draft is not approval; no copied fixture defaults |
-| 7. Preview and reconcile | Explicitly select the policy and, optionally, current report/binding; inspect the complete fresh server result | Compare each pool and any v4 combined allocation with independent arithmetic below; retain all reasons, including expected blocks |
+| 7. Preview and reconcile | Run the explicit current policy check for urgency/supplier review; separately select an optional current report/binding in Recommendations when historical financial context is required | Compare each pool, urgency boundary and v4 allocation with independent arithmetic below; retain all reasons, including expected blocks |
 | 8. Compare vendors | Explicitly select available policies for the same product; inspect reported/current base price, tax basis, receipt age, stock and checks | Default vendor order; exact price order only for compatible evidence; a cheaper blocked offer remains blocked; comparison is unsaved |
 | 9. Record an evaluation | Through the existing fresh evaluation workflow, review evidence, reason and acknowledgement; if recording is in scope, save with a new request UUID | Snapshot and audit are atomic; changed evidence requires a new preview; uncertain network save uses the exact original UUID/body for retry |
 | 10. Review history and dashboard | Open immutable detail and latest-saved queue; exercise product/vendor/status/approval/search filters and corresponding dashboard links | Historical counts agree with the latest record per policy; later drafts preserve approval, changed/revoked approvals are flagged; no stock/money totals inferred |

@@ -282,6 +282,22 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Documentation checks and source-specific CI evidence are recorded in draft
   PR #22. Application behavior and schema are unchanged by this preparation.
 
+## Seventeenth deliverable: current selected-policy replenishment check
+
+- ADR 0037 and [the current-check guide](current-replenishment.md) add scoped
+  current-approved policy search and an explicit 1–10-policy fresh check, linked
+  from navigation/dashboard. No policy, report or client default is selected.
+- Exact Amazon stockout urgency is independent of supplier readiness. Unknown
+  required Amazon inputs stay unknown; an urgent item can have an unavailable
+  supplier. Separate review opportunities require verified finite supply and
+  complete assessed v4 allocation/price/minimum/terms evidence.
+- Current check times, cutoffs, per-pool arithmetic and complete previews remain
+  visible. Counts refer only to selected policies; no whole-catalogue claim,
+  source sync, saved fallback, reservation or purchase is introduced. Source-
+  specific local, full CI and desktop/mobile evidence is recorded in draft PR #22.
+- Client confirmations, supported positive-FBA/FBM inbound arrival handling and
+  real-data acceptance remain open. No client file/policy, merge or deployment occurred.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, supported inbound arrival handling
@@ -293,8 +309,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   pool priority, price conversions, landed-cost inputs and historical financial context.
 - Operational acceptance of the implemented scoped APIs, dashboard, search,
   vendor comparisons and cost/profit context with real data.
-- Current urgency/opportunity behavior beyond the explicitly historical saved
-  dashboard; do not mark that scope item accepted from historical counts.
+- Real-data acceptance of the implemented on-demand current urgency/opportunity
+  workflow. Historical saved counts alone remain insufficient evidence.
 - Three-real-SKU acceptance walkthrough with client-approved source/policy inputs.
 
 No revised budget or delivery date is recorded as client-approved. Milestone 1

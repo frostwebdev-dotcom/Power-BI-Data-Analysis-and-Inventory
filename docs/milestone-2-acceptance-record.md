@@ -71,6 +71,7 @@ until independently calculated and observed from real evidence.
 | Same-product vendor comparison / tax and unit compatibility | NOT RUN | NOT RUN | NOT RUN | |
 | Fresh preview / reviewed save / immutable history / audit / retry | NOT RUN | NOT RUN | NOT RUN | |
 | Queue search / filters / approval relation / historical dashboard counts | NOT RUN | NOT RUN | NOT RUN | |
+| Fresh selected-policy urgency / independent supplier review / full evidence | NOT RUN | NOT RUN | NOT RUN | |
 | Applicable original availability event evidence | NOT RUN | NOT RUN | NOT RUN | |
 | Expected unknown/stale/inbound blocker behavior | NOT RUN | NOT RUN | NOT RUN | |
 | purchasing_eligible=false / no stock reservation or order | NOT RUN | NOT RUN | NOT RUN | |
@@ -86,7 +87,7 @@ while operational readiness stays BLOCKED. Do not mark unexercised features PASS
 | --- | --- | --- | --- |
 | Reporting year/timezone and real-file coverage review | PENDING | | |
 | Positive FBA arrival timing / unknown FBM inbound | Supported blocker; operational handling PENDING where required | | |
-| Current urgency/opportunity view versus historical saved counts | PENDING scope review/implementation and real acceptance | | |
+| On-demand current selected-policy urgency/opportunity acceptance | Implemented on draft; real cases NOT RUN; historical counts are separate | | |
 | Landed-cost inputs / cost completeness | PENDING | | |
 | Required case or second-supplier coverage not exercised | PENDING until cases are selected and run | | |
 | Client operational sign-off | PENDING | | |

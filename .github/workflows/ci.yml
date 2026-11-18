@@ -280,6 +280,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      - name: Current replenishment layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-replenishment-layouts
+          path: frontend/test-results/**/current-replenishment-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

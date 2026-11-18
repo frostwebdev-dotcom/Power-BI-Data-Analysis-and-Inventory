@@ -132,6 +132,8 @@ review until these dependencies and the complete integration are accepted.
 Use the [walkthrough and coverage limits](milestone-2-acceptance.md),
 [client confirmation worksheet](milestone-2-client-confirmations.md) and
 [blank acceptance record](milestone-2-acceptance-record.md). These distinguish
-tested draft-branch behavior from unrun real cases. Historical dashboard counts
-do not complete the current urgency requirement; unsupported inbound evidence
-must remain blocked. No client sign-off is implied by preparing these documents.
+tested draft-branch behavior from unrun real cases. The separate
+[on-demand current check](current-replenishment.md) supplies selected-policy
+urgency/supplier diagnostics; historical dashboard counts do not substitute for
+it. Unsupported inbound evidence must remain blocked. No client sign-off is
+implied by preparing these documents or by the synthetic checks.

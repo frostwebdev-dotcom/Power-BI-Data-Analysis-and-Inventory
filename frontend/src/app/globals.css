@@ -1358,3 +1358,10 @@ textarea:focus {
 
 .vendor-comparisons [aria-label="Selected offer approvals"] .button { white-space: normal; max-width: 100%; text-align: left; }
 .vendor-comparisons .candidate label { min-width: 0; overflow-wrap: anywhere; flex: 1; }
+
+.current-replenishment .candidate label { min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.current-replenishment [aria-label="Policies selected for current check"] { overflow-wrap: anywhere; }
+.current-replenishment [aria-label="Current selected-policy replenishment results"] .table { min-width: 1300px; }
+.current-replenishment [aria-label="Current selected-policy replenishment results"] details { margin-bottom: 8px; }
+.replenishment-links { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: flex-end; }
+.replenishment-overview .card__header { flex-wrap: wrap; gap: 12px; }

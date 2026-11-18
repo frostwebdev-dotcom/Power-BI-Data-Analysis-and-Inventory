@@ -7,7 +7,7 @@ import { useReviewSummary } from "@/lib/replenishment-review";
 
 export function ReplenishmentOverview() {
   const query = useReviewSummary(), data = query.data;
-  return <section className="card replenishment-overview" data-testid="replenishment-overview"><div className="card__header"><h2 className="card__title">Saved replenishment review</h2><Link href="/vendor-comparisons">Compare vendors</Link></div>
+  return <section className="card replenishment-overview" data-testid="replenishment-overview"><div className="card__header"><h2 className="card__title">Saved replenishment review</h2><div className="replenishment-links"><Link href="/replenishment-now">Check current replenishment</Link><Link href="/vendor-comparisons">Compare vendors</Link></div></div>
     <Note>These counts use the latest saved evaluation per policy. Current policy approval does not verify today’s mappings, stock, prices or shipment arrivals. Run a fresh preview before acting.</Note>
     <ErrorNote error={query.error} />{query.isPending ? <Loading what="Loading saved review counts" /> : null}
     {data ? <><div className="counters counters--tiles">
