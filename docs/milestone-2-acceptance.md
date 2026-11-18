@@ -43,16 +43,19 @@ for profile identity, immutable original bytes and correction/replacement rules.
 | Amazon demand, inventory and readiness | Read-only scoped ingestion/readiness; explicit shipped-only order-date coverage, conversions and physical pools | Fresh complete source proof and approved policy for each selected product |
 | ConnectBooks profitability | Signed XLSX preview, original-file retention, financial review/binding/replacement UI and historical context | Confirm year/timezone; reconcile the real report and review cost/advertising coverage and exact links |
 | Replenishment | Exact per-pool arithmetic, manager-approved policies, source checks, immutable evaluations and finite supplier allocation | Independently reconcile real inputs/results and verify expected blockers |
+| Reviewed inbound | Exact source-bound complete FBA/manual FBM positions and versioned ETA credit | Reconcile real shipments, units and timely/late/expired/missed cases; manager evidence and explicit selection |
 | Vendor comparison | Explicit selected policies; qualified exact current goods-price ordering; complete per-offer evidence | Two comparable supplier offers for the same product where available; preserve unknown/incompatible offers |
 | Dashboard/search/availability | Searchable saved-review queue, separate on-demand current selected-policy urgency/supplier check, and existing availability feed | Verify fresh selected-policy results, queue/feed evidence and scope; historical counts are not current urgency |
 | Real walkthrough/sign-off | This procedure and blank record | Run cases, retain evidence, resolve deviations and obtain client decision |
 
-Positive FBA inbound cannot currently become usable inbound: the adapter lacks
-verified arrival evidence. FBM inbound is not ingested and remains unknown.
-Client-provided arrival dates alone do not add a supported adapter path. Record
-these as expected blockers and any needed follow-up implementation. Do not enter
-zero, use a calculator fixture, modify saved inputs or approve around a blocker.
-Explicit zero FBA inbound is supported only when the source proves zero.
+Positive FBA inbound requires an explicitly selected manager-reviewed complete
+position reconciled to native quantities. Native FBM inbound is not ingested;
+a complete manual positive/zero position can be reviewed separately. Follow
+[reviewed inbound](reviewed-inbound.md), retain original evidence and exercise
+ETA qualification, expiry, missed arrivals and source changes. Dates alone do not
+confirm completeness. Unknown quantities remain blocked; never enter zero or
+modify saved inputs to bypass missing evidence. Unselected FBA zero is supported
+only when native sources prove zero.
 
 The saved dashboard is not a live urgency certification. Use the separate
 [current replenishment check](current-replenishment.md) for 1–10 explicitly
@@ -92,7 +95,7 @@ Do not manufacture a second supplier or a new mapping for comparison coverage.
 | 4. Review identity and units | Check exact SKUs, product/listing/vendor UUIDs, ASINs and mapping approval evidence; confirm every conversion and pool | No description-only match; complete listing/pool membership; source, order and price units are separate decisions |
 | 5. Establish source readiness | Inspect already-ingested baseline/order/inventory and supplier job/file/row/snapshot evidence | Clean complete current sources within approved limits; no older fallback; unknown inbound remains blocked |
 | 6. Review purchasing policy | Enter client-confirmed window/coverage/lead/safety/minimum/multiple/freshness/supplier settings; manager reviews definition/context | Record exact approval UUID and evidence references; a draft is not approval; no copied fixture defaults |
-| 7. Preview and reconcile | Run the explicit current policy check for urgency/supplier review; separately select an optional current report/binding in Recommendations when historical financial context is required | Compare each pool, urgency boundary and v4 allocation with independent arithmetic below; retain all reasons, including expected blocks |
+| 7. Preview and reconcile | Run the explicit current policy check for urgency/supplier review; separately select an optional current report/binding in Recommendations when historical financial context is required | Compare each pool, urgency boundary and v4/v5 allocation with independent arithmetic below; retain all reasons, including expected blocks |
 | 8. Compare vendors | Explicitly select available policies for the same product; inspect reported/current base price, tax basis, receipt age, stock and checks | Default vendor order; exact price order only for compatible evidence; a cheaper blocked offer remains blocked; comparison is unsaved |
 | 9. Record an evaluation | Through the existing fresh evaluation workflow, review evidence, reason and acknowledgement; if recording is in scope, save with a new request UUID | Snapshot and audit are atomic; changed evidence requires a new preview; uncertain network save uses the exact original UUID/body for retry |
 | 10. Review history and dashboard | Open immutable detail and latest-saved queue; exercise product/vendor/status/approval/search filters and corresponding dashboard links | Historical counts agree with the latest record per policy; later drafts preserve approval, changed/revoked approvals are flagged; no stock/money totals inferred |
@@ -116,7 +119,7 @@ manual original-file import does not prove unattended email intake works.
 | Required units | ceiling(sold base units × (target + lead + safety days) / window days); confirm target excludes the separately added lead and safety |
 | Net shortfall | max(0, required - known on hand - usable inbound), separately for each physical pool |
 | Before supplier cap | If shortfall is positive, round max(shortfall, approved per-pool minimum) upward to the approved order multiple; otherwise zero |
-| Finite supplier stock | v4 uses one product/supplier-SKU stock count in explicit approved pool priority; allocations respect multiples/minima, never exceed available stock and show unmet quantities |
+| Finite supplier stock | v4/v5 use one product/supplier-SKU stock count in explicit approved pool priority; allocations respect multiples/minima, never exceed available stock and show unmet quantities |
 | Supplier order units / goods value | Combined allocated base units / approved base units per order unit; goods value uses exact current reported price and approved price-unit conversion; source discount applies once |
 | Supplier minima | Check only confirmed SKU-level quantity/value scopes; unmet checks block and unknown/scopeless checks remain unconfirmed; no automatic top-up |
 | Price comparison | Exact reported USD price / approved base units per price unit; compare exact ratios only with matching approved listing-unit projection and stated tax basis |
@@ -134,9 +137,3 @@ passing behavior check while operational readiness remains BLOCKED. Keep those
 two decisions separate. No blank result means pass. Every failure/gap has an
 owner, next action and retest reference. Only the client can provide final
 operational sign-off after the agreed scope and real-data checks are satisfied.
-
-
-Reviewed arrival evidence is implemented on the draft branch (ADR 0038). Earlier
-native-adapter limitations above still describe the unselected path. Explicit
-manager-reviewed complete FBA/FBM positions follow [the inbound guide](reviewed-inbound.md).
-Real-data acceptance remains open; FBM is manual evidence, not a native feed.

@@ -63,8 +63,9 @@ Adding lead time to target coverage is an explicit first-preview policy, not a
 claim that the client has approved this interpretation. Before live purchasing
 recommendations, confirm whether target days already includes lead time and
 safety days. Inbound timing and separate shared inventory pools must also be
-resolved in the live adapter; subtracting all inbound does not prove that it
-arrives before stockout.
+verified against exact source-bound complete positions; subtracting all inbound
+does not prove that it arrives before stockout. ADR 0038 adds the explicit reviewed
+path; see [reviewed inbound](reviewed-inbound.md). Operational acceptance remains open.
 
 ### Acceptance examples
 

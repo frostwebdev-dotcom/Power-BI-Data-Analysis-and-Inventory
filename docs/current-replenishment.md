@@ -46,7 +46,7 @@ then positive shortfall selects REPLENISH, otherwise NO_REORDER.
 
 This is an independent diagnostic. REVIEW_OPPORTUNITY requires known positive
 shortfall, a non-blocked evaluation, verified in-stock finite supplier quantity,
-and v4 positive combined allocation with assessed current goods price/units,
+and v4/v5 positive combined allocation with assessed current goods price/units,
 reviewed terms and met scoped minimums. A valid partial allocation can qualify;
 its unfilled request and remaining stock evidence stay in the complete preview.
 Zero reported price retains a review warning and does not qualify automatically.
@@ -79,8 +79,8 @@ budget allocation or recommended purchase. Recording requires a separate fresh
 evaluation/review using the existing Recommendations workflow.
 
 The observation reads already-ingested sources; it does not establish continuous
-live monitoring. Unsupported positive-FBA arrival timing and unknown FBM inbound
-continue to block readiness. Client reporting/purchasing confirmations and the
+live monitoring. Positive FBA/manual FBM inbound requires explicit selected
+complete-position evidence; unconfirmed native inbound remains blocked. Client reporting/purchasing confirmations and the
 real three-SKU [acceptance walkthrough](milestone-2-acceptance.md) remain pending.
 No client file/policy, Gmail setup, source sync, purchase, merge or deployment is
 performed by this increment. Full validation is recorded against source in PR #22.

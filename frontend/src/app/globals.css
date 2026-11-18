@@ -1365,3 +1365,10 @@ textarea:focus {
 .current-replenishment [aria-label="Current selected-policy replenishment results"] details { margin-bottom: 8px; }
 .replenishment-links { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: flex-end; }
 .replenishment-overview .card__header { flex-wrap: wrap; gap: 12px; }
+
+.inbound-evidence fieldset { min-width: 0; margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
+.inbound-evidence legend { font-size: 13px; font-weight: 600; }
+.inbound-evidence input, .inbound-evidence textarea { min-width: 0; max-width: 100%; }
+.inbound-evidence .button, .inbound-choices .button { max-width: 100%; white-space: normal; }
+.inbound-choices { overflow-wrap: anywhere; }
+.inbound-choices ul { padding-left: 20px; }

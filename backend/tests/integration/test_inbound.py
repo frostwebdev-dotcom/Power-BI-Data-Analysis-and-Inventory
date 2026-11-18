@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -267,6 +268,7 @@ def test_known_late_arrival_credits_zero_without_claiming_receipt(db_session: Se
     a = result.snapshot.inbound_assessments[0]
     assert a.status == "APPLIED" and a.usable_base_units == 0
     assert a.arrivals[0].disposition == "AFTER_STOCKOUT"
+    ctx.at = datetime.now(UTC)
     evaluations.record(
         db_session, ctx, evaluations.request(result, inbound={"revision_ids": [str(saved.id)]})
     )
@@ -417,16 +419,40 @@ def test_database_rejects_forged_inbound_confirmation(db_session: Session, fault
         db_session.execute(insert(InboundEvidenceRevision).values(**data))
 
 
-def test_v5_composes_with_approved_commercials(db_session: Session) -> None:
+@pytest.mark.parametrize("financial", [False, True])
+def test_v5_composes_with_approved_commercials(
+    db_session: Session, tmp_path: Path, financial: bool
+) -> None:
+    from app.schemas.financial_context import FinancialSelection
+    from app.services.vendor_comparisons import normalized_price
+    from tests.integration.test_recommendation_financials import upload
+
     source = commercials.setup(db_session)
     ctx = source.calculation
     saved = confirm(db_session, ctx, 0)
-    result = evaluate(db_session, ctx, saved.id)
+    batch = upload(db_session, ctx, tmp_path) if financial else None
+    selection = (
+        FinancialSelection(import_id=batch.id, expected_binding_revision_id=None) if batch else None
+    )
+    result = recommendations.preview_recommendation(
+        db_session,
+        ctx.policy.operator,
+        ctx.policy_id,
+        RecommendationPreviewRequest(
+            expected_approved_revision_id=ctx.approval,
+            financial=selection,
+            inbound=InboundSelection(revision_ids=[saved.id]),
+        ),
+    )
     assert result.snapshot.rule_version == "replenishment-evaluation-v5"
     assert result.snapshot.commercial is not None and result.snapshot.allocation is not None
+    assert normalized_price(result.snapshot) is not None
+    assert (result.snapshot.financial is not None) == financial
     ctx.at = datetime.now(UTC)
     evaluations.record(
-        db_session, ctx, evaluations.request(result, inbound={"revision_ids": [str(saved.id)]})
+        db_session,
+        ctx,
+        evaluations.request(result, inbound={"revision_ids": [str(saved.id)]}, financial=selection),
     )
 
 
@@ -452,3 +478,217 @@ def test_downgrade_refuses_reviewed_evidence(isolated_engine: Engine) -> None:
         confirm(session, ctx)
     with pytest.raises(DBAPIError, match="Cannot discard reviewed inbound evidence"):
         downgrade_migrations(isolated_engine.url, "a61117202608")
+
+
+def test_selected_inbound_is_forwarded_to_current_and_comparison_without_writes(
+    db_session: Session,
+) -> None:
+    from app.schemas.replenishment_now import CurrentCheckRequest
+    from app.schemas.replenishment_review import VendorComparisonRequest
+    from app.services.replenishment_now import current_check
+    from app.services.vendor_comparisons import preview_vendor_comparison
+    from tests.integration.test_replenishment_review import counts
+
+    ctx = setup(db_session)
+    saved = confirm(db_session, ctx)
+    choice = {
+        "policy_id": ctx.policy_id,
+        "expected_approved_revision_id": ctx.approval,
+        "inbound": {"revision_ids": [saved.id]},
+    }
+    before = counts(db_session)
+    current = current_check(
+        db_session, ctx.policy.operator, CurrentCheckRequest.model_validate({"choices": [choice]})
+    )
+    compared = preview_vendor_comparison(
+        db_session,
+        ctx.policy.operator,
+        VendorComparisonRequest.model_validate(
+            {"product_id": ctx.policy.product.id, "choices": [choice], "order_by": "VENDOR_NAME"}
+        ),
+    )
+    assert current.items[0].snapshot.rule_version == "replenishment-evaluation-v5"
+    assert current.items[0].pools[0].usable_inbound_base_units == 36
+    assert compared.offers[0].snapshot.rule_version == "replenishment-evaluation-v5"
+    assert compared.offers[0].snapshot.readiness.pools[0].usable_inbound_base_units == 36
+    assert counts(db_session) == before
+
+
+@pytest.mark.parametrize("fault", ["credits", "head", "blocked", "expiry", "pool", "basis"])
+def test_database_rejects_forged_v5_qualification(db_session: Session, fault: str) -> None:
+    from copy import deepcopy
+
+    from app.models import ReplenishmentRecommendation
+
+    ctx = setup(db_session)
+    evidence = confirm(db_session, ctx)
+    result = evaluate(db_session, ctx, evidence.id)
+    ctx.at = datetime.now(UTC)
+    saved = evaluations.record(
+        db_session, ctx, evaluations.request(result, inbound={"revision_ids": [str(evidence.id)]})
+    )
+    row = db_session.get(ReplenishmentRecommendation, saved.id)
+    assert row is not None
+    data = {
+        c.name: getattr(row, c.name)
+        for c in row.__table__.columns
+        if c.name not in {"created_at", "updated_at"}
+    }
+    snapshot = deepcopy(row.snapshot)
+    assessment = snapshot["inbound_assessments"][0]
+    if fault == "credits":
+        assessment["usable_base_units"] = 35
+        snapshot["readiness"]["pools"][0]["usable_inbound_base_units"] = 35
+        assessment["arrivals"][0]["credited_units"] = 35
+    elif fault == "head":
+        confirm(db_session, ctx)
+    elif fault == "blocked":
+        assessment["status"] = "BLOCKED"
+    elif fault == "expiry":
+        snapshot["evaluated_at"] = evidence.position.expires_at.isoformat()
+    elif fault == "pool":
+        snapshot["readiness"]["pools"][0]["usable_inbound_base_units"] = 0
+    else:
+        assessment["basis"] = "GUESSED_INBOUND"
+    data.update(
+        id=uuid.uuid4(),
+        request_id=uuid.uuid4(),
+        snapshot=snapshot,
+        recorded_at=datetime.now(UTC),
+        snapshot_sha256=policies.digest(snapshot),
+    )
+    with pytest.raises(DBAPIError), db_session.begin_nested():
+        db_session.execute(insert(ReplenishmentRecommendation).values(**data))
+
+
+def test_revocation_remains_available_after_policy_context_changes(db_session: Session) -> None:
+    ctx = setup(db_session)
+    saved = confirm(db_session, ctx)
+    current = policies.get_policy(db_session, ctx.policy.operator, ctx.policy_id)
+    draft = managers.draft(db_session, ctx.policy, current, 28)
+    managers.approve(db_session, ctx.policy, draft)
+    revoked = service.revoke(
+        db_session,
+        ctx.policy.manager,
+        ctx.policy_id,
+        InboundRevokeRequest(
+            request_id=uuid.uuid4(),
+            expected_head_id=saved.id,
+            reason="Synthetic old approval position withdrawn",
+            acknowledge_review=True,
+        ),
+    )
+    assert revoked.kind == "REVOKED" and revoked.approved_revision_id == saved.approved_revision_id
+
+
+def test_same_shipment_reference_cannot_be_confirmed_for_two_pools(db_session: Session) -> None:
+    from app.models import AmazonSyncRun
+    from app.models.enums import ListingStatus, MappingStatus, MatchMethod
+    from tests.integration import factories
+
+    ctx = setup(db_session)
+    listing = factories.make_marketplace_listing(
+        db_session,
+        ctx.policy.org,
+        ctx.policy.product,
+        asin="B000000002",
+        listing_status=ListingStatus.ACTIVE,
+        mapping_status=MappingStatus.APPROVED,
+        mapping_method=MatchMethod.MANUAL_APPROVAL,
+        approved_by_user_id=ctx.policy.manager.user_id,
+        approved_at=ctx.policy.listing.approved_at,
+    )
+    run = db_session.get(AmazonSyncRun, ctx.stock.sync_run_id)
+    assert run is not None
+    factories.make_amazon_inventory_snapshot(
+        db_session,
+        ctx.policy.org,
+        run,
+        seller_sku=listing.seller_sku,
+        asin=listing.asin,
+        captured_at=ctx.stock.captured_at,
+        fnsku="SYNTHETIC-FNSKU2",
+        condition="NewItem",
+        fulfillable=10,
+        inbound_shipped=6,
+        raw={**ctx.stock.raw, "seller_sku": listing.seller_sku, "asin": listing.asin},
+    )
+    current = policies.get_policy(db_session, ctx.policy.operator, ctx.policy_id)
+    definition = current.head.definition.model_dump(mode="json")
+    definition["amazon"]["listing_units"].append(
+        {**definition["amazon"]["listing_units"][0], "listing_id": str(listing.id)}
+    )
+    definition["amazon"]["stock_pools"].append(
+        {
+            "pool_id": "second",
+            "channel": "FBA",
+            "listing_ids": [str(listing.id)],
+            "stock_source_listing_id": str(listing.id),
+            "distinct_stock_reference": "Synthetic distinct warehouse stock source",
+        }
+    )
+    db_session.commit()
+    draft = policies.record_draft(
+        db_session,
+        ctx.policy.operator,
+        ctx.policy_id,
+        PolicyDraftRequest(
+            expected_head_id=current.head.id,
+            definition=PurchasingPolicyDefinition.model_validate(definition),
+            reason="Synthetic distinct second pool with approved case units",
+        ),
+    )
+    ctx.approval = managers.approve(db_session, ctx.policy, draft).head.id
+    first = confirm(db_session, ctx)
+    context = service.context(
+        db_session,
+        ctx.policy.manager,
+        ctx.policy_id,
+        InboundContextRequest(expected_approved_revision_id=ctx.approval, pool_id="second"),
+    )
+    base = proposal(db_session, ctx)
+    position = base.position.model_copy(
+        update={
+            "arrivals": tuple(
+                a.model_copy(update={"reference": a.reference.upper()})
+                for a in base.position.arrivals
+            )
+        }
+    )
+    request = InboundProposal(
+        expected_approved_revision_id=ctx.approval,
+        pool_id="second",
+        expected_head_id=context.head_id,
+        expected_source_sha256=context.source_sha256,
+        position=position,
+    )
+    result = service.preview(db_session, ctx.policy.manager, ctx.policy_id, request)
+    assert (
+        not result.can_confirm and "INBOUND_SHIPMENT_REFERENCED_BY_ANOTHER_POOL" in result.blockers
+    )
+
+    row = db_session.get(InboundEvidenceRevision, first.id)
+    assert row is not None
+    data = {
+        c.name: getattr(row, c.name)
+        for c in row.__table__.columns
+        if c.name not in {"created_at", "updated_at"}
+    }
+    data.update(
+        id=uuid.uuid4(),
+        request_id=uuid.uuid4(),
+        pool_id="second",
+        previous_revision_id=None,
+        revision_number=1,
+        stock_source_listing_id=listing.id,
+        stock_snapshot_id=uuid.UUID(context.source_context["stock_snapshot_id"]),
+        source_context=context.source_context,
+        source_sha256=context.source_sha256,
+        recorded_at=datetime.now(UTC),
+        position=position.model_dump(mode="json"),
+    )
+    with (
+        pytest.raises(DBAPIError, match="shipment cannot be credited to two pools"),
+        db_session.begin_nested(),
+    ):
+        db_session.execute(insert(InboundEvidenceRevision).values(**data))

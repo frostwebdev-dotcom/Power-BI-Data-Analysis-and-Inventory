@@ -189,8 +189,8 @@
             "daily_sales": "20",
             "days_of_supply": "2.5",
             "required_units": 340,
-            "net_shortfall_units": 290,
-            "order_quantity_before_vendor_cap": 294
+            "net_shortfall_units": 286,
+            "order_quantity_before_vendor_cap": 288
           },
           "suggested_units": null
         },
@@ -281,7 +281,9 @@
         "reasons": [],
         "purchasing_eligible": false
       }
-    ]
+    ],
+    "allocation": null,
+    "commercial": null
   },
   "evidence_sha256": "546fad18af7602bc5aa9d5f2854682c13dc2de82b27a0fdd74f6a86a2a671c09"
 }

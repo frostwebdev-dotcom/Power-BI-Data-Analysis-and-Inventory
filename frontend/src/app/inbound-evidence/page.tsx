@@ -15,7 +15,7 @@ import { Reasons } from "../replenishment-recommendations/evidence";
 export default function InboundPage() { return <Suspense fallback={<Loading />}><Inbound /></Suspense>; }
 function Inbound() {
   const params = useSearchParams(), policy = params.get("policy");
-  return <div className="recommendations"><PageHeader title="Reviewed inbound arrivals" lede="Record a complete outstanding shipment position against an exact approved stock pool and inventory snapshot." /><Note>Review evidence only. Recording does not receive stock, update Amazon, reserve inventory or authorize a purchase. Unknown quantities or dates cannot be confirmed as zero.</Note>{policy ? <PolicyEvidence key={policy} policy={policy} /> : <ChoosePolicy />}</div>;
+  return <div className="recommendations inbound-evidence"><PageHeader title="Reviewed inbound arrivals" lede="Record a complete outstanding shipment position against an exact approved stock pool and inventory snapshot." /><Note>Review evidence only. Recording does not receive stock, update Amazon, reserve inventory or authorize a purchase. Unknown quantities or dates cannot be confirmed as zero.</Note>{policy ? <PolicyEvidence key={policy} policy={policy} /> : <ChoosePolicy />}</div>;
 }
 function ChoosePolicy() {
   const [page, setPage] = useState(1), policies = usePolicies(page, "");

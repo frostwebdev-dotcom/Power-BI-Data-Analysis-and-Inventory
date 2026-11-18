@@ -143,7 +143,7 @@ BEGIN
     IF NOT FOUND OR run.started_at IS NULL OR run.completed_at IS NULL OR snap.captured_at<run.started_at OR snap.captured_at>run.completed_at OR run.completed_at>NEW.recorded_at THEN RAISE EXCEPTION 'Inbound inventory source is incomplete or invalid'; END IF;
     SELECT id INTO latest_id FROM amazon_sync_runs WHERE organization_id=NEW.organization_id AND marketplace_id=NEW.marketplace_id AND job_type='FBA_INVENTORY' ORDER BY started_at DESC NULLS LAST,id LIMIT 1;
     IF latest_id IS DISTINCT FROM run.id OR (SELECT count(*) FROM amazon_sync_runs WHERE organization_id=NEW.organization_id AND marketplace_id=NEW.marketplace_id AND job_type='FBA_INVENTORY' AND started_at=run.started_at)>1 THEN RAISE EXCEPTION 'Inbound confirmation requires an unambiguous latest inventory source'; END IF;
-    IF NEW.observed_at<snap.captured_at OR NEW.observed_at>NEW.recorded_at OR NEW.expires_at<=NEW.recorded_at OR NEW.expires_at<=NEW.observed_at OR NEW.expires_at>NEW.observed_at+interval '31 days' THEN RAISE EXCEPTION 'Inbound observation or expiry is invalid'; END IF;
+    IF NEW.observed_at<snap.captured_at OR NEW.observed_at>NEW.recorded_at OR NEW.expires_at<=NEW.recorded_at OR NEW.expires_at<=NEW.observed_at OR NEW.expires_at>NEW.observed_at+interval '744 hours' THEN RAISE EXCEPTION 'Inbound observation or expiry is invalid'; END IF;
     IF NEW.source_context->>'approved_revision_id' IS DISTINCT FROM approval.id::text OR NEW.source_context->>'policy_id' IS DISTINCT FROM NEW.policy_id::text OR NEW.source_context->>'product_id' IS DISTINCT FROM NEW.product_id::text OR NEW.source_context->>'stock_snapshot_id' IS DISTINCT FROM snap.id::text OR NEW.source_context->'inventory_run'->>'id' IS DISTINCT FROM run.id::text OR NEW.source_context->'pool' IS DISTINCT FROM pool THEN RAISE EXCEPTION 'Inbound source context disagrees with its references'; END IF;
     IF NEW.position->'complete_position_confirmed' IS DISTINCT FROM 'true'::jsonb OR NEW.position->'no_on_hand_overlap_confirmed' IS DISTINCT FROM 'true'::jsonb OR NEW.position->'declared_total_base_units' IS DISTINCT FROM to_jsonb(NEW.declared_total_base_units) OR (NEW.position->>'observed_at')::timestamptz IS DISTINCT FROM NEW.observed_at OR (NEW.position->>'expires_at')::timestamptz IS DISTINCT FROM NEW.expires_at OR coalesce(length(btrim(NEW.position->>'evidence_reference')),0) NOT BETWEEN 10 AND 500 OR jsonb_typeof(NEW.position->'arrivals') IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'A complete non-overlapping referenced inbound position is required'; END IF;
     IF jsonb_array_length(NEW.position->'arrivals')>100 OR EXISTS (SELECT 1 FROM jsonb_array_elements(NEW.position->'arrivals') a WHERE jsonb_typeof(a) IS DISTINCT FROM 'object' OR a->>'expected_at' IS NULL OR a->>'expected_at' !~ '(Z|[+-][0-9]{2}:[0-9]{2})$' OR jsonb_typeof(a->'base_units') IS DISTINCT FROM 'number' OR (a->>'base_units')!~'^[1-9][0-9]*$' OR (a->>'base_units')::numeric>9223372036854775807 OR coalesce(length(btrim(a->>'reference')),0) NOT BETWEEN 1 AND 100 OR (a->>'expected_at')::timestamptz<=NEW.recorded_at) OR (SELECT coalesce(sum((a->>'base_units')::numeric),0) FROM jsonb_array_elements(NEW.position->'arrivals') a)<>NEW.declared_total_base_units OR (SELECT count(*)<>count(DISTINCT lower(btrim(a->>'reference'))) FROM jsonb_array_elements(NEW.position->'arrivals') a) THEN RAISE EXCEPTION 'Inbound arrivals must be distinct future whole quantities that reconcile exactly'; END IF;
@@ -286,6 +286,18 @@ BEGIN
             OR a->'revision'->>'source_sha256' IS DISTINCT FROM e.source_sha256
             OR a->'revision'->'source_context' IS DISTINCT FROM e.source_context
             OR a->'revision'->>'pool_id' IS DISTINCT FROM e.pool_id
+            OR a->'revision'->>'policy_id' IS DISTINCT FROM e.policy_id::text
+            OR a->'revision'->>'approved_revision_id' IS DISTINCT FROM e.approved_revision_id::text
+            OR a->'revision'->>'channel' IS DISTINCT FROM e.channel
+            OR (a->'revision'->>'revision_number')::integer IS DISTINCT FROM e.revision_number
+            OR a->'revision'->>'previous_revision_id' IS DISTINCT FROM e.previous_revision_id::text
+            OR a->'revision'->>'kind' IS DISTINCT FROM e.kind
+            OR a->'revision'->>'inventory_run_id' IS DISTINCT FROM e.inventory_run_id::text
+            OR a->'revision'->>'stock_snapshot_id' IS DISTINCT FROM e.stock_snapshot_id::text
+            OR a->'revision'->>'recorded_by_user_id' IS DISTINCT FROM e.recorded_by_user_id::text
+            OR (a->'revision'->>'recorded_at')::timestamptz IS DISTINCT FROM e.recorded_at
+            OR a->'revision'->>'reason' IS DISTINCT FROM e.reason
+            OR a->'revision'->'purchasing_eligible' IS DISTINCT FROM 'false'::jsonb
             OR a->'purchasing_eligible' IS DISTINCT FROM 'false'::jsonb
             OR (a->>'usable_base_units')::numeric<0 OR (a->>'usable_base_units')::numeric>e.declared_total_base_units
         ) OR (SELECT count(*)<>count(DISTINCT a->'revision'->>'pool_id') FROM jsonb_array_elements(NEW.snapshot->'inbound_assessments') a) THEN
@@ -322,9 +334,9 @@ BEGIN
                     RAISE EXCEPTION 'Applied inbound requires current complete source evidence';
                 END IF;
                 total_credit=0; expected_arrivals='[]'::jsonb;
-                FOR arrival IN SELECT value FROM jsonb_array_elements(ev.position->'arrivals') ORDER BY (value->>'expected_at')::timestamptz,value->>'reference' LOOP
+                FOR arrival IN SELECT value FROM jsonb_array_elements(ev.position->'arrivals') ORDER BY (value->>'expected_at')::timestamptz,(value->>'reference') COLLATE "C" LOOP
                     credit=0;
-                    IF (arrival->>'expected_at')::timestamptz>captured+make_interval(days=>coverage_days) THEN expected_disposition='AFTER_COVERAGE';
+                    IF (arrival->>'expected_at')::timestamptz>captured+coverage_days*interval '24 hours' THEN expected_disposition='AFTER_COVERAGE';
                     ELSIF sales=0 OR (on_hand+total_credit)*window_days*86400000000 > sales*extract(epoch FROM ((arrival->>'expected_at')::timestamptz-captured))*1000000 THEN
                         expected_disposition='BEFORE_STOCKOUT'; credit=(arrival->>'base_units')::numeric;
                     ELSE expected_disposition='AFTER_STOCKOUT'; END IF;

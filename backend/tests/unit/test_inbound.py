@@ -59,6 +59,8 @@ def test_declared_position_has_no_guess_or_coercion(invalid: Any) -> None:
     [
         {"arrivals": []},
         {"observed_at": "2026-11-18T00:00:00"},
+        {"observed_at": 1800000000},
+        {"observed_at": "9999-12-31T23:59:59Z", "expires_at": "9999-12-31T23:59:59Z"},
         {"expires_at": "2026-11-19T00:00:00"},
         {"expires_at": AT},
         {"expires_at": AT + timedelta(days=32)},
@@ -80,6 +82,9 @@ def test_position_requires_complete_explicit_evidence(changes: dict[str, Any]) -
         {"base_units": True},
         {"base_units": "10"},
         {"expected_at": "2026-11-19T00:00:00"},
+        {"expected_at": 1800000000},
+        {"expected_at": "1800000000"},
+        {"expected_at": "0001-01-01T00:00:00+14:00"},
         {"reference": " "},
     ],
 )

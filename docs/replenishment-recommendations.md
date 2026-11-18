@@ -190,3 +190,14 @@ ordering, and the latest-saved-per-policy queue and dashboard. Current approval
 relation is rechecked; current source freshness is not revalidated by historical
 discovery. Separate fresh preview/review is required to record an evaluation.
 No schema migration, stock reservation or purchasing eligibility is introduced.
+
+
+## Reviewed inbound selection (v5)
+
+Explicit optional current ledger revisions add reviewed complete FBA/manual FBM
+positions without changing v1–v4 history. V2 readiness retains native observations
+and original issues; v5 snapshots retain the full confirmation and exact per-arrival
+credit. Expired, missed or source-changed evidence stays unknown. The existing
+supplier, historical-financial and commercial checks compose with this path.
+See [reviewed inbound](reviewed-inbound.md) for confirmation/revocation, units,
+source binding, timing and operational limits.

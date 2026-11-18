@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
@@ -34,12 +35,24 @@ class Arrival(PreviewModel):
             raise ValueError("Shipment reference is required.")
         return value.strip()
 
+    @field_validator("expected_at", mode="before")
+    @classmethod
+    def explicit_time(cls, value: Any) -> Any:
+        if not isinstance(value, (str, datetime)) or (
+            isinstance(value, str) and not re.search(r"(Z|[+-][0-9]{2}:[0-9]{2})$", value)
+        ):
+            raise ValueError("Use a date and time with an explicit timezone.")
+        return value
+
     @field_validator("expected_at")
     @classmethod
     def aware(cls, value: datetime) -> datetime:
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("An explicit timezone is required.")
-        return value.astimezone(UTC)
+        try:
+            return value.astimezone(UTC)
+        except (ValueError, OverflowError) as exc:
+            raise ValueError("Time is outside the supported UTC range.") from exc
 
 
 class InboundPosition(PreviewModel):
@@ -50,6 +63,11 @@ class InboundPosition(PreviewModel):
     evidence_reference: Annotated[str, Field(min_length=10, max_length=500)]
     complete_position_confirmed: StrictBool
     no_on_hand_overlap_confirmed: StrictBool
+
+    @field_validator("observed_at", "expires_at", mode="before")
+    @classmethod
+    def explicit_time(cls, value: Any) -> Any:
+        return Arrival.explicit_time(value)
 
     @field_validator("observed_at", "expires_at")
     @classmethod
@@ -69,7 +87,11 @@ class InboundPosition(PreviewModel):
             raise ValueError("Arrivals must reconcile exactly to the declared position.")
         if len({a.reference.casefold() for a in self.arrivals}) != len(self.arrivals):
             raise ValueError("Shipment references must be unique within a position.")
-        if not self.observed_at < self.expires_at <= self.observed_at + timedelta(days=31):
+        try:
+            expiry_limit = self.observed_at + timedelta(days=31)
+        except OverflowError as exc:
+            raise ValueError("Observation time is outside the supported range.") from exc
+        if not self.observed_at < self.expires_at <= expiry_limit:
             raise ValueError("Expiry must be after observation and within 31 days.")
         return self
 
