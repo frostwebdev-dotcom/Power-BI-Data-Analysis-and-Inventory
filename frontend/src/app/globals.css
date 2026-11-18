@@ -1331,7 +1331,7 @@ textarea:focus {
 .recommendations { min-width: 0; }
 .recommendations h1, .recommendations .kv__value, .recommendations td { overflow-wrap: anywhere; }
 .recommendations .kv__value { flex: 1; white-space: normal; overflow: visible; text-overflow: clip; }
-.recommendations .json-block { max-width: 100%; overflow: auto; font-size: 0.75rem; padding: 12px; background: var(--surface-alt); border-radius: 6px; }
+.recommendations .json-block { max-width: 100%; overflow: auto; font-size: 0.75rem; padding: 12px; background: var(--bg-subtle); border-radius: 6px; }
 .recommendations .card { margin-top: 16px; }
 .recommendations .checkbox-row { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; }
 .recommendations .checkbox-row input { width: auto; margin-top: 4px; }
@@ -1339,4 +1339,12 @@ textarea:focus {
   .recommendations .candidate { flex-wrap: wrap; }
   .recommendations .candidate > div { min-width: 0; overflow-wrap: anywhere; }
   .recommendations .toolbar { flex-wrap: wrap; }
+}
+.recommendations .kv__row { align-items: flex-start; }
+.recommendations .kv__key { flex: 0 0 38%; }
+.recommendations .table { min-width: 680px; }
+.recommendations [aria-label="Historical SKU financial amounts"] .table { min-width: 1100px; }
+@media (max-width: 640px) {
+  .recommendations .kv__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .recommendations .kv__value { text-align: left; }
 }

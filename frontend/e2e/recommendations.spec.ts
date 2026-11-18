@@ -63,17 +63,21 @@ test("explicit financial selection, acknowledgement, save and historical detail 
   await expect(page.getByTestId("financial-context")).toContainText("Historical financial context");
   await expect(page.getByRole("button", { name: "Record evaluation", exact: true })).toBeDisabled();
   await acknowledge(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("recommendation-review-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("recommendation-review-mobile.png"), fullPage: true });
   await page.getByRole("button", { name: "Record evaluation", exact: true }).click();
   await expect(page.getByTestId("saved-evaluation")).toContainText("Reviewed synthetic source evidence");
   expect(calls.find(c => c.path.endsWith("/recommendation-preview"))!.body).toEqual({ expected_approved_revision_id: BASE.snapshot.approved_policy.id, financial: { import_id: REPORT, expected_binding_revision_id: null } });
   const sent = calls.find(c => c.path.endsWith("/recommendations"))!.body!;
   expect(sent.acknowledge_review).toBe(true); expect(sent.expected_evidence_sha256).toBe(BASE.evidence_sha256);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("recommendation-detail-mobile.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("recommendation-detail-desktop.png"), fullPage: true });
 });
 
@@ -96,7 +100,7 @@ for (const role of ["VIEWER", "DATA_OPERATOR"]) test(role + " sees permitted rec
 test("unconfirmed save retries the exact request UUID and body", async ({ page }) => {
   const calls = await mock(page, { ambiguous: true }); await begin(page); await acknowledge(page);
   await page.getByRole("button", { name: "Record evaluation", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("save result is unconfirmed");
+  await expect(page.getByTestId("evaluation-review").getByRole("alert")).toContainText("save result is unconfirmed");
   await expect(page.getByRole("button", { name: "Select report", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Retry same save", exact: true }).click();
   await expect(page.getByTestId("saved-evaluation")).toBeVisible();

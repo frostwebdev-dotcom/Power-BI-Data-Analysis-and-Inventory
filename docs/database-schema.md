@@ -886,7 +886,8 @@ marketplace, actor/time/reason, client request UUID and request/evidence/content
 digests. A unique organization/request key supports exact successful retries.
 Policy/recorded-time indexing supports bounded history; snapshots retain the
 approved definition, identity/source evidence and per-pool inputs/results.
-Supplier/profitability adapters remain unintegrated; no record authorizes a purchase.
+Versioned supplier and historical financial evidence extend this original
+snapshot contract; no record authorizes a purchase.
 
 The insert guard serializes with policy review and requires the scoped current
 approval, matching snapshot references, active actor/organization and valid
@@ -900,3 +901,11 @@ snapshots. v2 requires approved supplier settings and supplier evidence; v1 may
 not silently discard those settings. Existing definitions omit absent supplier
 settings, retaining their original JSON and digests. No tables, enums or triggers
 are added. Downgrade refuses to discard v2 snapshots or supplier policy history.
+
+Migration a61117202607 adds nullable financial_import_id and
+financial_binding_revision_id UUID foreign keys to replenishment_recommendations.
+The v3 insert guard serializes with financial report/binding writes, requires an
+organization/marketplace-scoped current report and exact current binding head,
+and matches snapshot profile/file/period identity. Legacy v1/v2 rows retain null
+references and unchanged JSON/digests. Downgrade refuses to discard v3 history.
+No tables, enums or triggers are added: counts remain 35 / 23 / 16.
