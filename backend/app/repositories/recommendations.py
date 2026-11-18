@@ -46,7 +46,7 @@ class RecommendationRepository(ScopedRepository):
         *,
         policy_id: uuid.UUID | None = None,
         product_id: uuid.UUID | None = None,
-        status: Literal["BLOCKED", "NO_REORDER"] | None = None,
+        status: Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"] | None = None,
     ) -> tuple[list[ReplenishmentRecommendation], int]:
         query = self.select(ReplenishmentRecommendation)
         for column, value in (

@@ -6,7 +6,7 @@ import type { FormEvent, ReactElement } from "react";
 
 import { EmptyState, ErrorNote, Loading, Note, Pager, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
-import { buildPolicy, policyError, policyForm, policyPath, US_MARKETPLACE, usePolicyListings, useVendorProductChoices } from "@/lib/purchasing-policies";
+import { buildPolicy, policyError, policyForm, policyPath, US_MARKETPLACE, usePolicyListings, useSupplierProfiles, useVendorProductChoices } from "@/lib/purchasing-policies";
 import type { PolicyDefinition, PolicyForm, PolicySummary, PoolForm, UnitForm, VendorProductChoice } from "@/lib/purchasing-policies";
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactElement<{ id?: string; "aria-describedby"?: string }> }) {
@@ -29,14 +29,15 @@ export function VendorChoice({ productId, onSelect }: { productId: string; onSel
   </section>;
 }
 
-export function PolicyEditor({ productId, vendorProductId, initial, expectedHead, onSaved, onCancel }: {
-  productId: string; vendorProductId: string; initial?: PolicyDefinition; expectedHead?: { policyId: string; revisionId: string; number: number }; onSaved: (policy: PolicySummary) => void; onCancel: () => void;
+export function PolicyEditor({ vendorId, productId, vendorProductId, initial, expectedHead, onSaved, onCancel }: {
+  vendorId: string; productId: string; vendorProductId: string; initial?: PolicyDefinition; expectedHead?: { policyId: string; revisionId: string; number: number }; onSaved: (policy: PolicySummary) => void; onCancel: () => void;
 }) {
   const cache = useQueryClient();
   const [form, setForm] = useState<PolicyForm>(() => policyForm(initial));
   const [reason, setReason] = useState(""), [error, setError] = useState<Error | null>(null);
   const [excluded, setExcluded] = useState<string[]>([]);
   const listings = usePolicyListings(productId, form.marketplace);
+  const profiles = useSupplierProfiles(vendorId, form.supplierEnabled);
   const names = new Map((listings.data ?? []).map(l => [l.id, l.seller_sku]));
   const allIds = [...new Set([...(listings.data ?? []).map(l => l.id), ...form.units.map(u => u.listing_id)])].filter(id => !excluded.includes(id));
   const units = allIds.map(id => form.units.find(u => u.listing_id === id) ?? { listing_id: id, factor: "", reference: "" });
@@ -58,6 +59,7 @@ export function PolicyEditor({ productId, vendorProductId, initial, expectedHead
     try {
       if (!listings.data || listings.isFetching || listings.isError) throw new Error("Load the complete Amazon listing set before saving.");
       if (reason.trim().length < 10 || reason.trim().length > 1000) throw new Error("Explain the draft in 10–1000 characters.");
+      if (form.supplierEnabled && (!profiles.data || profiles.isFetching || profiles.isError)) throw new Error("Load the complete supplier profile list before saving.");
       save.mutate(buildPolicy(form, productId, units));
     } catch (issue) { setError(policyError(issue)); }
   }
@@ -83,6 +85,21 @@ export function PolicyEditor({ productId, vendorProductId, initial, expectedHead
         <Field label="Base units per supplier order unit" hint="Blank means unknown. Do not infer this from the product’s pack size."><input inputMode="numeric" pattern="[0-9]+" value={form.vendorFactor} onChange={e => field("vendorFactor", e.target.value)} /></Field>
         {ref("Supplier unit evidence", form.vendorReference, value => field("vendorReference", value))}
       </div>
+      <h3>Supplier availability checks</h3>
+      <label className="check"><input type="checkbox" checked={form.supplierEnabled} onChange={e => field("supplierEnabled", e.target.checked)} />Include supplier source checks</label>
+      <p className="small muted">Choose the source layout and confirm its stock units. Receipt age measures when the file reached PRMS; it does not prove when the supplier prepared its data.</p>
+      {form.supplierEnabled ? <>
+        <ErrorNote error={profiles.error} />{profiles.isPending ? <Loading what="Loading supplier inventory profiles" /> : null}
+        <div className="grid grid--2">
+          <Field label="Supplier inventory profile"><select value={form.supplierProfile} onChange={e => field("supplierProfile", e.target.value)}><option value="">Unconfirmed profile</option>{profiles.data?.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · version {profile.version}{profile.is_active ? "" : " · inactive"}</option>)}{form.supplierProfile && profiles.data && !profiles.data.some(p => p.id === form.supplierProfile) ? <option value={form.supplierProfile}>Previously selected profile · unavailable</option> : null}</select></Field>
+          <Field label="Maximum supplier file receipt age (seconds)" hint="1–2,678,400 seconds since PRMS received the file."><input required inputMode="numeric" pattern="[0-9]+" value={form.supplierAge} onChange={e => field("supplierAge", e.target.value)} /></Field>
+          <Field label="Supplier freshness basis"><select required value={form.supplierBasis} onChange={e => field("supplierBasis", e.target.value)}><option value="">Choose freshness basis</option><option value="FILE_RECEIPT_TIME">File receipt time · supplier data time unverified</option></select></Field>
+          {ref("Supplier receipt-age confirmation", form.supplierFreshnessReference, value => field("supplierFreshnessReference", value))}
+          <Field label="Base units per source quantity" hint="Explicit conversion of the file’s as-stated stock count. Blank means unknown; pack size is not copied."><input inputMode="numeric" pattern="[0-9]+" value={form.supplierFactor} onChange={e => field("supplierFactor", e.target.value)} /></Field>
+          {ref("Source quantity evidence", form.supplierQuantityReference, value => field("supplierQuantityReference", value))}
+          {ref("Supplier availability evidence", form.supplierAvailabilityReference, value => field("supplierAvailabilityReference", value))}
+        </div>
+      </> : <p className="small muted">Supplier availability remains unverified without these settings.</p>}
       <h3>Freshness and inbound</h3><div className="grid grid--2">
         {numeric("ordersAge", "Maximum sales-data lag (seconds)", "1–2,678,400 seconds from the complete sales-window cutoff.")}
         {numeric("inventoryAge", "Maximum inventory age (seconds)", "1–2,678,400 seconds; applied to the run and each stock snapshot.")}

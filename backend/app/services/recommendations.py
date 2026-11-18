@@ -5,8 +5,9 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
+from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError
@@ -18,6 +19,8 @@ from app.repositories.recommendations import RecommendationRepository
 from app.schemas.amazon_readiness import AmazonReadinessResponse
 from app.schemas.purchasing_policies import PolicyRevisionResponse
 from app.schemas.recommendations import (
+    EvaluationSnapshot,
+    EvaluationStatus,
     PoolEvaluation,
     RecommendationPage,
     RecommendationPreview,
@@ -25,12 +28,15 @@ from app.schemas.recommendations import (
     RecommendationRecordRequest,
     RecommendationResponse,
     RecommendationSnapshot,
+    SupplierRecommendationSnapshot,
 )
 from app.schemas.replenishment import ReplenishmentPreviewInput
+from app.schemas.supplier_readiness import SupplierReadinessResponse
 from app.services import audit
 from app.services import purchasing_policies as policies
 from app.services.amazon_readiness import check_amazon_readiness
 from app.services.replenishment import calculate_replenishment
+from app.services.supplier_readiness import check_supplier_readiness
 
 READ = policies.READ
 WRITE = policies.WRITE
@@ -100,10 +106,71 @@ def build_snapshot(
     )
 
 
-def evidence_digest(snapshot: RecommendationSnapshot) -> str:
+def build_supplier_snapshot(
+    approved: PolicyRevisionResponse,
+    identity: dict[str, Any],
+    policy_blocks: tuple[str, ...],
+    readiness: AmazonReadinessResponse,
+    supplier: SupplierReadinessResponse,
+) -> SupplierRecommendationSnapshot:
+    legacy = build_snapshot(approved, identity, policy_blocks, readiness)
+    pools: list[PoolEvaluation] = []
+    for pool in legacy.pools:
+        inputs = pool.inputs.model_copy(
+            update={
+                "vendor_availability": supplier.availability,
+                "vendor_stock_units": supplier.stock_base_units,
+                "source_data_current": pool.inputs.source_data_current
+                and supplier.status == "VERIFIED",
+            }
+        )
+        result = calculate_replenishment(inputs)
+        pools.append(
+            PoolEvaluation(
+                pool_id=pool.pool_id,
+                inputs=inputs,
+                result=result,
+                blocking_reasons=tuple(
+                    sorted(
+                        {
+                            *policy_blocks,
+                            *supplier.issues,
+                            *(issue.code for issue in readiness.issues),
+                            *(result.reasons if result.status != "NO_REORDER" else ()),
+                        }
+                    )
+                ),
+            )
+        )
+    positive = [pool for pool in pools if pool.result.calculation.net_shortfall_units]
+    review = set(supplier.review_reasons)
+    if positive:
+        review.add("PROFITABILITY_NOT_INTEGRATED")
+    if len(positive) > 1:
+        review.add("SUPPLIER_STOCK_SHARED_ACROSS_POOLS")
+    status: EvaluationStatus = "BLOCKED"
+    if pools and all(pool.result.status == "NO_REORDER" for pool in pools):
+        status = "NO_REORDER"
+    elif pools and all(pool.result.status != "BLOCKED" for pool in pools):
+        status = "REVIEW_REQUIRED"
+    data = legacy.model_dump(mode="json")
+    data.update(
+        rule_version="replenishment-evaluation-v2",
+        supplier=supplier.model_dump(mode="json"),
+        supplier_inputs=supplier.status,
+        pools=[pool.model_dump(mode="json") for pool in pools],
+        status=status,
+        review_reasons=sorted(review),
+    )
+    return SupplierRecommendationSnapshot.model_validate(data)
+
+
+def evidence_digest(snapshot: EvaluationSnapshot) -> str:
     data = snapshot.model_dump(mode="json")
     data.pop("evaluated_at")
     data["readiness"].pop("evaluated_at")
+    if isinstance(snapshot, SupplierRecommendationSnapshot):
+        data["supplier"].pop("evaluated_at")
     if not snapshot.readiness.order_coverage_run_ids:
         # With no baseline the readiness adapter reports a clock-derived window.
         # Its quantities stay unknown; that display clock is not source evidence.
@@ -124,6 +191,17 @@ def _evaluate(
         session, actor, approved.definition.amazon, now=now, lock_sources=True
     )
     snapshot = build_snapshot(approved, identity, blocks, readiness)
+    if approved.definition.supplier is not None:
+        supplier = check_supplier_readiness(
+            session,
+            actor.organization_id,
+            approved.product_id,
+            approved.vendor_product_id,
+            approved.definition.supplier,
+            at=readiness.evaluated_at,
+        )
+        enriched = build_supplier_snapshot(approved, identity, blocks, readiness, supplier)
+        return RecommendationPreview(snapshot=enriched, evidence_sha256=evidence_digest(enriched))
     return RecommendationPreview(snapshot=snapshot, evidence_sha256=evidence_digest(snapshot))
 
 
@@ -149,7 +227,7 @@ def _response(row: ReplenishmentRecommendation) -> RecommendationResponse:
         vendor_product_id=row.vendor_product_id,
         marketplace_id=row.marketplace_id,
         status=row.status,
-        snapshot=RecommendationSnapshot.model_validate(row.snapshot),
+        snapshot=TypeAdapter(EvaluationSnapshot).validate_python(row.snapshot),
         evidence_sha256=row.evidence_sha256,
         snapshot_sha256=row.snapshot_sha256,
         recorded_by_user_id=row.recorded_by_user_id,
@@ -244,7 +322,7 @@ def recommendation_page(
     *,
     policy_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
-    status: Literal["BLOCKED", "NO_REORDER"] | None = None,
+    status: EvaluationStatus | None = None,
 ) -> RecommendationPage:
     actor.require_roles(READ)
     rows, total = RecommendationRepository(session, actor.organization_id).page(

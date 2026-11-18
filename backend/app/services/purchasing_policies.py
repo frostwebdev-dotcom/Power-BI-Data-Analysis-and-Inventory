@@ -32,6 +32,7 @@ from app.schemas.purchasing_policies import (
     PurchasingPolicyDefinition,
 )
 from app.services import audit
+from app.services.supplier_readiness import review_supplier_policy
 
 READ = (RoleCode.VIEWER, RoleCode.DATA_OPERATOR, RoleCode.PURCHASING_MANAGER)
 WRITE = (RoleCode.DATA_OPERATOR, RoleCode.PURCHASING_MANAGER)
@@ -339,6 +340,13 @@ def _review(
         "mapping_approver_ids": sorted(str(identifier) for identifier in approvers),
     }
     blocked: set[str] = set()
+    if definition.supplier is not None:
+        supplier_context, supplier_blocks = review_supplier_policy(
+            repository, vendor, definition.supplier
+        )
+        context["supplier"] = supplier_context
+        if action == "APPROVE" or revalidate_approval:
+            blocked.update(supplier_blocks)
     if action == "APPROVE" or revalidate_approval:
         if action == "APPROVE" and head.kind != "DRAFT":
             blocked.add("CURRENT_HEAD_NOT_DRAFT")
@@ -544,4 +552,6 @@ def mapping_evidence(context: dict[str, Any]) -> dict[str, Any]:
         key=lambda row: str(row["id"]),
     )
     result["mapping_approver_ids"] = sorted(context.get("mapping_approver_ids", []))
+    if "supplier" in context:
+        result["supplier"] = context["supplier"]
     return result

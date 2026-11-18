@@ -13,6 +13,7 @@ from app.models import (
     PurchasingPolicyRevision,
     User,
     Vendor,
+    VendorImportProfile,
     VendorProduct,
 )
 from app.models.enums import Marketplace
@@ -137,7 +138,11 @@ class PurchasingPolicyRepository(ScopedRepository):
 
     def owned(
         self,
-        model: type[Product] | type[User] | type[Vendor] | type[VendorProduct],
+        model: type[Product]
+        | type[User]
+        | type[Vendor]
+        | type[VendorProduct]
+        | type[VendorImportProfile],
         identifier: uuid.UUID,
     ) -> Any:
         return self.session.scalar(

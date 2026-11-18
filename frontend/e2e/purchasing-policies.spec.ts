@@ -9,6 +9,8 @@ const DEFINITION = EXAMPLE.definition, PRODUCT = DEFINITION.amazon.product_id, L
 const ALIAS = "22222222-2222-4222-8222-222222222223", POLICY = "44444444-4444-4444-8444-444444444444";
 const TIME = "2026-11-17T18:00:00Z";
 const IDENTITY = { catalog_item_number: "DEMO-POLICY", product_name: "Synthetic policy product", vendor_id: "55555555-5555-4555-8555-555555555555", vendor_name: "Synthetic supplier", vendor_code: "POLICY", vendor_sku: "SUPPLIER-6" };
+const SUPPLIER_PROFILE = "77777777-7777-4777-8777-777777777777";
+const SUPPLIER = { profile_id: SUPPLIER_PROFILE, inventory_max_age_seconds: 3600, freshness_basis: "FILE_RECEIPT_TIME" as const, freshness_confirmation_reference: "Synthetic manager accepts receipt-age proxy", base_units_per_source_quantity: 6, quantity_confirmation_reference: "Synthetic supplier stock cases contain six base units", availability_confirmation_reference: "Synthetic confirmed supplier availability column" };
 const PRODUCT_ROW = { id: PRODUCT, catalog_item_number: IDENTITY.catalog_item_number, name: IDENTITY.product_name, brand: "Synthetic", status: "ACTIVE", is_active: true, pack_size: 99, unit_of_measure: "piece", nineyard_last_seen_at: TIME };
 const LISTINGS = [LISTING, ALIAS].map((id, i) => ({ id, product_id: PRODUCT, seller_sku: i ? "PACK-6" : "SINGLE-1", asin: "B000000001", marketplace: "AMAZON", marketplace_id: "ATVPDKIKX0DER", mapping_status: "APPROVED", mapping_method: "MANUAL_APPROVAL", approved_at: TIME, approved_by_user_id: "actor", listing_status: "ACTIVE", is_active: true, name: "Synthetic listing" }));
 const DEF: PolicyDefinition = { ...DEFINITION, amazon: { ...DEFINITION.amazon, listing_units: [
@@ -19,12 +21,13 @@ function version(number: number, kind: PolicyRevision["kind"] = "DRAFT", definit
   return { id: number === 1 ? POLICY : "66666666-6666-4666-8666-" + String(number).padStart(12, "0"), policy_id: POLICY, product_id: PRODUCT, vendor_product_id: EXAMPLE.vendor_product_id, marketplace_id: "ATVPDKIKX0DER", revision_number: number, supersedes_revision_id: number === 1 ? null : versionId(number-1), reviewed_revision_id: kind === "APPROVED" ? versionId(number-1) : null, kind, definition: structuredClone(definition), definition_sha256: "a".repeat(64), review_context: null, context_sha256: null, recorded_by_user_id: "actor", recorded_at: TIME, reason: "Synthetic policy version " + number, purchasing_eligible: false };
 }
 function versionId(number: number) { return number === 1 ? POLICY : "66666666-6666-4666-8666-" + String(number).padStart(12, "0"); }
-interface Options { role?: string; empty?: boolean; approvedDraft?: boolean; staleReview?: boolean; staleDraft?: boolean; blocked?: string[]; tooManyListings?: boolean; manyVersions?: boolean; manyPolicies?: boolean }
+interface Options { supplier?: boolean; tooManyProfiles?: boolean; role?: string; empty?: boolean; approvedDraft?: boolean; staleReview?: boolean; staleDraft?: boolean; blocked?: string[]; tooManyListings?: boolean; manyVersions?: boolean; manyPolicies?: boolean }
 async function mock(page: Page, options: Options = {}) {
   const calls: { path: string; method: string; params: URLSearchParams; body: Record<string, unknown> | null }[] = [];
   let versions = options.empty ? [] : [version(1)];
   if (options.approvedDraft) versions = [version(3, "DRAFT", { ...DEF, quantity: { ...DEF.quantity, target_days: 21 } }), version(2, "APPROVED"), version(1)];
   if (options.manyVersions) versions = Array.from({ length: 12 }, (_, i) => version(12-i, "DRAFT", { ...DEF, quantity: { ...DEF.quantity, target_days: 12-i } }));
+  if (options.supplier) versions = versions.map(v => ({ ...v, definition: { ...v.definition, supplier: SUPPLIER } }));
   function summary(): PolicySummary { const decision = versions.find(v => v.kind !== "DRAFT"); return { identity: IDENTITY, policy_id: POLICY, head: versions[0]!, approved: decision?.kind === "APPROVED" ? decision : null, purchasing_eligible: false, current_data_verified: false }; }
   await page.addInitScript(() => localStorage.setItem("prms.token", "synthetic-browser-credential"));
   await page.route("**/api/v1/**", async route => {
@@ -36,6 +39,7 @@ async function mock(page: Page, options: Options = {}) {
     if (path === "/health") return route.fulfill({ json: { status: "ok", dependencies: [] } });
     if (path === "/products") return route.fulfill({ json: { items: [PRODUCT_ROW], total: 1, page: 1, page_size: 10 } });
     if (path === "/products/" + PRODUCT) return route.fulfill({ json: PRODUCT_ROW });
+    if (path.endsWith("/import-profiles")) return route.fulfill({ json: { items: [{ id: SUPPLIER_PROFILE, name: "Synthetic case stock", version: 2, is_active: true }], total: options.tooManyProfiles ? 201 : 1 } });
     if (path.endsWith("/listings")) return route.fulfill({ json: { items: LISTINGS, total: options.tooManyListings ? 201 : 2, page: 1, page_size: 200 } });
     if (path.endsWith("/vendor-products")) return route.fulfill({ json: { items: [{ id: EXAMPLE.vendor_product_id, product_id: PRODUCT, vendor_id: IDENTITY.vendor_id, vendor_name: IDENTITY.vendor_name, vendor_code: IDENTITY.vendor_code, vendor_sku: IDENTITY.vendor_sku, is_active: true, vendor_is_active: true, mapping_status: "APPROVED", mapping_method: "MANUAL_APPROVAL", approved_by_user_id: "actor", approved_at: TIME }], page: 1, page_size: 10, total: 1 } });
     if (path === "/purchasing-policies" && request.method() === "POST") { versions = [version(1, "DRAFT", body!.definition as PolicyDefinition)]; return route.fulfill({ status: 201, json: summary() }); }
@@ -43,7 +47,7 @@ async function mock(page: Page, options: Options = {}) {
     if (path.endsWith("/review-preview")) {
       const action = url.searchParams.get("action") as ReviewAction;
       const target = action === "APPROVE" ? versions[0]! : summary().approved!;
-      const json: PolicyReview = { action, policy_id: POLICY, expected_head_id: versions[0]!.id, reviewed_revision_id: target.id, definition: target.definition, definition_sha256: "a".repeat(64), context_sha256: "b".repeat(64), review_context: { product: { id: PRODUCT, catalog_item_number: IDENTITY.catalog_item_number, name: IDENTITY.product_name, is_active: true }, vendor: { id: IDENTITY.vendor_id, is_active: true }, vendor_product: { vendor_sku: IDENTITY.vendor_sku, mapping_status: "APPROVED", mapping_approved_at: TIME }, listings: LISTINGS }, review_allowed: !options.blocked?.length, blocking_reasons: options.blocked ?? [], purchasing_eligible: false };
+      const json: PolicyReview = { action, policy_id: POLICY, expected_head_id: versions[0]!.id, reviewed_revision_id: target.id, definition: target.definition, definition_sha256: "a".repeat(64), context_sha256: "b".repeat(64), review_context: { ...(options.supplier ? { supplier: { profile: { id: SUPPLIER_PROFILE, name: "Synthetic case stock", version: 2, is_active: true }, vendor_constraints: {} } } : {}), product: { id: PRODUCT, catalog_item_number: IDENTITY.catalog_item_number, name: IDENTITY.product_name, is_active: true }, vendor: { id: IDENTITY.vendor_id, is_active: true }, vendor_product: { vendor_sku: IDENTITY.vendor_sku, mapping_status: "APPROVED", mapping_approved_at: TIME }, listings: LISTINGS }, review_allowed: !options.blocked?.length, blocking_reasons: options.blocked ?? [], purchasing_eligible: false };
       return route.fulfill({ json });
     }
     if (path.endsWith("/reviews")) {
@@ -210,6 +214,60 @@ test("unsafe or fractional quantities are refused before sending a draft", async
   expect(calls.filter(c => c.method === "POST" && c.path === "/purchasing-policies")).toHaveLength(0);
 });
 
+test("supplier settings start blank and retain unknown quantity conversion", async ({ page }, testInfo) => {
+  const calls = await mock(page, { empty: true }); await startNew(page); await values(page);
+  await page.getByLabel("Include supplier source checks", { exact: true }).check();
+  for (const label of ["Supplier inventory profile", "Maximum supplier file receipt age (seconds)", "Supplier freshness basis", "Base units per source quantity"]) await expect(page.getByLabel(label, { exact: true })).toHaveValue("");
+  await page.getByLabel("Supplier inventory profile", { exact: true }).selectOption(SUPPLIER_PROFILE);
+  await page.getByLabel("Maximum supplier file receipt age (seconds)", { exact: true }).fill("3600");
+  await page.getByLabel("Supplier freshness basis", { exact: true }).selectOption("FILE_RECEIPT_TIME");
+  await page.getByLabel("Supplier receipt-age confirmation", { exact: true }).fill(SUPPLIER.freshness_confirmation_reference);
+  await page.getByLabel("Supplier availability evidence", { exact: true }).fill(SUPPLIER.availability_confirmation_reference);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("policy-supplier-editor-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("policy-supplier-editor-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByTestId("policy-editing-head")).toContainText("Version 1");
+  const definition = calls.find(c => c.method === "POST" && c.path === "/purchasing-policies")!.body!.definition as PolicyDefinition;
+  expect(definition.supplier?.profile_id).toBe(SUPPLIER_PROFILE);
+  expect(definition.supplier?.base_units_per_source_quantity).toBeNull();
+  expect(definition.supplier?.quantity_confirmation_reference).toBeNull();
+});
+
+test("supplier settings survive editing and appear in manager review", async ({ page }, testInfo) => {
+  const calls = await mock(page, { supplier: true }); await page.goto("/purchasing-policies?policy=" + POLICY);
+  await page.getByRole("button", { name: "Draft from this version", exact: true }).click();
+  await expect(page.getByLabel("Base units per source quantity", { exact: true })).toHaveValue("6");
+  await expect(page.getByLabel("Supplier inventory profile", { exact: true })).toHaveValue(SUPPLIER_PROFILE);
+  await page.getByLabel("Target coverage days", { exact: true }).fill("28");
+  await page.getByLabel("Reason for this draft", { exact: true }).fill("Synthetic edit preserves reviewed supplier contract.");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByTestId("policy-editing-head")).toContainText("Version 2");
+  expect((calls.find(c => c.method === "POST" && c.path.endsWith("/revisions"))!.body!.definition as PolicyDefinition).supplier).toEqual(SUPPLIER);
+  await page.getByRole("button", { name: "Preview approval of version 2", exact: true }).click();
+  const review = page.getByTestId("policy-review-preview");
+  await expect(review).toContainText("supplier data time unverified");
+  await expect(review).toContainText(SUPPLIER.quantity_confirmation_reference);
+  await review.getByText("Identity and mapping evidence checked for this review", { exact: true }).click();
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: testInfo.outputPath("policy-supplier-review-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("policy-supplier-review-mobile.png"), fullPage: true });
+});
+
+test("incomplete supplier profile lookup cannot save a source contract", async ({ page }) => {
+  const calls = await mock(page, { empty: true, tooManyProfiles: true }); await startNew(page); await values(page);
+  await page.getByLabel("Include supplier source checks", { exact: true }).check();
+  await page.getByLabel("Maximum supplier file receipt age (seconds)", { exact: true }).fill("3600");
+  await page.getByLabel("Supplier freshness basis", { exact: true }).selectOption("FILE_RECEIPT_TIME");
+  await expect(page.getByText("The complete supplier profile list could not be loaded. Select from up to 200 profiles.")).toBeVisible();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Load the complete supplier profile list before saving.")).toBeVisible();
+  expect(calls.filter(c => c.method === "POST" && c.path === "/purchasing-policies")).toHaveLength(0);
+});
+
 test("synthetic policy draft and revision are retained through the real API @live", async ({ page }) => {
   const base = (process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "") + "/api/v1";
   const login = await page.request.post(base + "/auth/dev-token", { data: { email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.test" } });
@@ -226,13 +284,20 @@ test("synthetic policy draft and revision are retained through the real API @liv
   await page.addInitScript(value => localStorage.setItem("prms.token", value), token);
   await page.goto("/purchasing-policies?new=1"); await page.getByLabel("Find a product", { exact: true }).fill("DEMO-001"); await page.getByRole("button", { name: "Search products", exact: true }).click(); await page.getByRole("button", { name: "Select", exact: true }).click();
   await page.getByLabel("Find a supplier or SKU", { exact: true }).fill(sku); await page.getByRole("button", { name: "Search supplier SKUs", exact: true }).click(); await page.getByRole("button", { name: "Use SKU " + sku, exact: true }).click();
-  await values(page); await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await values(page);
+  await page.getByLabel("Include supplier source checks", { exact: true }).check();
+  await page.getByLabel("Supplier inventory profile", { exact: true }).selectOption(profileId);
+  await page.getByLabel("Maximum supplier file receipt age (seconds)", { exact: true }).fill("3600");
+  await page.getByLabel("Supplier freshness basis", { exact: true }).selectOption("FILE_RECEIPT_TIME");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByTestId("policy-editing-head")).toContainText("Version 1"); const id = new URL(page.url()).searchParams.get("policy"); expect(id).toBeTruthy();
   const first = await page.request.get(base + "/purchasing-policies/" + id, { headers }); expect(first.ok()).toBe(true);
   const saved = await first.json() as PolicySummary;
+  expect(saved.head.definition.supplier?.profile_id).toBe(profileId); expect(saved.head.definition.supplier?.base_units_per_source_quantity).toBeNull();
   expect(saved.identity.vendor_sku).toBe(sku); expect(saved.approved).toBeNull(); expect(saved.head.definition.vendor_base_units_per_order_unit).toBeNull(); expect(saved.purchasing_eligible).toBe(false);
   await page.getByRole("button", { name: "Preview approval of version 1", exact: true }).click(); await expect(page.getByTestId("policy-review-preview")).toContainText("Approval cannot be recorded"); await expect(page.getByRole("button", { name: "Record policy approval", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Draft from this version", exact: true }).click(); await page.getByLabel("Target coverage days", { exact: true }).fill("21"); await page.getByLabel("Reason for this draft", { exact: true }).fill("Synthetic draft revision keeps unknown units explicit."); await page.getByRole("button", { name: "Save draft", exact: true }).click(); await expect(page.getByTestId("policy-editing-head")).toContainText("Version 2");
   const history = await page.request.get(base + "/purchasing-policies/" + id + "/revisions", { headers }); const revisions = await history.json() as { items: PolicyRevision[]; total: number };
+  expect(revisions.items.every(v => v.definition.supplier?.profile_id === profileId)).toBe(true);
   expect(revisions.total).toBe(2); expect(revisions.items.map(v => v.definition.quantity.target_days)).toEqual([21, 14]); expect(revisions.items.every(v => v.kind === "DRAFT" && !v.purchasing_eligible)).toBe(true);
 });

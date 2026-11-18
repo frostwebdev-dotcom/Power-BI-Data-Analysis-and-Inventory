@@ -197,6 +197,26 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   the source in draft PR #22. No new UI, client policy/financial upload,
   live sync, merge or deployment is included.
 
+## Twelfth deliverable: supplier source validation
+
+- ADR 0033 and [supplier evidence](supplier-readiness.md) add explicit optional
+  profile/receipt-age/quantity/availability settings to staff policy drafts and
+  manager review. Old definitions and saved v1 content/digests remain unchanged.
+- Current-profile/constraint evidence is checked against approval. The newest
+  vendor file must have a clean job, exact SKU identity, consistent staged row
+  and snapshot, whole quantities, confirmed units and valid receipt chronology.
+  Bad/missing/partial/tied/latest-profile changes never fall back to older stock.
+- New v2 snapshots retain supplier evidence and exact vendor caps. Known zero,
+  unknown quantity and conflicting availability remain distinct. Receipt age is
+  explicitly a reviewed proxy; supplier effective time is not verified.
+- Positive quantities still require financial/commercial/allocation review, and
+  every output remains purchasing-ineligible. No supplier stock is reserved or
+  summed across independent pool suggestions. Migration a61117202606 preserves
+  both versions and refuses destructive downgrade.
+- Source-specific backend, PostgreSQL/migration, UI/build/browser and layout
+  evidence is recorded in draft PR #22. No client policy/file, live source sync,
+  merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
@@ -204,8 +224,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
-- Supplier availability/unit/freshness constraints and financial context in saved
-  recommendations, and the staff recommendation review interface.
+- Financial context, monetary/commercial constraints and shared supplier-stock
+  allocation in saved recommendations, and the staff recommendation interface.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
 

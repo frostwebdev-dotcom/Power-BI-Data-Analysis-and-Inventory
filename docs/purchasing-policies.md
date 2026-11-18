@@ -144,9 +144,11 @@ migration is added by the editor increment. Browser tests include mocked manager
 flows, a real-API synthetic draft/revision, and desktop/mobile screenshot evidence.
 
 [Saved replenishment evaluations](replenishment-recommendations.md) now consume
-the current approval plus independently checked Amazon source data. Later drafts
+the current approval plus independently checked Amazon source data. Optional
+[supplier checks](supplier-readiness.md) now bind a reviewed import layout,
+receipt-age proxy and explicit source quantity/availability contract. Later drafts
 do not replace approval; changed approval identity blocks evaluation. Supplier
-availability/quantity and profitability integration remain follow-ups.
+financial/commercial integration and the recommendation interface remain follow-ups.
 Client values, inbound arrival evidence and three-real-SKU acceptance remain
 required. October financial year/timezone and coverage/cost review are still
 unconfirmed; Gmail remains paused.

@@ -6,10 +6,18 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, StrictBool, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    StrictBool,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from app.schemas.amazon_readiness import AmazonReadinessRequest, Factor, Reference
 from app.schemas.replenishment import PreviewModel, ReplenishmentPolicy
+from app.schemas.supplier_readiness import SupplierPolicy
 
 Reason = Annotated[str, Field(min_length=10, max_length=1000)]
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -25,6 +33,14 @@ class PurchasingPolicyDefinition(PreviewModel):
     inbound_policy: Literal["CONFIRMED_BEFORE_STOCKOUT_ONLY"]
     vendor_base_units_per_order_unit: Factor | None
     vendor_unit_confirmation_reference: Reference | None
+    supplier: SupplierPolicy | None = None
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.supplier is None:
+            data.pop("supplier", None)
+        return data
 
     @model_validator(mode="after")
     def consistent_units_and_window(self) -> PurchasingPolicyDefinition:

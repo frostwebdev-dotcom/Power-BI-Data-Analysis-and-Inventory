@@ -45,7 +45,9 @@ class ReplenishmentRecommendation(
     __table_args__ = (
         Index("uq_replenishment_request", "organization_id", "request_id", unique=True),
         Index("ix_replenishment_policy_recorded", "organization_id", "policy_id", "recorded_at"),
-        CheckConstraint("status in ('BLOCKED', 'NO_REORDER')", name="valid_status"),
+        CheckConstraint(
+            "status in ('BLOCKED', 'REVIEW_REQUIRED', 'NO_REORDER')", name="valid_status"
+        ),
         CheckConstraint("marketplace_id = 'ATVPDKIKX0DER'", name="us_marketplace"),
         CheckConstraint("length(btrim(reason)) between 10 and 1000", name="reason_required"),
         CheckConstraint("jsonb_typeof(snapshot) = 'object'", name="object_snapshot"),

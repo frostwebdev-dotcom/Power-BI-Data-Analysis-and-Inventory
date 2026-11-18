@@ -62,7 +62,7 @@ def history(
     page_size: int = Query(25, ge=1, le=100),
     policy_id: uuid.UUID | None = Query(None),
     product_id: uuid.UUID | None = Query(None),
-    status: Literal["BLOCKED", "NO_REORDER"] | None = Query(None),
+    status: Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"] | None = Query(None),
     principal: Principal = _read,
     session: Session = Depends(get_db),
 ) -> RecommendationPage:

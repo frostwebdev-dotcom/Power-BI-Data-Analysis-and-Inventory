@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import StrictBool, field_validator
+from pydantic import Field, StrictBool, field_validator
 
 from app.schemas.amazon_readiness import AmazonReadinessResponse
 from app.schemas.purchasing_policies import Digest, PolicyRevisionResponse, ReasonedRequest
@@ -15,6 +15,7 @@ from app.schemas.replenishment import (
     ReplenishmentPreviewInput,
     ReplenishmentPreviewResult,
 )
+from app.schemas.supplier_readiness import SupplierReadinessResponse
 
 
 class RecommendationPreviewRequest(PreviewModel):
@@ -61,8 +62,35 @@ class RecommendationSnapshot(PreviewModel):
     purchasing_eligible: Literal[False] = False
 
 
+class SupplierRecommendationSnapshot(PreviewModel):
+    rule_version: Literal["replenishment-evaluation-v2"] = "replenishment-evaluation-v2"
+    data_source: Literal["ingested_postgresql"] = "ingested_postgresql"
+    policy_id: uuid.UUID
+    product_id: uuid.UUID
+    vendor_product_id: uuid.UUID
+    marketplace_id: str
+    evaluated_at: datetime
+    approved_policy: PolicyRevisionResponse
+    current_identity_evidence: dict[str, Any]
+    policy_blocking_reasons: tuple[str, ...]
+    readiness: AmazonReadinessResponse
+    pools: tuple[PoolEvaluation, ...]
+    status: Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"]
+    supplier_inputs: Literal["VERIFIED", "BLOCKED"]
+    supplier: SupplierReadinessResponse
+    review_reasons: tuple[str, ...]
+    profitability: Literal["NOT_INTEGRATED"] = "NOT_INTEGRATED"
+    purchasing_eligible: Literal[False] = False
+
+
+EvaluationSnapshot = Annotated[
+    RecommendationSnapshot | SupplierRecommendationSnapshot, Field(discriminator="rule_version")
+]
+EvaluationStatus = Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"]
+
+
 class RecommendationPreview(PreviewModel):
-    snapshot: RecommendationSnapshot
+    snapshot: EvaluationSnapshot
     evidence_sha256: str
 
 
@@ -74,8 +102,8 @@ class RecommendationResponse(PreviewModel):
     product_id: uuid.UUID
     vendor_product_id: uuid.UUID
     marketplace_id: str
-    status: Literal["BLOCKED", "NO_REORDER"]
-    snapshot: RecommendationSnapshot
+    status: EvaluationStatus
+    snapshot: EvaluationSnapshot
     evidence_sha256: str
     snapshot_sha256: str
     recorded_by_user_id: uuid.UUID

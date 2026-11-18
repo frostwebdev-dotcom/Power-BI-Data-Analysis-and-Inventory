@@ -3,12 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
 import type { Page } from "./api";
-import type { MarketplaceListing } from "./types";
+import type { ImportProfile, MarketplaceListing } from "./types";
 
 export const US_MARKETPLACE = "ATVPDKIKX0DER";
 export interface ListingUnits { listing_id: string; base_units_per_listing_unit: number | null; confirmation_reference: string | null }
 export interface StockPool { pool_id: string; channel: "FBA" | "FBM"; listing_ids: string[]; stock_source_listing_id: string; distinct_stock_reference: string | null }
+export interface SupplierPolicy { profile_id: string | null; inventory_max_age_seconds: number; freshness_basis: "FILE_RECEIPT_TIME"; freshness_confirmation_reference: string | null; base_units_per_source_quantity: number | null; quantity_confirmation_reference: string | null; availability_confirmation_reference: string | null }
 export interface PolicyDefinition {
+  supplier?: SupplierPolicy;
   rule_version: "purchasing-policy-v1";
   quantity: { velocity_window_days: 7 | 14 | 30; target_days: number; lead_time_days: number; safety_days: number; minimum_order_units: number; order_multiple_units: number };
   amazon: { product_id: string; marketplace_id: typeof US_MARKETPLACE; sales_channel: "Amazon.com"; demand_basis: "FULLY_SHIPPED_ONLY"; velocity_window_days: 7 | 14 | 30; orders_max_age_seconds: number; inventory_max_age_seconds: number; listing_units: ListingUnits[]; stock_pools: StockPool[] };
@@ -54,7 +56,21 @@ export function usePolicyListings(productId: string, marketplace: string) {
 export function useVendorProductChoices(productId: string, page: number, q: string) {
   return useQuery({ queryKey: ["policy-vendor-products", productId, page, q], enabled: Boolean(productId), queryFn: () => api.get<Page<VendorProductChoice>>("/products/" + encodeURIComponent(productId) + "/vendor-products", { page, page_size: 10, q }) });
 }
+export function useSupplierProfiles(vendorId: string, enabled: boolean) {
+  return useQuery({ queryKey: ["policy-supplier-profiles", vendorId], enabled: enabled && Boolean(vendorId), queryFn: async () => {
+    const data = await api.get<{ items: ImportProfile[]; total: number }>("/vendors/" + encodeURIComponent(vendorId) + "/import-profiles", { include_inactive: true });
+    if (data.total > 200 || data.items.length !== data.total) throw new Error("The complete supplier profile list could not be loaded. Select from up to 200 profiles.");
+    return data.items;
+  } });
+}
+
 const REASONS: Record<string, string> = {
+  SUPPLIER_PROFILE_UNCONFIRMED: "Choose a confirmed inventory profile belonging to this supplier.",
+  SUPPLIER_PROFILE_INACTIVE: "The chosen supplier profile is inactive or superseded.",
+  SUPPLIER_PROFILE_INVALID: "The chosen supplier profile has invalid extraction rules.",
+  SUPPLIER_QUANTITY_UNITS_UNCONFIRMED: "Confirm the source quantity conversion and its evidence.",
+  SUPPLIER_RECEIPT_AGE_POLICY_UNCONFIRMED: "Confirm using file receipt time to check supplier freshness.",
+  SUPPLIER_AVAILABILITY_POLICY_UNCONFIRMED: "Confirm how this supplier file reports availability.",
   CURRENT_HEAD_NOT_DRAFT: "The latest version is not a draft. Save a new draft before requesting approval.",
   PRODUCT_INACTIVE: "The product is inactive.", VENDOR_INACTIVE: "The vendor is inactive.",
   VENDOR_MAPPING_UNCONFIRMED: "The supplier SKU needs an active, approved product mapping and approval evidence.",
@@ -89,12 +105,14 @@ export interface PoolForm { key: string; name: string; channel: string; members:
 export interface PolicyForm {
   marketplace: string; window: string; target: string; lead: string; safety: string; minimum: string; multiple: string;
   ordersAge: string; inventoryAge: string; demand: string; coverage: string; coverageReference: string;
+  supplierEnabled: boolean; supplierProfile: string; supplierAge: string; supplierBasis: string; supplierFreshnessReference: string; supplierFactor: string; supplierQuantityReference: string; supplierAvailabilityReference: string;
   inbound: string; vendorFactor: string; vendorReference: string; units: UnitForm[]; pools: PoolForm[];
 }
 export function policyForm(definition?: PolicyDefinition): PolicyForm {
-  if (!definition) return { marketplace: "", window: "", target: "", lead: "", safety: "", minimum: "", multiple: "", ordersAge: "", inventoryAge: "", demand: "", coverage: "", coverageReference: "", inbound: "", vendorFactor: "", vendorReference: "", units: [], pools: [] };
+  if (!definition) return { supplierEnabled: false, supplierProfile: "", supplierAge: "", supplierBasis: "", supplierFreshnessReference: "", supplierFactor: "", supplierQuantityReference: "", supplierAvailabilityReference: "", marketplace: "", window: "", target: "", lead: "", safety: "", minimum: "", multiple: "", ordersAge: "", inventoryAge: "", demand: "", coverage: "", coverageReference: "", inbound: "", vendorFactor: "", vendorReference: "", units: [], pools: [] };
   const q = definition.quantity, a = definition.amazon;
-  return { marketplace: a.marketplace_id, window: String(q.velocity_window_days), target: String(q.target_days), lead: String(q.lead_time_days), safety: String(q.safety_days), minimum: String(q.minimum_order_units), multiple: String(q.order_multiple_units), ordersAge: String(a.orders_max_age_seconds), inventoryAge: String(a.inventory_max_age_seconds), demand: a.demand_basis, coverage: definition.coverage_policy, coverageReference: definition.coverage_confirmation_reference ?? "", inbound: definition.inbound_policy, vendorFactor: definition.vendor_base_units_per_order_unit?.toString() ?? "", vendorReference: definition.vendor_unit_confirmation_reference ?? "", units: a.listing_units.map(u => ({ listing_id: u.listing_id, factor: u.base_units_per_listing_unit?.toString() ?? "", reference: u.confirmation_reference ?? "" })), pools: a.stock_pools.map((p, i) => ({ key: String(i), name: p.pool_id, channel: p.channel, members: [...p.listing_ids], source: p.stock_source_listing_id, reference: p.distinct_stock_reference ?? "" })) };
+  const supplier = definition.supplier;
+  return { supplierEnabled: Boolean(supplier), supplierProfile: supplier?.profile_id ?? "", supplierAge: supplier ? String(supplier.inventory_max_age_seconds) : "", supplierBasis: supplier?.freshness_basis ?? "", supplierFreshnessReference: supplier?.freshness_confirmation_reference ?? "", supplierFactor: supplier?.base_units_per_source_quantity?.toString() ?? "", supplierQuantityReference: supplier?.quantity_confirmation_reference ?? "", supplierAvailabilityReference: supplier?.availability_confirmation_reference ?? "", marketplace: a.marketplace_id, window: String(q.velocity_window_days), target: String(q.target_days), lead: String(q.lead_time_days), safety: String(q.safety_days), minimum: String(q.minimum_order_units), multiple: String(q.order_multiple_units), ordersAge: String(a.orders_max_age_seconds), inventoryAge: String(a.inventory_max_age_seconds), demand: a.demand_basis, coverage: definition.coverage_policy, coverageReference: definition.coverage_confirmation_reference ?? "", inbound: definition.inbound_policy, vendorFactor: definition.vendor_base_units_per_order_unit?.toString() ?? "", vendorReference: definition.vendor_unit_confirmation_reference ?? "", units: a.listing_units.map(u => ({ listing_id: u.listing_id, factor: u.base_units_per_listing_unit?.toString() ?? "", reference: u.confirmation_reference ?? "" })), pools: a.stock_pools.map((p, i) => ({ key: String(i), name: p.pool_id, channel: p.channel, members: [...p.listing_ids], source: p.stock_source_listing_id, reference: p.distinct_stock_reference ?? "" })) };
 }
 function integer(value: string, label: string, min: number, max: number): number {
   if (!/^\d+$/.test(value.trim())) throw new Error(label + " must be an explicit whole number.");
@@ -122,7 +140,9 @@ export function buildPolicy(form: PolicyForm, productId: string, units: UnitForm
     for (const id of pool.members) { const key = pool.channel + ":" + id; if (memberships.has(key)) throw new Error("A listing can belong to one stock pool per fulfillment channel."); memberships.add(key); }
     return { pool_id: name, channel: pool.channel, listing_ids: [...pool.members], stock_source_listing_id: pool.source, distinct_stock_reference: reference(pool.reference, "Stock-pool evidence") };
   });
+  if (form.supplierEnabled && form.supplierBasis !== "FILE_RECEIPT_TIME") throw new Error("Choose the supplier freshness basis explicitly.");
   return {
+    ...(form.supplierEnabled ? { supplier: { profile_id: form.supplierProfile || null, inventory_max_age_seconds: integer(form.supplierAge, "Maximum supplier file receipt age", 1, 2678400), freshness_basis: "FILE_RECEIPT_TIME" as const, freshness_confirmation_reference: reference(form.supplierFreshnessReference, "Supplier receipt-age confirmation"), base_units_per_source_quantity: form.supplierFactor.trim() ? integer(form.supplierFactor, "Source quantity conversion", 1, 1000000) : null, quantity_confirmation_reference: reference(form.supplierQuantityReference, "Source quantity evidence"), availability_confirmation_reference: reference(form.supplierAvailabilityReference, "Supplier availability evidence") } } : {}),
     rule_version: "purchasing-policy-v1",
     quantity: { velocity_window_days: window, target_days: integer(form.target, "Target coverage days", 1, 3650), lead_time_days: integer(form.lead, "Lead time days", 0, 3650), safety_days: integer(form.safety, "Safety days", 0, 3650), minimum_order_units: integer(form.minimum, "Minimum order", 0, 1000000000), order_multiple_units: integer(form.multiple, "Order multiple", 1, 1000000000) },
     amazon: { product_id: productId, marketplace_id: US_MARKETPLACE, sales_channel: "Amazon.com", demand_basis: "FULLY_SHIPPED_ONLY", velocity_window_days: window, orders_max_age_seconds: integer(form.ordersAge, "Maximum sales-data lag", 1, 2678400), inventory_max_age_seconds: integer(form.inventoryAge, "Maximum inventory age", 1, 2678400), listing_units: units.map(u => ({ listing_id: u.listing_id, base_units_per_listing_unit: u.factor.trim() ? integer(u.factor, "Listing conversion", 1, 1000000) : null, confirmation_reference: reference(u.reference, "Listing conversion evidence") })), stock_pools: pools },

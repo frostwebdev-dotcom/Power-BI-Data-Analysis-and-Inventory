@@ -893,3 +893,10 @@ approval, matching snapshot references, active actor/organization and valid
 chronology. A second trigger refuses updates/deletes; downgrade refuses to
 discard snapshots. The schema now has 34 business tables plus alembic_version
 (35 total), 23 enums and 16 triggers.
+
+Migration a61117202606 extends replenishment_recommendations status to include
+REVIEW_REQUIRED and replaces its insert guard to accept versioned v1/v2
+snapshots. v2 requires approved supplier settings and supplier evidence; v1 may
+not silently discard those settings. Existing definitions omit absent supplier
+settings, retaining their original JSON and digests. No tables, enums or triggers
+are added. Downgrade refuses to discard v2 snapshots or supplier policy history.
