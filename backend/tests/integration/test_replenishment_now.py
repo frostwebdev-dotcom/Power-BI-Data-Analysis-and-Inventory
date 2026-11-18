@@ -125,7 +125,11 @@ def test_zero_supplier_positions_require_coherent_availability_evidence(
         source.row.normalized_data = {**source.row.normalized_data, "availability": "OUT_OF_STOCK"}
         source.row.availability_status = AvailabilityStatus.OUT_OF_STOCK
         source.stock.availability_status = AvailabilityStatus.OUT_OF_STOCK
-        commercial.approve(db_session, source)
+        commercial.approve(
+            db_session,
+            source,
+            terms_review_reference="Synthetic manager reviewed changed zero-stock source rules",
+        )
     db_session.commit()
     item = current_check(db_session, ctx.policy.operator, request(ctx), now=lambda: ctx.at).items[0]
     assert item.urgency == "URGENT"
