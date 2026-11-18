@@ -8,13 +8,14 @@ reformatting or replacement just to answer these questions.
 
 Hi Pinchas, I’m preparing the Milestone 2 review using your October ConnectBooks
 file. I have USD, Item = Amazon SKU, and Brand Name Deals-Amazon as the store.
-Could you confirm the reporting year and the timezone used for that report,
-whether its product costs and advertising are complete or anything is missing,
-and three Amazon SKUs you’d like us to validate first? For those items, please
-also share your usual demand window, target coverage, lead time, safety stock,
-pack/order units and supplier minimums/terms, or we can review those together.
-Please confirm whether target coverage already includes lead and safety days.
-Anything unknown can stay marked unknown; I’ll keep those gaps visible.
+Could you confirm the reporting year and timezone, whether product costs and
+advertising are complete or anything is missing, and three Amazon SKUs you’d
+like us to validate first? For those items, we can review your demand window,
+coverage, lead/safety days, pack/order units and supplier minimums/terms together.
+Please confirm whether coverage already includes lead and safety. If they have
+outstanding shipments, please include the complete quantities, shipment
+references and expected arrival dates with timezone. Unknowns can stay marked
+unknown; I’ll keep those gaps visible.
 
 ## Confirmation worksheet
 
@@ -57,7 +58,11 @@ not need to provide internal UUIDs or database fields.
 | Priority when pools share limited supplier stock | Unconfirmed | Unconfirmed | Unconfirmed |
 | Acceptable sales / inventory / supplier receipt age | Unconfirmed | Unconfirmed | Unconfirmed |
 | Supplier file receipt-age proxy acceptable? | Unconfirmed | Unconfirmed | Unconfirmed |
-| Known inbound and arrival evidence, if any | Unconfirmed | Unconfirmed | Unconfirmed |
+| Complete outstanding inbound total and its unit basis; explicit zero only if verified | | | |
+| Shipment references, quantities/units and expected arrivals with timezone | | | |
+| Position observation time and original evidence reference | | | |
+| Complete position and no overlap with on-hand stock / another pool confirmed? | Unconfirmed | Unconfirmed | Unconfirmed |
+| Manager validity/expiry decision, at most 31 days after observation | Unconfirmed | Unconfirmed | Unconfirmed |
 | Evidence reference / confirmer | | | |
 
 Stock, price and order units can differ. Do not infer one from the other or from
@@ -65,8 +70,16 @@ the product description. Lead time and safety are additive in the implemented
 coverage formula; if the client's target includes them, resolve that policy
 interpretation explicitly before manager approval. For supplier minimums, state
 whether they apply to this SKU or a mixed basket. Current checks support explicit
-SKU scopes only. Positive inbound/FBM arrival handling remains an adapter limit
-even if the client supplies dates; see [acceptance limits](milestone-2-acceptance.md).
+SKU scopes only.
+
+Reviewed inbound is implemented on the draft branch. FBA positions must reconcile
+to native working/shipped/receiving totals after the approved conversion. FBM
+requires an explicit complete manual position; no native FBM inbound feed is
+implied. Dates alone do not prove completeness or authorize a confirmation.
+The developer resolves source references, and a manager reviews the complete
+position and expiry before an exact revision is selected for a calculation.
+See [reviewed inbound](reviewed-inbound.md) and the
+[acceptance walkthrough](milestone-2-acceptance.md).
 
 After confirmation, the developer resolves exact scoped identities, source
 files/profile versions and complete listing/pool sets, then presents the policy

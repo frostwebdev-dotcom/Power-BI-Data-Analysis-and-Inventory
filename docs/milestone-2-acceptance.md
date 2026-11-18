@@ -5,9 +5,11 @@ Status: **PREPARATION ONLY — real-data walkthrough NOT RUN; client sign-off PE
 This runbook covers the authorized [Milestone 2 scope](milestone-2-scope.md).
 It does not accept Milestone 1, authorize a deployment/source sync or enable
 Gmail. The application changes are on draft PR #22. Their verified application
-baseline source is `020cb23fd34cf42992b98781a16ac21e892e2202`, with CI #203 passing
-2,174 backend and 75 browser tests. The current-check increment's exact-source
-validation is maintained in PR #22. Automated synthetic tests are separate from
+baseline source is `34d05b053b0f7da907e0eb5c5cd98f44a4ef677a`, with
+[CI #221](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/44310886846)
+passing 2,299 backend and 92 browser tests. It includes current checks and reviewed
+inbound positions. Validation for later documentation changes is maintained in
+[PR #22](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/pull/22). Automated synthetic tests are separate from
 client operational acceptance. Recheck the actual test environment/source when
 the walkthrough is scheduled; no hosted Milestone 2 deployment is evidenced here.
 
@@ -35,6 +37,23 @@ cost/coverage unknowns may remain explicitly disclosed review items; they must
 not be relabelled complete merely to obtain a passing result. Advertising
 coverage is unchecked unless verified. Follow [financial imports](financial-imports.md)
 for profile identity, immutable original bytes and correction/replacement rules.
+
+## Before scheduling the client review
+
+| Gate | What must be available | Current state in this preparation |
+| --- | --- | --- |
+| Report identity | Client-confirmed October year/timezone and the exact original file/account/store | Year/timezone Unconfirmed; existing USD/SKU/store facts retained |
+| Case selection | Three exact seller SKUs selected by the client, with source evidence and complete related listing/pool sets | Not selected |
+| Purchasing decisions | Client-confirmed units, stock pools, coverage, source-age limits and applicable supplier/commercial settings, followed by manager approval | No approved real-case values evidenced |
+| Inbound use, when needed | Complete outstanding position, original evidence, observation/expiry, per-shipment quantities and timezone-aware ETAs, manager review and exact selected revision | No real position recorded |
+| Execution context | Environment and exact application source, organization, reviewer/roles and the data actions in scope | Not established; the draft branch is not a hosted deployment |
+
+Preparation can continue without those answers, but missing data must not be
+replaced with examples. A financial import needs a confirmed year/timezone;
+quantity-only checks do not need an optional financial report, but they still
+need their own verified inputs and approved policy. Preserve any remaining
+cost/advertising unknowns as review items. The developer fills internal UUIDs
+from actual application evidence; the client supplies business facts.
 
 ## Scope coverage and honest limits
 
@@ -95,12 +114,13 @@ Do not manufacture a second supplier or a new mapping for comparison coverage.
 | 4. Review identity and units | Check exact SKUs, product/listing/vendor UUIDs, ASINs and mapping approval evidence; confirm every conversion and pool | No description-only match; complete listing/pool membership; source, order and price units are separate decisions |
 | 5. Establish source readiness | Inspect already-ingested baseline/order/inventory and supplier job/file/row/snapshot evidence | Clean complete current sources within approved limits; no older fallback; unknown inbound remains blocked |
 | 6. Review purchasing policy | Enter client-confirmed window/coverage/lead/safety/minimum/multiple/freshness/supplier settings; manager reviews definition/context | Record exact approval UUID and evidence references; a draft is not approval; no copied fixture defaults |
-| 7. Preview and reconcile | Run the explicit current policy check for urgency/supplier review; separately select an optional current report/binding in Recommendations when historical financial context is required | Compare each pool, urgency boundary and v4/v5 allocation with independent arithmetic below; retain all reasons, including expected blocks |
-| 8. Compare vendors | Explicitly select available policies for the same product; inspect reported/current base price, tax basis, receipt age, stock and checks | Default vendor order; exact price order only for compatible evidence; a cheaper blocked offer remains blocked; comparison is unsaved |
-| 9. Record an evaluation | Through the existing fresh evaluation workflow, review evidence, reason and acknowledgement; if recording is in scope, save with a new request UUID | Snapshot and audit are atomic; changed evidence requires a new preview; uncertain network save uses the exact original UUID/body for retry |
-| 10. Review history and dashboard | Open immutable detail and latest-saved queue; exercise product/vendor/status/approval/search filters and corresponding dashboard links | Historical counts agree with the latest record per policy; later drafts preserve approval, changed/revoked approvals are flagged; no stock/money totals inferred |
-| 11. Review availability | Inspect existing availability-feed events and their original source/import evidence for a selected item, if an event exists | No event is fabricated; absent applicable history is NOT EXERCISED, not proof of a refresh or restock |
-| 12. Record the client decision | Complete observed/expected values, evidence references, deviations and reviewer/client disposition | Accept only exercised, reconciled checks; full Milestone 2 sign-off stays pending while required scope/data gaps remain |
+| 7. Review inbound, if required | After policy approval, load the exact stock source, review the complete position and manager confirmation; explicitly select its current revision on each policy check/evaluation/comparison | Retain native, declared and credited quantities separately; v5 evaluation/v2 readiness retains original issues, revision/source digests and per-arrival credit; no selection retains native behavior |
+| 8. Preview and reconcile | Run the explicit current policy check for urgency/supplier review; separately select an optional current report/binding in Recommendations when historical financial context is required | Compare each pool, urgency boundary and v4/v5 allocation with independent arithmetic below; retain all reasons, including expected blocks |
+| 9. Compare vendors | Explicitly select available policies for the same product; inspect reported/current base price, tax basis, receipt age, stock and checks | Default vendor order; exact price order only for compatible evidence; a cheaper blocked offer remains blocked; comparison is unsaved |
+| 10. Record an evaluation | Through the existing fresh evaluation workflow, review evidence, reason and acknowledgement; if recording is in scope, save with a new request UUID | Snapshot and audit are atomic; changed evidence requires a new preview; uncertain network save uses the exact original UUID/body for retry |
+| 11. Review history and dashboard | Open immutable detail and latest-saved queue; exercise product/vendor/status/approval/search filters and corresponding dashboard links | Historical counts agree with the latest record per policy; later drafts preserve approval, changed/revoked approvals are flagged; no stock/money totals inferred |
+| 12. Review availability | Inspect existing availability-feed events and their original source/import evidence for a selected item, if an event exists | No event is fabricated; absent applicable history is NOT EXERCISED, not proof of a refresh or restock |
+| 13. Record the client decision | Complete observed/expected values, evidence references, deviations and reviewer/client disposition | Accept only exercised, reconciled checks; full Milestone 2 sign-off stays pending while required scope/data gaps remain |
 
 This sequence describes later authorized data actions; preparation has performed
 none of them on client systems. Readiness/preview/comparison do not fetch new
@@ -117,6 +137,9 @@ manual original-file import does not prove unattended email intake works.
 | Margin / cost-based ROI | Profit / positive Net Sales and Profit / positive Cost, respectively; percent display multiplies by 100; undefined denominators remain unknown |
 | Batch controls | Full report detail including Unitemized reconciles to the original footer within the supported one-cent tolerance; never sum only the three test rows as the report total |
 | Required units | ceiling(sold base units × (target + lead + safety days) / window days); confirm target excludes the separately added lead and safety |
+| FBA complete inbound | (native working + shipped + receiving) × approved source-listing base-unit factor = declared total = sum of arrival quantities; apply conversion once |
+| Manual FBM complete inbound | Record an explicitly reviewed complete position in base units; confirmed zero requires total 0 with no arrivals; native observed inbound remains unknown |
+| Arrival qualification | Follow the exact capture-anchored sequence below; the declared complete total is not automatically the usable amount |
 | Net shortfall | max(0, required - known on hand - usable inbound), separately for each physical pool |
 | Before supplier cap | If shortfall is positive, round max(shortfall, approved per-pool minimum) upward to the approved order multiple; otherwise zero |
 | Finite supplier stock | v4/v5 use one product/supplier-SKU stock count in explicit approved pool priority; allocations respect multiples/minima, never exceed available stock and show unmet quantities |
@@ -128,6 +151,53 @@ Keep source quantities and normalized quantities side by side. Do not multiply
 historical profit/cost by a suggested quantity, distribute Unitemized or combine
 independent vendor offers into one reservation/order. Verify large quantities
 from exact server evidence; the browser labels unsafe integers unavailable.
+
+## Inbound reconciliation and change checks
+
+Copy the inbound tables in the [blank record](milestone-2-acceptance-record.md)
+for each policy/pool. Record **native observed**, **manager-declared complete**
+and **server-credited usable** quantities separately, with source and base units
+side by side. FBA must reconcile all three native components; missing components
+cannot be replaced by a guessed manual total. FBM's reviewed manual position does
+not turn native inbound into an ingested value.
+
+Only after position validity, source identity, current approval/head, completeness
+and no-overlap checks pass, independently assess arrivals in ETA order. Let `D`
+be sold base units, `W` the approved window days, `H` source on-hand base units,
+`C` the inventory capture time and `S` the units credited from earlier arrivals
+(initially zero for this reconciliation, not a default stock input). For each ETA:
+
+1. Keep the full UTC timestamp precision and compute elapsed microseconds from `C`.
+2. Require the ETA to be after the evaluation time and no later than `C` plus
+   target + lead + safety days (each day is exactly 86,400 seconds).
+3. With positive `D`, prove `(H + S) * W * 86,400,000,000 > D * elapsed_microseconds`.
+   Equality is too late. With verified zero demand there is no depletion deadline;
+   coverage and all evidence checks still apply.
+4. Credit the arrival's whole base units only if both timing checks pass, then add
+   that credit to `S`. A known late or after-coverage arrival contributes zero;
+   it cannot bridge an earlier stockout. Compare the final `S` with server usable
+   inbound and retain every excluded arrival and reason.
+
+Do not round to displayed days-of-supply or lose microseconds while checking a
+boundary. This method uses observed stock at capture; it does not project on-hand
+stock to the current instant. If any required stock/demand/position evidence is
+unknown, stop the independent credit calculation and record unknown, not zero.
+
+| Evidence or change | Expected behavior to verify |
+| --- | --- |
+| No reviewed revision selected | Native path: only proven FBA zero is usable; positive FBA and un-ingested FBM stay unknown |
+| Valid complete position, future ETA strictly before depletion and within coverage | APPLIED with full arrival credit; retain any other purchasing blockers |
+| Valid complete position, future ETA at/after depletion or beyond coverage | APPLIED with known zero credit for that arrival; no receipt is inferred |
+| Any outstanding ETA reached/missed, expiry reached, or source context changed | Selected position BLOCKED, usable/arrival credits unknown; reconcile and review again |
+| Selected head revoked/replaced or approval changed | Refuse stale selection and choose/review the current evidence explicitly; no automatic fallback |
+| Revocation after a saved evaluation | New previews cannot use the revoked head; the saved historical snapshot remains unchanged |
+| Uncertain confirmation/revocation/evaluation save result | Retry the exact original request UUID/body; preserve the eventual original result |
+
+Perform change/revocation/retry exercises only on records and actions explicitly
+in scope for the chosen test environment. Do not revoke valid client evidence,
+change source records, advance clocks or trigger shipments merely to manufacture
+a case. Where real evidence cannot exercise a condition, mark NOT EXERCISED and
+retain its existing synthetic CI coverage as separate engineering evidence.
 
 ## Completion rule
 

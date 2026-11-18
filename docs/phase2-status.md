@@ -314,6 +314,22 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   client evidence/policies, acceptance, merge and deployment remain outstanding.
   No mailbox, provider sync, inventory mutation or purchase occurs.
 
+## Nineteenth deliverable: three-SKU acceptance handoff update
+
+- Updated the walkthrough, unsent client confirmation request and blank real-case
+  record to match implemented reviewed inbound and the verified application
+  baseline `34d05b0` (CI #221: 2,299 backend / 92 browser tests).
+- Intake gates keep report year/timezone, three exact SKUs, purchasing decisions,
+  complete position evidence and execution environment explicitly unconfirmed.
+  Added current revision/source references, native/declared/credited quantities,
+  exact capture-anchored arrival reconciliation and condition coverage records.
+- Known zero, unknown and excluded credit remain distinct. Expected blocker
+  behavior and operational readiness are separate decisions; missing real-case
+  coverage is NOT EXERCISED. No real record, client message, data action, policy
+  approval, deployment or milestone sign-off was performed by this preparation.
+- This increment changes documentation only. Validation is recorded in draft
+  PR #22; the application, schema and existing test cases are unchanged.
+
 ## Remaining Milestone 2 work
 
 - Client-approved Amazon pack/pool/freshness policy, operational acceptance of

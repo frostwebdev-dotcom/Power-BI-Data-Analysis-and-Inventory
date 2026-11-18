@@ -10,7 +10,8 @@ Use [the walkthrough](milestone-2-acceptance.md) and
 
 | Field | Recorded value |
 | --- | --- |
-| Environment / exact application commit | |
+| Environment / exact application commit / applicable CI run | |
+| Data actions in scope / reviewer authority reference | |
 | Organization UUID / display label | |
 | Reviewer identity / role | |
 | Client reviewer | |
@@ -38,7 +39,10 @@ Use [the walkthrough](milestone-2-acceptance.md) and
 | Inventory run / snapshot UUIDs and times | | | |
 | Supplier file digest / receipt / profile version / job / row / snapshot UUIDs | | | |
 | Financial source row and exact SKU binding evidence | | | |
+| Explicit inbound selection: none or exact current revision IDs / pool IDs | | | |
+| Inbound source digest / original evidence / observed time / expiry | | | |
 | Fresh preview time / evidence SHA-256 / full snapshot reference | | | |
+| Evaluation / readiness rule versions (v5/v2 for selected inbound) | | | |
 | Saved evaluation / request / audit UUIDs, if recorded | | | |
 
 Duplicate products or shared pools across cases must be identified explicitly.
@@ -55,6 +59,70 @@ until independently calculated and observed from real evidence.
 | B | | | | NOT RUN | |
 | C | | | | NOT RUN | |
 
+## Reviewed inbound evidence — repeat per policy/pool
+
+Leave quantities and identities blank until taken from real evidence. Keep
+native FBA totals, complete declarations and usable arrival credit distinct.
+For FBM, identify the complete position as manual and retain native inbound as
+unknown. If no reviewed revision is selected, record that explicitly; do not
+fill this table with a guessed confirmation. Use the capture-anchored method in
+the [walkthrough](milestone-2-acceptance.md#inbound-reconciliation-and-change-checks).
+
+| Position evidence | Recorded value / source |
+| --- | --- |
+| Case / policy / approved revision / pool / FBA or FBM | |
+| Inventory run / authoritative listing / snapshot / capture time (UTC) | |
+| Source context SHA-256 / exact current ledger head / selected revision IDs | |
+| Native working / shipped / receiving quantities and source units (FBA) | |
+| Approved base units per native listing unit / native total in base units | |
+| Manager-declared complete total in whole base units | |
+| Original evidence reference / observation time / expiry (UTC) | |
+| Manager / confirmation reason / complete-position and no-overlap attestations | Unconfirmed |
+| Confirmation request / audit references | |
+| Evaluation time / approved demand window / sold base units / on-hand base units | |
+| Target + lead + safety coverage / resulting UTC coverage end | |
+| Independently expected usable inbound / observed server usable inbound | |
+| Assessment / original native issues / current blockers | NOT RUN |
+
+For confirmed zero, retain the declaration of 0, empty arrival schedule and
+source/manager evidence. An empty table is not a confirmed zero. For positive
+positions, add one row per arrival in ETA order; use whole base units and exact
+UTC times. Do not manufacture a row when no real arrival exists.
+
+| Shipment reference / source | Qty and source-to-base conversion | ETA (UTC) / elapsed microseconds from capture | Earlier credited units / independent timing result | Expected credit / observed credit / disposition | Evidence / check result / deviation |
+| --- | --- | --- | --- | --- | --- |
+| | | | | | NOT RUN |
+
+The arrival quantities must sum to the complete declared position, including
+arrivals excluded from credit. Retain exact source digests/selection and compare
+fresh current-check, comparison and saved-evaluation evidence at their respective
+observation times. Changed inputs require a new preview, not an assumption that
+all observations have equal quantities. Native/declared/usable must not be summed.
+
+## Inbound condition coverage
+
+Each line needs a real case/evidence reference or an explicit NOT EXERCISED gap.
+A synthetic CI test alone cannot populate the observed real-data result.
+
+| Condition | Real case / evidence / observation time | Expected behavior | Observed result / reference | Check result / gap owner |
+| --- | --- | --- | --- | --- |
+| Native FBA zero / unselected native path | | Only source-proven zero usable; no inferred confirmation | | NOT RUN |
+| Complete timely FBA position / native reconciliation | | Declared matches converted native total; only qualified arrivals credited | | NOT RUN |
+| Complete manual positive FBM position | | Manual provenance explicit; native inbound still unknown | | NOT RUN |
+| Complete explicit zero FBM position | | Total 0 / empty schedule / manager evidence; no defaulted zero | | NOT RUN |
+| Future late / at-depletion / after-coverage arrival | | Known zero credit for excluded arrival | | NOT RUN |
+| Expired evidence / reached or missed ETA | | Whole selected position blocked; usable credits unknown; no assumed receipt | | NOT RUN |
+| Inventory source / mapping or pack/pool context changed | | Old position cannot silently carry forward | | NOT RUN |
+| Selected head revoked/replaced / approval changed | | Stale selection refused; saved history retained | | NOT RUN |
+| No-overlap / duplicate reference across pools in one policy position | | No duplicate arrival credit; same physical stock never added twice | | NOT RUN |
+| Confirmation/revocation exact retry / audit and role checks | | Original result preserved; only manager/admin mutates | | NOT RUN |
+
+Only exercise mutations/retries on authorized test records. Do not change valid
+client evidence to obtain a negative result. Each selected confirmation must
+belong to its policy. Separate vendor-offer scenarios may describe the same
+physical inbound stock; they do not reserve inventory or justify summing offers
+into a purchase.
+
 ## Required checks
 
 | Check | A | B | C | Evidence / deviation reference |
@@ -63,6 +131,9 @@ until independently calculated and observed from real evidence.
 | Exact mappings / complete known listing set / unit conversions | NOT RUN | NOT RUN | NOT RUN | |
 | Complete shipped-only order-date demand / freshness | NOT RUN | NOT RUN | NOT RUN | |
 | Independent physical stock pools / source stock / usable inbound | NOT RUN | NOT RUN | NOT RUN | |
+| Explicit inbound selection / current approval, head, inventory source and digest | NOT RUN | NOT RUN | NOT RUN | |
+| Complete FBA/manual FBM position / expiry / no-overlap / native reconciliation | NOT RUN | NOT RUN | NOT RUN | |
+| Per-arrival exact timing / excluded credit / v5-v2 evidence and historical replay | NOT RUN | NOT RUN | NOT RUN | |
 | Latest supplier profile/file/row/snapshot / price / quantity evidence | NOT RUN | NOT RUN | NOT RUN | |
 | Manager-approved coverage / minimums / multiple / price units / priority | NOT RUN | NOT RUN | NOT RUN | |
 | Required units / shortfall / rounding / caps / combined allocation | NOT RUN | NOT RUN | NOT RUN | |
@@ -86,7 +157,8 @@ while operational readiness stays BLOCKED. Do not mark unexercised features PASS
 | Gap / requirement | Current disposition | Owner / next action | Retest / client decision |
 | --- | --- | --- | --- |
 | Reporting year/timezone and real-file coverage review | PENDING | | |
-| Positive FBA arrival timing / unknown FBM inbound | Supported blocker; operational handling PENDING where required | | |
+| Reviewed FBA/manual FBM positions and arrival timing | Implemented on draft; real positions and condition coverage NOT RUN | | |
+| Missing real shipment / zero-position / expired or changed-source coverage | NOT EXERCISED until supported by actual scoped evidence | | |
 | On-demand current selected-policy urgency/opportunity acceptance | Implemented on draft; real cases NOT RUN; historical counts are separate | | |
 | Landed-cost inputs / cost completeness | PENDING | | |
 | Required case or second-supplier coverage not exercised | PENDING until cases are selected and run | | |
