@@ -4,6 +4,8 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { ComparisonRequest, VendorComparison, SavedReviewItem, ReviewSummary } from "../src/lib/replenishment-review";
 
+test.setTimeout(30_000);
+
 const FIXTURE = JSON.parse(readFileSync(join(process.cwd(), "e2e/fixtures/vendor-comparison.json"), "utf8")) as { comparison: VendorComparison; review_items: SavedReviewItem[]; summary: ReviewSummary };
 const PRODUCT = FIXTURE.comparison.product_id;
 const PRODUCT_ROW = { id: PRODUCT, catalog_item_number: "SYNTHETIC", name: "Synthetic product", brand: "Synthetic", status: "ACTIVE", is_active: true };
