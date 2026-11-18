@@ -90,7 +90,7 @@ function EvaluationPanel({ policyId, request, onLock, onStale }: { policyId: str
     setAttempt(payload); setPending(true); setError(null); onLock(true);
     try {
       const saved = await api.post<SavedEvaluation>(policyPath(policyId) + "/recommendations", payload);
-      await cache.invalidateQueries({ queryKey: ["recommendations"] });
+      await Promise.all([cache.invalidateQueries({ queryKey: ["recommendations"] }), cache.invalidateQueries({ queryKey: ["replenishment-review"] })]);
       onLock(false); router.push("/replenishment-recommendations?evaluation=" + encodeURIComponent(saved.id));
     } catch (error) {
       if (error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500) {

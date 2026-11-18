@@ -193,6 +193,8 @@ export const NAV_ICONS: Record<string, (props: IconProps) => React.ReactElement>
   "/purchasing-policies": ImportsIcon,
   "/exceptions": ExceptionsIcon,
   "/products": ProductsIcon,
+  "/vendor-comparisons": VendorsIcon,
+  "/replenishment-review": WatchlistIcon,
   "/replenishment-recommendations": WatchlistIcon,
   "/watchlist": WatchlistIcon,
   "/availability": AvailabilityIcon,

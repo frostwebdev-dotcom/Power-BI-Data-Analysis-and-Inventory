@@ -250,6 +250,24 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   commercial-history downgrade. Full source-specific validation is recorded in
   draft PR #22; no client policy/file, sync, purchase, merge or deployment is included.
 
+## Fifteenth deliverable: vendor comparison and saved-review dashboard
+
+- ADR 0036 and [the comparison/review guide](vendor-comparison-and-review.md)
+  add explicit selected-policy comparison, a latest-saved-per-policy review queue
+  and dashboard links. All staff read roles can use them; no offers or financial
+  reports are selected automatically.
+- One scoped observation reuses existing previews under deterministic policy
+  locks. Verified current prices are ordered by exact rational values only when
+  approved unit projections and stated tax treatment match. Missing prices and
+  incompatible assumptions remain visible; price never means purchase approval.
+- Bounded literal search and product/vendor/policy/status/approval/shortfall
+  filters expose saved evidence. Latest non-draft decisions distinguish current
+  approval from changed/revoked approval without certifying current inputs.
+  Counts and stockout context are explicitly historical; no stock/money is summed.
+- No migration or Milestone 1 dashboard API change is introduced. Source-specific
+  local, PostgreSQL/browser CI and desktop/mobile layout evidence are recorded
+  in draft PR #22. No client data/policy, sync, purchase, merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
@@ -259,8 +277,9 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   The database/API and staff interface are implemented on the draft branch.
 - Client confirmation and operational acceptance of SKU commercial scopes,
   pool priority, price conversions, landed-cost inputs and historical financial context.
-- Tenant-scoped APIs and application dashboard/search/filtering.
-- Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
+- Operational acceptance of the implemented scoped APIs, dashboard, search,
+  vendor comparisons and cost/profit context with real data.
+- Three-real-SKU acceptance walkthrough with client-approved source/policy inputs.
 
 No revised budget or delivery date is recorded as client-approved. Milestone 1
 is not marked accepted by this development start.

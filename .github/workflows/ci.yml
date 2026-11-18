@@ -268,6 +268,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      - name: Comparison and saved review layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparison-review-layouts
+          path: |
+            frontend/test-results/**/vendor-comparison-*.png
+            frontend/test-results/**/saved-review-*.png
+            frontend/test-results/**/replenishment-dashboard-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

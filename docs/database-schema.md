@@ -919,3 +919,10 @@ cannot discard approved commercial settings. Downgrade refuses to discard v4
 rows or commercial policy history. No columns/tables/enums/triggers are added.
 The existing staged unit_cost annotation is corrected to Decimal, matching its
 unchanged Numeric(14,4) database type. Counts remain 35 tables / 23 enums / 16 triggers.
+
+ADR 0036 adds scoped read projections over existing policy decisions and saved
+evaluations for vendor comparison and dashboard/review discovery. Latest saved
+records are selected per organization/policy before queue filters; current
+approval uses the latest non-draft decision. The immutable JSON remains the
+historical source for quantities and reasons. No table, index, enum, trigger or
+migration is added; counts remain 35 / 23 / 16 and head a61117202608.

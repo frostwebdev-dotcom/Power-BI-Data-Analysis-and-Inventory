@@ -1348,3 +1348,13 @@ textarea:focus {
   .recommendations .kv__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .recommendations .kv__value { text-align: left; }
 }
+
+.replenishment-overview { margin-top: 24px; min-width: 0; }
+.replenishment-overview .counters { margin-top: 16px; }
+.vendor-comparisons [aria-label="Selected vendor offer comparison"] .table { min-width: 1500px; }
+.saved-review .table { min-width: 1200px; }
+.vendor-comparisons .checkbox-row, .saved-review .checkbox-row { margin: 8px 0; }
+.vendor-comparisons [aria-label="Selected offer approvals"] { overflow-wrap: anywhere; }
+
+.vendor-comparisons [aria-label="Selected offer approvals"] .button { white-space: normal; max-width: 100%; text-align: left; }
+.vendor-comparisons .candidate label { min-width: 0; overflow-wrap: anywhere; flex: 1; }

@@ -179,3 +179,12 @@ historical report separately. All positive evaluations remain review-required or
 blocked, and purchasing eligibility/stock reservation remain false. Snapshot and
 audit stay atomic; exact retries preserve the original observation. Migration
 a61117202608 preserves v1–v3 and refuses to discard v4/commercial policy history.
+
+## Selected vendor comparisons and saved-review discovery (ADR 0036)
+
+[The comparison/review guide](vendor-comparison-and-review.md) documents explicit
+1–10 policy comparisons with complete unsaved snapshots, qualified exact price
+ordering, and the latest-saved-per-policy queue and dashboard. Current approval
+relation is rechecked; current source freshness is not revalidated by historical
+discovery. Separate fresh preview/review is required to record an evaluation.
+No schema migration, stock reservation or purchasing eligibility is introduced.
