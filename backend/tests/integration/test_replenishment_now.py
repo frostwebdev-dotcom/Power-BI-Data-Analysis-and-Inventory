@@ -19,8 +19,15 @@ from app.core.security import Principal, RoleCode
 from app.db.session import get_db
 from app.main import create_app
 from app.models import User
-from app.models.enums import ImportJobStatus, ListingStatus, MappingStatus, MatchMethod
+from app.models.enums import (
+    AvailabilityStatus,
+    ImportJobStatus,
+    ListingStatus,
+    MappingStatus,
+    MatchMethod,
+)
 from app.schemas.purchasing_policies import PolicyCreateRequest, PurchasingPolicyDefinition
+from app.schemas.recommendations import CommercialRecommendationSnapshot
 from app.schemas.replenishment_now import CurrentCheckRequest
 from app.services import purchasing_policies as policies
 from app.services.replenishment_now import current_check, current_choices
@@ -101,8 +108,10 @@ def test_failed_supplier_run_preserves_current_amazon_shortfall(db_session: Sess
     )
 
 
-def test_zero_supplier_stock_and_zero_amazon_stock_is_urgent_but_unavailable(
+@pytest.mark.parametrize("consistent", [False, True])
+def test_zero_supplier_positions_require_coherent_availability_evidence(
     db_session: Session,
+    consistent: bool,
 ) -> None:
     source = commercial.setup(db_session)
     ctx = source.calculation
@@ -111,9 +120,18 @@ def test_zero_supplier_stock_and_zero_amazon_stock_is_urgent_but_unavailable(
     source.row.quantity = 0
     source.row.normalized_data = {**source.row.normalized_data, "quantity": 0}
     source.stock.quantity_available = Decimal(0)
+    if consistent:
+        source.profile.availability_rules = {"available_when": "quantity_gt_zero"}
+        source.row.normalized_data = {**source.row.normalized_data, "availability": "OUT_OF_STOCK"}
+        source.row.availability_status = AvailabilityStatus.OUT_OF_STOCK
+        source.stock.availability_status = AvailabilityStatus.OUT_OF_STOCK
+        commercial.approve(db_session, source)
     db_session.commit()
     item = current_check(db_session, ctx.policy.operator, request(ctx), now=lambda: ctx.at).items[0]
-    assert item.urgency == "URGENT" and item.opportunity == "UNAVAILABLE"
+    assert item.urgency == "URGENT"
+    assert item.opportunity == ("UNAVAILABLE" if consistent else "UNCONFIRMED")
+    assert isinstance(item.snapshot, CommercialRecommendationSnapshot)
+    assert item.snapshot.supplier.status == ("VERIFIED" if consistent else "BLOCKED")
     assert item.pools[0].on_hand_base_units == 0 and item.pools[0].supply_days_numerator == "0"
 
 

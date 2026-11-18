@@ -28,7 +28,14 @@ async function mock(page: Page, options: Options = {}) {
       if (options.stale) return route.fulfill({ status: 409, json: { error: { code: "purchasing_policy_conflict", details: { code: "POLICY_APPROVAL_CHANGED" } } } });
       const selected = (body as unknown as CurrentRequest).choices, result = structuredClone(FIXTURE.response);
       result.items = result.items.filter(item => selected.some(c => c.policy_id === item.policy_id));
-      if (options.secondUnknown && posts > 1) { for (const item of result.items) { item.urgency = "UNKNOWN"; item.opportunity = "UNCONFIRMED"; item.reasons = ["SOURCE_DATA_STALE"]; item.snapshot.status = "BLOCKED"; } }
+      if (options.secondUnknown && posts > 1) {
+        for (const item of result.items) {
+          item.urgency = "UNKNOWN"; item.opportunity = "UNCONFIRMED"; item.reasons = ["SOURCE_DATA_STALE"]; item.snapshot.status = "BLOCKED";
+          item.snapshot.readiness.status = "BLOCKED";
+          if (Array.isArray(item.snapshot.readiness.pools)) for (const pool of item.snapshot.readiness.pools) { if (pool && typeof pool === "object") pool.quantity_input_ready = false; }
+          for (const pool of item.pools) { pool.urgency = "UNKNOWN"; pool.required_units = null; pool.net_shortfall_units = null; pool.supply_days_numerator = null; pool.supply_days_denominator = null; pool.reasons = ["SOURCE_DATA_STALE"]; }
+        }
+      }
       result.summary = { checked_policies: result.items.length, urgent: result.items.filter(i => i.urgency === "URGENT").length, replenish: result.items.filter(i => i.urgency === "REPLENISH").length, no_reorder: result.items.filter(i => i.urgency === "NO_REORDER").length, unknown: result.items.filter(i => i.urgency === "UNKNOWN").length, review_opportunities: result.items.filter(i => i.opportunity === "REVIEW_OPPORTUNITY").length };
       return route.fulfill({ json: result });
     }
