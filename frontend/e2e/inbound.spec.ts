@@ -70,13 +70,13 @@ test("complete explicit position, acknowledgement and immutable ledger on deskto
   await expect(page.getByLabel("Declared total base units", { exact: true })).toBeEmpty();
   await fill(page); await preview(page);
   const save = page.getByRole("button", { name: "Confirm reviewed inbound", exact: true }); await expect(save).toBeDisabled(); await acknowledge(page);
-  await page.screenshot({ path: info.outputPath("inbound-review-desktop.png"), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: info.outputPath("inbound-review-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath("inbound-review-mobile.png"), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: info.outputPath("inbound-review-mobile.png"), fullPage: true });
   await save.click(); await expect(page.getByRole("heading", { name: /fba · revision 1/ })).toBeVisible();
   const sent = calls.find(c => c.method === "POST" && c.path.endsWith("/inbound"))!.body!;
   expect(sent.expected_source_sha256).toBe(ROW.source_sha256); expect(sent.acknowledge_review).toBe(true); expect(sent.expected_head_id).toBeNull();
-  await page.screenshot({ path: info.outputPath("inbound-ledger-mobile.png"), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: info.outputPath("inbound-ledger-mobile.png"), fullPage: true });
 });
 
 test("explicit zero is distinct from a blank or unsafe quantity", async ({ page }) => {
@@ -145,8 +145,8 @@ test("replenishment opts into exact inbound revision and shows timing evidence",
   await expect(page.getByTestId("reviewed-inbound-evidence")).toContainText("Manager reviewed complete position");
   await expect(page.getByRole("region", { name: "Reviewed arrival qualification", exact: true })).toContainText("after stockout");
   expect(calls.find(c => c.path.endsWith("/recommendation-preview"))!.body).toEqual({ expected_approved_revision_id: ROW.approved_revision_id, inbound: { revision_ids: [ROW.id] } });
-  await page.screenshot({ path: info.outputPath("inbound-evaluation-desktop.png"), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: info.outputPath("inbound-evaluation-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath("inbound-evaluation-mobile.png"), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: info.outputPath("inbound-evaluation-mobile.png"), fullPage: true });
   await page.getByRole("button", { name: "Reload inbound choices and clear selection", exact: true }).click(); await expect(page.getByTestId("evaluation-evidence")).toHaveCount(0);
 });

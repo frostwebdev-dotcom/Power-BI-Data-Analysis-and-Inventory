@@ -1372,3 +1372,5 @@ textarea:focus {
 .inbound-evidence .button, .inbound-choices .button { max-width: 100%; white-space: normal; }
 .inbound-choices { overflow-wrap: anywhere; }
 .inbound-choices ul { padding-left: 20px; }
+
+.inbound-evidence .checkbox-row input, .inbound-choices .checkbox-row input { flex-shrink: 0; min-width: 13px; }

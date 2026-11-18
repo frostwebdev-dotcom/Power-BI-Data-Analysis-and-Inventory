@@ -204,9 +204,7 @@
     "supplier_inputs": "NOT_INTEGRATED",
     "supplier": null,
     "financial": null,
-    "review_reasons": [
-      "HISTORICAL_FINANCIAL_CONTEXT_ONLY"
-    ],
+    "review_reasons": [],
     "profitability": "NOT_INTEGRATED",
     "purchasing_eligible": false,
     "inbound_assessments": [
