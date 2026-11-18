@@ -102,6 +102,7 @@ def historical_row(
             or current is None
             or current.id != listing.listing_id
             or current.product_id != product_id
+            or (parsed is not None and parsed.asin is not None and parsed.asin != current.asin)
             or not current.asin
             or not current.approved_by_user_id
             or not current.approved_at

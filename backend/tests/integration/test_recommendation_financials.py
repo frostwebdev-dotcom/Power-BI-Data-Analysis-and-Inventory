@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import insert, select
+from sqlalchemy import Engine, insert, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,7 @@ from app.services.financial_imports import (
 )
 from app.services.purchasing_policies import digest
 from tests.integration import test_recommendations as evaluations
+from tests.integration.test_recommendations import isolated_engine as isolated_engine
 from tests.unit.test_connectbooks import changed, profile, workbook
 
 pytestmark = pytest.mark.integration
@@ -271,3 +272,70 @@ def test_v3_snapshot_and_audit_rollback_atomically(
             ),
         )
     assert evaluations.count(db_session) == before
+
+
+def test_v3_api_roundtrip_scope_roles_and_stale_save(db_session: Session, tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_principal
+    from app.core.config import Settings
+    from app.core.security import Principal, RoleCode
+    from app.db.session import get_db
+    from app.main import create_app
+
+    ctx = evaluations.setup(db_session)
+    batch = upload(db_session, ctx, tmp_path)
+    app = create_app(Settings(app_env="test"))
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_principal] = lambda: ctx.policy.operator
+    base = f"/api/v1/purchasing-policies/{ctx.policy_id}"
+    selection = {"import_id": str(batch.id), "expected_binding_revision_id": None}
+    with TestClient(app) as client:
+        response = client.post(
+            base + "/recommendation-preview",
+            json={"expected_approved_revision_id": str(ctx.approval), "financial": selection},
+        )
+        assert response.status_code == 200, response.text
+        parsed = RecommendationPreview.model_validate(response.json())
+        assert isinstance(parsed.snapshot, FinancialRecommendationSnapshot)
+        assert parsed.snapshot.financial.rows[0].amounts["fees"] == Decimal(-15)
+        request = evaluations.request(parsed, financial=selection).model_dump(mode="json")
+        ctx.policy.listing.asin = "B000000009"
+        db_session.commit()
+        assert client.post(base + "/recommendations", json=request).status_code == 409
+        viewer = Principal(
+            ctx.policy.operator.user_id,
+            ctx.policy.org.id,
+            "viewer@example.test",
+            "Viewer",
+            frozenset({RoleCode.VIEWER}),
+        )
+        app.dependency_overrides[get_current_principal] = lambda: viewer
+        assert client.post(base + "/recommendations", json=request).status_code == 403
+        assert (
+            client.post(
+                base + "/recommendation-preview",
+                json={"expected_approved_revision_id": str(ctx.approval), "financial": selection},
+            ).status_code
+            == 200
+        )
+
+
+def test_v3_downgrade_refuses_discarding_financial_evidence(
+    isolated_engine: Engine, tmp_path: Path
+) -> None:
+    from tests.integration.conftest import downgrade_migrations
+
+    with Session(isolated_engine) as session:
+        ctx = evaluations.setup(session)
+        batch = upload(session, ctx, tmp_path)
+        result = preview(session, ctx, batch)
+        evaluations.record(
+            session,
+            ctx,
+            evaluations.request(
+                result, financial={"import_id": str(batch.id), "expected_binding_revision_id": None}
+            ),
+        )
+    with pytest.raises(DBAPIError, match="Cannot discard historical financial evaluation evidence"):
+        downgrade_migrations(isolated_engine.url, "a61117202606")

@@ -2,13 +2,14 @@
 
 The original v1 contract below remains supported. Policies with explicitly
 approved [supplier settings](supplier-readiness.md) now use v2 snapshots with
-source evidence and vendor caps. History preserves both versions and adds the
-REVIEW_REQUIRED status; positive results remain for review, not purchasing.
+source evidence and vendor caps. Explicit financial selections add v3 historical
+context. History preserves all versions; positive results remain for review.
 
 Milestone 2 draft-branch APIs connect the current manager-approved purchasing
 policy to ingested Amazon readiness and the exact quantity-preview-v1 formula.
 They retain historical evidence; they do not reserve inventory or place orders.
-The staff recommendation screen and supplier/profitability adapters are follow-ups.
+The staff review screen supports these versions; commercial/allocation checks
+and real-data operational acceptance remain open.
 
 ## Preview and record
 
