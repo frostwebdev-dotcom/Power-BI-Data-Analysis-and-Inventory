@@ -13,6 +13,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from app.imports.extract import normalize_vendor_sku
 from app.imports.profile_rules import ProfileRules
 from app.models import (
     ImportFile,
@@ -55,6 +56,9 @@ class Context:
 def setup(session: Session) -> Context:
     ctx = evaluation.setup(session)
     identity = ctx.policy
+    identity.vendor_product.normalized_vendor_sku = normalize_vendor_sku(
+        identity.vendor_product.vendor_sku
+    )
     at = datetime.now(UTC)
     rules = ProfileRules.model_validate(
         {
