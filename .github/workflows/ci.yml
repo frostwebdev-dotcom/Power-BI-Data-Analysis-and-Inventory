@@ -257,6 +257,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      - name: Recommendation review layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recommendation-layouts
+          path: frontend/test-results/**/recommendation-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

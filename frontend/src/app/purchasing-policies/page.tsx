@@ -68,6 +68,7 @@ function PolicyDetail({ id }: { id: string }) {
     {policy ? <>
       <PageHeader title={policy.identity.catalog_item_number + " · " + policy.identity.product_name} lede={policy.identity.vendor_name + " · Supplier SKU " + policy.identity.vendor_sku} actions={<button type="button" className="button" disabled={query.isFetching || Boolean(editor)} onClick={() => { setSelection(null); setReviewSession(value => value + 1); void query.refetch(); }}>Reload policy</button>} />
       <Note>Policy approval records reviewed assumptions. It does not certify current inventory or authorize a purchase.</Note>
+      {policy.approved ? <p><Link className="button" href={"/replenishment-recommendations?policy=" + encodeURIComponent(id)}>Evaluate approved policy</Link></p> : null}
       <div className="grid grid--2 policy-statuses">
         <section className="card" data-testid="policy-editing-head"><h2>Editing head</h2><p>Version {policy.head.revision_number} · <StatusBadge value={policy.head.kind} /></p><p className="muted small">{fmtDate(policy.head.recorded_at)}</p><p>{policy.head.reason}</p></section>
         <section className="card" data-testid="policy-current-approval"><h2>Current approval</h2>{policy.approved ? <><p>Version {policy.approved.revision_number} · <StatusBadge value="APPROVED" /></p><p className="muted small">Later drafts leave this approval in place.</p><button type="button" className="button" disabled={Boolean(editor)} onClick={() => setSelection(policy.approved)}>Inspect approved definition</button></> : <p>No current approval.</p>}</section>

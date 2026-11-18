@@ -217,6 +217,22 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   evidence is recorded in draft PR #22. No client policy/file, live source sync,
   merge or deployment is included.
 
+## Thirteenth deliverable: historical financial context and recommendation review
+
+- ADR 0034 adds explicit current report/binding selection to saved evaluations.
+  v3 snapshots retain historical exact SKU amounts, mapping identities, period,
+  profile/file provenance, controls, cost/coverage warnings and complete-set totals.
+  Uncertain/missing rows stay unknown; unallocated amounts are never distributed.
+- The staff Recommendations screen supports approved-policy selection, optional
+  report selection, per-pool preview, reason/acknowledgement, audited save,
+  bounded filtered history and immutable detail. Roles, context changes, stale
+  saves, exact retries and unsafe browser integer displays are handled explicitly.
+- Quantities remain unchanged; report amounts are historical context, not current
+  costs or forecast profit. Every result remains purchasing-ineligible.
+  Migration a61117202607 preserves v1/v2 and refuses destructive v3 downgrade.
+- Source-specific local and full CI evidence is recorded in draft PR #22.
+  No client data/policy, live sync, purchase, merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
@@ -224,8 +240,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
-- Financial context, monetary/commercial constraints and shared supplier-stock
-  allocation in saved recommendations, and the staff recommendation interface.
+- Monetary/commercial constraints and shared supplier-stock allocation in saved
+  recommendations; operational acceptance of historical financial context.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
 

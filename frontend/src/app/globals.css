@@ -1326,3 +1326,17 @@ textarea:focus {
   .purchasing-policies .kv__row { display: grid; }
   .purchasing-policies .kv__value { text-align: left; }
 }
+
+/* Historical recommendation review: keep evidence readable at narrow widths. */
+.recommendations { min-width: 0; }
+.recommendations h1, .recommendations .kv__value, .recommendations td { overflow-wrap: anywhere; }
+.recommendations .kv__value { flex: 1; white-space: normal; overflow: visible; text-overflow: clip; }
+.recommendations .json-block { max-width: 100%; overflow: auto; font-size: 0.75rem; padding: 12px; background: var(--surface-alt); border-radius: 6px; }
+.recommendations .card { margin-top: 16px; }
+.recommendations .checkbox-row { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; }
+.recommendations .checkbox-row input { width: auto; margin-top: 4px; }
+@media (max-width: 700px) {
+  .recommendations .candidate { flex-wrap: wrap; }
+  .recommendations .candidate > div { min-width: 0; overflow-wrap: anywhere; }
+  .recommendations .toolbar { flex-wrap: wrap; }
+}

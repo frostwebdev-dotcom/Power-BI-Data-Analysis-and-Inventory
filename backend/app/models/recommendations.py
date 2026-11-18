@@ -30,6 +30,12 @@ class ReplenishmentRecommendation(
     vendor_product_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("vendor_products.id", ondelete="RESTRICT")
     )
+    financial_import_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("financial_imports.id", ondelete="RESTRICT")
+    )
+    financial_binding_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("financial_binding_revisions.id", ondelete="RESTRICT")
+    )
     marketplace_id: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(16))
     snapshot: Mapped[dict[str, Any]]

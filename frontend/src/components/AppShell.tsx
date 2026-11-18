@@ -53,6 +53,7 @@ const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Monitoring",
     items: [
+      { href: "/replenishment-recommendations", label: "Recommendations" },
       { href: "/watchlist", label: "Watchlist" },
       { href: "/availability", label: "Availability" },
       { href: "/audit", label: "Audit log" },
@@ -70,6 +71,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/financial-imports": "Financial imports",
   "/purchasing-policies": "Purchasing policies",
   "/exceptions": "Exception queue",
+  "/replenishment-recommendations": "Recommendations",
   "/watchlist": "Watchlist",
   "/availability": "Availability",
   "/audit": "Audit log",

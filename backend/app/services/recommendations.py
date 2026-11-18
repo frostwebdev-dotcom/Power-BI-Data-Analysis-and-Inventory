@@ -17,10 +17,12 @@ from app.models import ReplenishmentRecommendation
 from app.repositories.purchasing_policies import PurchasingPolicyRepository
 from app.repositories.recommendations import RecommendationRepository
 from app.schemas.amazon_readiness import AmazonReadinessResponse
+from app.schemas.financial_context import FinancialSelection
 from app.schemas.purchasing_policies import PolicyRevisionResponse
 from app.schemas.recommendations import (
     EvaluationSnapshot,
     EvaluationStatus,
+    FinancialRecommendationSnapshot,
     PoolEvaluation,
     RecommendationPage,
     RecommendationPreview,
@@ -35,6 +37,7 @@ from app.schemas.supplier_readiness import SupplierReadinessResponse
 from app.services import audit
 from app.services import purchasing_policies as policies
 from app.services.amazon_readiness import check_amazon_readiness
+from app.services.recommendation_financials import financial_context
 from app.services.replenishment import calculate_replenishment
 from app.services.supplier_readiness import check_supplier_readiness
 
@@ -169,7 +172,10 @@ def evidence_digest(snapshot: EvaluationSnapshot) -> str:
     data = snapshot.model_dump(mode="json")
     data.pop("evaluated_at")
     data["readiness"].pop("evaluated_at")
-    if isinstance(snapshot, SupplierRecommendationSnapshot):
+    if (
+        isinstance(snapshot, (SupplierRecommendationSnapshot, FinancialRecommendationSnapshot))
+        and snapshot.supplier is not None
+    ):
         data["supplier"].pop("evaluated_at")
     if not snapshot.readiness.order_coverage_run_ids:
         # With no baseline the readiness adapter reports a clock-derived window.
@@ -185,12 +191,13 @@ def _evaluate(
     identifier: uuid.UUID,
     approval: uuid.UUID,
     now: Callable[[], datetime],
+    financial: FinancialSelection | None = None,
 ) -> RecommendationPreview:
     approved, identity, blocks = policies.calculation_policy(session, actor, identifier, approval)
     readiness = check_amazon_readiness(
         session, actor, approved.definition.amazon, now=now, lock_sources=True
     )
-    snapshot = build_snapshot(approved, identity, blocks, readiness)
+    snapshot: EvaluationSnapshot = build_snapshot(approved, identity, blocks, readiness)
     if approved.definition.supplier is not None:
         supplier = check_supplier_readiness(
             session,
@@ -200,8 +207,21 @@ def _evaluate(
             approved.definition.supplier,
             at=readiness.evaluated_at,
         )
-        enriched = build_supplier_snapshot(approved, identity, blocks, readiness, supplier)
-        return RecommendationPreview(snapshot=enriched, evidence_sha256=evidence_digest(enriched))
+        snapshot = build_supplier_snapshot(approved, identity, blocks, readiness, supplier)
+    if financial is not None:
+        context = financial_context(session, actor, financial, readiness)
+        data = snapshot.model_dump(mode="json")
+        review = set(data.get("review_reasons", [])) - {"PROFITABILITY_NOT_INTEGRATED"}
+        review.update(context.review_reasons)
+        review.add("HISTORICAL_FINANCIAL_CONTEXT_ONLY")
+        data.update(
+            rule_version="replenishment-evaluation-v3",
+            financial=context.model_dump(mode="json"),
+            supplier=data.get("supplier"),
+            profitability="HISTORICAL_CONTEXT",
+            review_reasons=sorted(review),
+        )
+        snapshot = FinancialRecommendationSnapshot.model_validate(data)
     return RecommendationPreview(snapshot=snapshot, evidence_sha256=evidence_digest(snapshot))
 
 
@@ -214,7 +234,9 @@ def preview_recommendation(
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> RecommendationPreview:
     actor.require_roles(READ)
-    return _evaluate(session, actor, identifier, payload.expected_approved_revision_id, now)
+    return _evaluate(
+        session, actor, identifier, payload.expected_approved_revision_id, now, payload.financial
+    )
 
 
 def _response(row: ReplenishmentRecommendation) -> RecommendationResponse:
@@ -246,7 +268,10 @@ def record_recommendation(
 ) -> RecommendationResponse:
     actor.require_roles(WRITE)
     repository = RecommendationRepository(session, actor.organization_id)
-    fingerprint = policies.digest({"policy_id": str(identifier), **payload.model_dump(mode="json")})
+    request_data = payload.model_dump(mode="json")
+    if payload.financial is None:
+        request_data.pop("financial")  # Preserve exact legacy retry fingerprints.
+    fingerprint = policies.digest({"policy_id": str(identifier), **request_data})
     with transaction(session):
         repository.lock_request(payload.request_id)
         policies.validate_actor(PurchasingPolicyRepository(session, actor.organization_id), actor)
@@ -258,7 +283,14 @@ def record_recommendation(
             ):
                 raise RecommendationConflict(details={"code": "REQUEST_ID_REUSED"})
             return _response(existing)
-        preview = _evaluate(session, actor, identifier, payload.expected_approved_revision_id, now)
+        preview = _evaluate(
+            session,
+            actor,
+            identifier,
+            payload.expected_approved_revision_id,
+            now,
+            payload.financial,
+        )
         if preview.evidence_sha256 != payload.expected_evidence_sha256:
             raise RecommendationConflict(details={"code": "RECOMMENDATION_EVIDENCE_CHANGED"})
         snapshot = preview.snapshot.model_dump(mode="json")
@@ -272,6 +304,10 @@ def record_recommendation(
             product_id=preview.snapshot.product_id,
             vendor_product_id=preview.snapshot.vendor_product_id,
             marketplace_id=preview.snapshot.marketplace_id,
+            financial_import_id=payload.financial.import_id if payload.financial else None,
+            financial_binding_revision_id=payload.financial.expected_binding_revision_id
+            if payload.financial
+            else None,
             status=preview.snapshot.status,
             snapshot=snapshot,
             evidence_sha256=preview.evidence_sha256,

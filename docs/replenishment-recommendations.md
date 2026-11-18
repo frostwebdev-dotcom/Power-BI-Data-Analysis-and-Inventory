@@ -100,3 +100,42 @@ Every read is historical and purchasing_eligible is always false.
 No client financial file or policy is seeded, uploaded or calculated live.
 Client policy/source confirmation, supplier constraints, financial coverage
 and three-real-SKU acceptance remain required before operational use.
+
+## Historical financial context and staff review (ADR 0034)
+
+The authenticated **Recommendations** page supports explicit approved-policy
+selection, preview, reason/acknowledgement, recording, filtered history and
+immutable details. All staff can preview/read; operators, purchasing managers
+and administrators can record. Changing policy/report/binding choices clears
+review state. Conflicts require a new preview; an uncertain network save retains
+its exact request UUID and body for retry. Quantities outside the browser's exact
+integer display range are labelled unavailable and cannot be recorded there.
+
+Preview/record requests optionally accept:
+
+```json
+"financial": {
+  "import_id": "UUID of the explicitly selected current financial report",
+  "expected_binding_revision_id": null
+}
+```
+
+Null selects original bindings only when no binding revision exists; otherwise
+provide the exact current binding UUID. No report is chosen automatically.
+Replaced/foreign reports and changed binding heads are refused. Legacy requests
+without this selection retain their v1/v2 shapes and retry fingerprints.
+
+New v3 snapshots preserve the report's period, store, USD currency, raw/profile
+digests, profile, binding version, exact SKU rows, recorded/current mapping
+identity, source controls and warnings. Missing/duplicate/unverified links and
+incomplete amounts remain unknown. Only a complete known product-listing set
+receives totals; Unitemized amounts are never distributed. Money and ratios stay
+exact decimal strings. The financial and demand windows are displayed separately.
+Historical amounts are never treated as current unit costs or multiplied by the
+suggested quantity to claim projected profit. Source cost/advertising warnings
+remain visible. Commercial constraints and shared-stock allocation remain open.
+
+Migration a61117202607 adds nullable report/binding foreign keys and scoped v3
+insert guards, preserves old history, and refuses downgrade over v3 rows.
+Snapshot and audit remain atomic; exact successful retries retain the original
+observation after report/binding changes. Purchasing eligibility remains false.

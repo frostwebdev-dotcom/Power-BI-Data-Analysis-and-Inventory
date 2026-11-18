@@ -69,6 +69,38 @@ class FinancialRepository(ScopedRepository):
             )
         ), total
 
+    def evaluation_rows(
+        self, identifier: uuid.UUID, skus: set[str], revision_id: uuid.UUID | None
+    ) -> tuple[list[FinancialImportRow], dict[uuid.UUID, FinancialBindingRow]]:
+        """Bound the known-product lookup; overflow is reported, never truncated totals."""
+        rows = list(
+            self.session.scalars(
+                self.select(FinancialImportRow)
+                .where(
+                    FinancialImportRow.import_id == identifier,
+                    FinancialImportRow.seller_sku.in_(skus),
+                    FinancialImportRow.row_kind == "SKU",
+                )
+                .order_by(FinancialImportRow.source_row_number)
+                .limit(201)
+            )
+        )
+        bindings = (
+            {}
+            if revision_id is None
+            else {
+                row.source_row_id: row
+                for row in self.session.scalars(
+                    self.select(FinancialBindingRow).where(
+                        FinancialBindingRow.import_id == identifier,
+                        FinancialBindingRow.revision_id == revision_id,
+                        FinancialBindingRow.source_row_id.in_([row.id for row in rows]),
+                    )
+                )
+            }
+        )
+        return rows, bindings
+
     def source_rows(self, identifier: uuid.UUID) -> list[FinancialImportRow]:
         return list(
             self.session.scalars(

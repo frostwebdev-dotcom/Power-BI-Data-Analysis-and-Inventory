@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, StrictBool, field_validator
 
 from app.schemas.amazon_readiness import AmazonReadinessResponse
+from app.schemas.financial_context import FinancialSelection, HistoricalFinancialContext
 from app.schemas.purchasing_policies import Digest, PolicyRevisionResponse, ReasonedRequest
 from app.schemas.replenishment import (
     PreviewModel,
@@ -20,11 +21,13 @@ from app.schemas.supplier_readiness import SupplierReadinessResponse
 
 class RecommendationPreviewRequest(PreviewModel):
     expected_approved_revision_id: uuid.UUID
+    financial: FinancialSelection | None = None
 
 
 class RecommendationRecordRequest(ReasonedRequest):
     request_id: uuid.UUID
     expected_approved_revision_id: uuid.UUID
+    financial: FinancialSelection | None = None
     expected_evidence_sha256: Digest
     acknowledge_review: StrictBool
 
@@ -83,8 +86,31 @@ class SupplierRecommendationSnapshot(PreviewModel):
     purchasing_eligible: Literal[False] = False
 
 
+class FinancialRecommendationSnapshot(PreviewModel):
+    rule_version: Literal["replenishment-evaluation-v3"] = "replenishment-evaluation-v3"
+    data_source: Literal["ingested_postgresql"] = "ingested_postgresql"
+    policy_id: uuid.UUID
+    product_id: uuid.UUID
+    vendor_product_id: uuid.UUID
+    marketplace_id: str
+    evaluated_at: datetime
+    approved_policy: PolicyRevisionResponse
+    current_identity_evidence: dict[str, Any]
+    policy_blocking_reasons: tuple[str, ...]
+    readiness: AmazonReadinessResponse
+    pools: tuple[PoolEvaluation, ...]
+    status: Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"]
+    supplier_inputs: Literal["NOT_INTEGRATED", "VERIFIED", "BLOCKED"]
+    supplier: SupplierReadinessResponse | None
+    financial: HistoricalFinancialContext
+    review_reasons: tuple[str, ...]
+    profitability: Literal["HISTORICAL_CONTEXT"] = "HISTORICAL_CONTEXT"
+    purchasing_eligible: Literal[False] = False
+
+
 EvaluationSnapshot = Annotated[
-    RecommendationSnapshot | SupplierRecommendationSnapshot, Field(discriminator="rule_version")
+    RecommendationSnapshot | SupplierRecommendationSnapshot | FinancialRecommendationSnapshot,
+    Field(discriminator="rule_version"),
 ]
 EvaluationStatus = Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"]
 
