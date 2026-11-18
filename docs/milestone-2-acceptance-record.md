@@ -16,7 +16,9 @@ Use [the walkthrough](milestone-2-acceptance.md) and
 | Reviewer identity / role | |
 | Client reviewer | |
 | Session and observation times (UTC) | |
-| Reporting month / confirmed year / timezone / UTC bounds | October / Unconfirmed / Unconfirmed / |
+| Reporting month / confirmed year / client timezone | October / 2026 / EST, explicit UTC−05:00 |
+| Profile timezone / reporting-context evidence | `Etc/GMT+5` / client reply relayed on 18 November 2026; see client worksheet |
+| UTC period start inclusive / end exclusive | `2026-10-01T05:00:00Z` / `2026-11-01T05:00:00Z` |
 | Currency / canonical store label | USD / Brand Name Deals-Amazon |
 | Exact source Store label / original report filename / SHA-256 | |
 | Financial import UUID / current binding revision UUID (or evidenced original) | |
@@ -156,7 +158,7 @@ while operational readiness stays BLOCKED. Do not mark unexercised features PASS
 
 | Gap / requirement | Current disposition | Owner / next action | Retest / client decision |
 | --- | --- | --- | --- |
-| Reporting year/timezone and real-file coverage review | PENDING | | |
+| Reporting year/timezone and real-file coverage review | Year 2026 and fixed UTC−05:00 CONFIRMED; actual file/coverage checks still PENDING | | |
 | Reviewed FBA/manual FBM positions and arrival timing | Implemented on draft; real positions and condition coverage NOT RUN | | |
 | Missing real shipment / zero-position / expired or changed-source coverage | NOT EXERCISED until supported by actual scoped evidence | | |
 | On-demand current selected-policy urgency/opportunity acceptance | Implemented on draft; real cases NOT RUN; historical counts are separate | | |

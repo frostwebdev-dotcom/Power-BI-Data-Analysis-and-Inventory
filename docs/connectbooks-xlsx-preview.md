@@ -25,7 +25,10 @@ Copy examples/connectbooks-preview-profile.json outside the repository and set
 the exact source Store label separately from the canonical Amazon store name.
 The example's store names are synthetic. Supply the explicitly confirmed month,
 USD currency and marketplace. Leave year/timezone null until known; the preview
-then reports the missing context without creating reporting timestamps.
+then reports the missing context without creating reporting timestamps. For the
+client’s supplied October file, year 2026 and explicit fixed UTC−05:00 are now
+confirmed; use `Etc/GMT+5` as documented in the
+[client worksheet](milestone-2-client-confirmations.md#confirmed-october-reporting-context).
 Advertising coverage remains unconfirmed unless the operator has verified it.
 Zero Ad Spend in an export does not establish that advertising costs are complete.
 
@@ -89,9 +92,13 @@ encrypted packages and malformed archives. Limits: 8 MiB compressed, 64 MiB
 expanded, 1,024 ZIP entries, 10,000 data rows plus header/control, 256 columns and
 1,000,000 explicitly stored cells. It makes no external requests.
 
-## Remaining integration
+## Recorded imports and remaining acceptance
 
-Before persistence, require a confirmed reporting year and timezone, approved
-tenant-scoped seller-SKU bindings, complete cost review, raw-file storage,
-overlap/replay rules and audited immutable financial snapshots. Staff API/UI and
-links to replenishment remain later increments of the authorized Milestone 2 work.
+The standalone preview still leaves identity unresolved and writes no financial
+records. The draft branch now implements [recorded financial imports](financial-imports.md),
+reviewed exact SKU bindings, replacement lineage and historical replenishment
+context. These paths require their own scoped source/review evidence.
+
+The client's year/offset is confirmed above. Actual original-file intake and
+cost/advertising coverage, exact SKU mappings and real-data acceptance remain
+open. Date confirmation alone does not record a report or approve purchasing.

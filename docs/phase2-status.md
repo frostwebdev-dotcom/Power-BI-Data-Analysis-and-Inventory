@@ -330,12 +330,28 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - This increment changes documentation only. Validation is recorded in draft
   PR #22; the application, schema and existing test cases are unchanged.
 
+## Client reporting-context confirmation — 18 November 2026
+
+- The owner relayed the client's confirmation of year 2026 and EST, explicitly
+  UTC−05:00, for the previously identified October report. Recorded it in the
+  client worksheet and acceptance context; no reporting year/offset is inferred.
+- Verified that the existing IANA-profile validator accepts `Etc/GMT+5` and the
+  existing reporting-bounds service returns 1 October 2026 05:00 UTC inclusive
+  through 1 November 2026 05:00 UTC exclusive, exactly 31 days / 744 hours.
+  The fixed-offset probe performed no storage/database writes.
+- Updated the follow-up to request only the remaining cost/advertising coverage,
+  three exact SKUs, purchasing settings and applicable complete shipment evidence.
+  The follow-up is prepared, not sent. Original-file acceptance, real-case runs,
+  manager policy approvals and client sign-off remain pending; nothing deployed.
+- Documentation/context update only; application code, schema and test cases
+  are unchanged. Full validation for the source is recorded in draft PR #22.
+
 ## Remaining Milestone 2 work
 
 - Client-approved Amazon pack/pool/freshness policy, operational acceptance of
   reviewed FBA/FBM positions and real supplier-aware recommendations.
-- Client reporting year/timezone, coverage assertions and cost review before
-  real-file operational acceptance.
+- Actual original-file reconciliation, coverage assertions and cost review before
+  real-file operational acceptance. Year 2026 / fixed UTC−05:00 are confirmed.
   The database/API and staff interface are implemented on the draft branch.
 - Client confirmation and operational acceptance of SKU commercial scopes,
   pool priority, price conversions, landed-cost inputs and historical financial context.

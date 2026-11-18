@@ -1,21 +1,52 @@
 # Milestone 2 client confirmations
 
-Status: request prepared; **not sent**. No reply, policy approval or sign-off is
-implied by this template. The already supplied October workbook does not need
-reformatting or replacement just to answer these questions.
+Status: **partially answered — reporting year/timezone confirmed**. On 18 November 2026,
+the owner relayed the client's reply: year 2026 and EST, explicitly UTC−05:00.
+The follow-up message below is prepared only; it has not been sent. No policy
+approval, real-file import or operational sign-off is implied. The supplied
+October workbook does not need reformatting or replacement to answer the
+remaining questions.
 
-## Short message to Pinchas
+## Confirmed October reporting context
 
-Hi Pinchas, I’m preparing the Milestone 2 review using your October ConnectBooks
-file. I have USD, Item = Amazon SKU, and Brand Name Deals-Amazon as the store.
-Could you confirm the reporting year and timezone, whether product costs and
-advertising are complete or anything is missing, and three Amazon SKUs you’d
-like us to validate first? For those items, we can review your demand window,
-coverage, lead/safety days, pack/order units and supplier minimums/terms together.
-Please confirm whether coverage already includes lead and safety. If they have
-outstanding shipments, please include the complete quantities, shipment
-references and expected arrival dates with timezone. Unknowns can stay marked
-unknown; I’ll keep those gaps visible.
+| Field | Confirmed or derived value | Evidence |
+| --- | --- | --- |
+| Reporting month / year | October 2026 | October previously confirmed; year supplied in the client reply relayed on 18 November 2026 |
+| Client's timezone description | EST, UTC−05:00 | Explicit client reply relayed on 18 November 2026 |
+| Profile timezone identifier | `Etc/GMT+5` | Verified with the installed timezone database and existing profile validator; fixed UTC−05:00 |
+| Local reporting start, inclusive | `2026-10-01T00:00:00-05:00` | Calendar-month start in the confirmed offset |
+| Local reporting end, exclusive | `2026-11-01T00:00:00-05:00` | Next calendar-month start in the confirmed offset |
+| UTC reporting start, inclusive | `2026-10-01T05:00:00Z` | Verified by the existing `reporting_bounds` service |
+| UTC reporting end, exclusive | `2026-11-01T05:00:00Z` | Verified by the existing `reporting_bounds` service |
+| Period length | 31 days / 744 hours | Derived from those exact UTC bounds |
+
+Use the client's explicit fixed offset. The profile's IANA name `Etc/GMT+5`
+represents UTC−05:00; do not reverse its sign or substitute a regional timezone.
+The reporting-context fragment for the existing source-specific profile is:
+
+```json
+{
+  "reporting_month": 10,
+  "reporting_year": 2026,
+  "reporting_timezone": "Etc/GMT+5"
+}
+```
+
+This is not a complete upload profile. Preserve/recheck the original worksheet,
+source/canonical store, USD and marketplace fields. Advertising coverage remains
+unconfirmed; keep its completeness assertion false until supported by a reply.
+No client workbook was uploaded or financial record created by verifying dates.
+
+## Follow-up message to Pinchas — not sent
+
+Thanks for confirming October 2026 and EST (UTC−05:00). Could you confirm whether
+product costs and advertising are complete or anything is missing, and choose
+three exact Amazon SKUs to validate first? For those items, we can review your
+demand window, target coverage, lead/safety days, pack/order units and supplier
+minimums/terms together. Please confirm whether target coverage already includes
+lead and safety. If there are outstanding shipments, please include complete
+quantities, shipment references and expected arrivals with timezone. Unknowns
+can stay marked unknown; I’ll keep those gaps visible.
 
 ## Confirmation worksheet
 
@@ -24,17 +55,17 @@ unresolved decisions. A confirmed zero needs a source/reference.
 
 | Item | Client answer | Confirmation reference / date |
 | --- | --- | --- |
-| October reporting year | Unconfirmed | |
-| Timezone used by ConnectBooks report | Unconfirmed | |
+| October reporting year | 2026 | Client reply relayed on 18 November 2026 |
+| Timezone used by ConnectBooks report | EST, explicit UTC−05:00; profile `Etc/GMT+5` | Client reply relayed on 18 November 2026; conversion verified |
 | Exact report/account/store and original file | Confirm against supplied original | |
 | Product cost coverage and known omissions | Unconfirmed | |
 | Advertising coverage and known omissions | Unconfirmed | |
 | Freight, taxes or fees not included in report/cost | Unconfirmed | |
 | Reviewer / purchasing manager | Unconfirmed | |
 
-The developer converts the confirmed reporting timezone to a supported timezone
-identifier and shows the resulting local/UTC period for review. The client does
-not need to provide internal UUIDs or database fields.
+The confirmed local/UTC bounds above close the missing year/timezone input.
+Remaining source, coverage, SKU and purchasing fields still need their own
+evidence. The client does not need to provide internal UUIDs or database fields.
 
 | Per-item decision | Case A | Case B | Case C |
 | --- | --- | --- | --- |

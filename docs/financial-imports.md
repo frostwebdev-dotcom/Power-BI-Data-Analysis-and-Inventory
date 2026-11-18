@@ -15,8 +15,12 @@ before storage or database writes. File creation timestamps are not used.
 
 Calendar-month bounds are converted from local midnight to UTC, with an exclusive
 end. DST, leap years and December rollover are handled; ambiguous/nonexistent
-midnight boundaries are rejected rather than guessed. The original October file
-has not been persisted: its reporting year/timezone still need confirmation.
+midnight boundaries are rejected rather than guessed. For the original October
+report, the client has now confirmed 2026 and EST with an explicit UTC−05:00
+fixed offset. Use `Etc/GMT+5`; the existing profile validator and reporting-bounds
+service produce `2026-10-01T05:00:00Z` inclusive to `2026-11-01T05:00:00Z` exclusive.
+See the [recorded context](milestone-2-client-confirmations.md#confirmed-october-reporting-context).
+The original report has not been persisted by this metadata verification.
 
 The storage backend retains unchanged source bytes before parsing. A parse or
 database failure can leave an unreferenced retained object; it is not deleted.
@@ -186,5 +190,6 @@ link reviews. Database downgrade refuses to discard existing replacement lineage
 empty scratch-schema upgrade/downgrade roundtrips remain supported.
 
 This work remains on the draft branch. No client report has been uploaded or
-live migration executed. The original October reporting year/timezone remain
-unconfirmed. Replacements do not approve cost completeness or enable purchasing.
+live migration executed. The original October year/timezone input is now resolved
+as recorded above; actual file acceptance and cost/advertising review remain open.
+Replacements do not approve cost completeness or enable purchasing.

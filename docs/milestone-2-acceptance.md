@@ -26,13 +26,16 @@ evidence. Do not commit the completed copy or client files to this repository.
 | Currency | Client confirmed USD | Preserve USD |
 | Item field | Client confirmed it is Amazon SKU | Check exact SKU against approved scoped mappings |
 | Store display label | Client said Brand Name Deals-Amazon | Preserve this label; recheck the workbook's exact source Store cells separately |
-| Reporting year/timezone | Unconfirmed | Obtain both before recording a financial import; do not infer from the file, laptop or browser |
+| Reporting year/timezone | Client confirmed 2026 and EST, explicit UTC−05:00 | Use profile `Etc/GMT+5`; retain the relayed reply and verified boundaries in the client worksheet |
+| October 2026 UTC period | `2026-10-01T05:00:00Z` inclusive to `2026-11-01T05:00:00Z` exclusive | Derived from the explicit fixed offset; verify exact source profile before import |
 | Product cost / advertising coverage | Unconfirmed | Record what is included, excluded or unknown; zero does not establish completeness |
 | Three real Amazon SKUs | Not selected for this walkthrough | Client selects representative cases; collect exact source/identity evidence |
 | Purchasing/source/commercial policy | No client-approved values evidenced for these cases | Obtain per-product/supplier decisions and manager review |
 | Real-data acceptance environment | Not established by this record | Identify source commit, organization, authorized operators and test environment before any data action |
 
-Year/timezone are hard requirements for recording the October report. Other
+Year/timezone were confirmed in the client reply relayed on 18 November 2026;
+see the [verified reporting context](milestone-2-client-confirmations.md#confirmed-october-reporting-context).
+This resolves those metadata inputs without recording a real report. Other
 cost/coverage unknowns may remain explicitly disclosed review items; they must
 not be relabelled complete merely to obtain a passing result. Advertising
 coverage is unchecked unless verified. Follow [financial imports](financial-imports.md)
@@ -42,15 +45,15 @@ for profile identity, immutable original bytes and correction/replacement rules.
 
 | Gate | What must be available | Current state in this preparation |
 | --- | --- | --- |
-| Report identity | Client-confirmed October year/timezone and the exact original file/account/store | Year/timezone Unconfirmed; existing USD/SKU/store facts retained |
+| Report identity | Client-confirmed October year/timezone and the exact original file/account/store | 2026 and fixed UTC−05:00 confirmed; verify the exact original file/account/source Store before import |
 | Case selection | Three exact seller SKUs selected by the client, with source evidence and complete related listing/pool sets | Not selected |
 | Purchasing decisions | Client-confirmed units, stock pools, coverage, source-age limits and applicable supplier/commercial settings, followed by manager approval | No approved real-case values evidenced |
 | Inbound use, when needed | Complete outstanding position, original evidence, observation/expiry, per-shipment quantities and timezone-aware ETAs, manager review and exact selected revision | No real position recorded |
 | Execution context | Environment and exact application source, organization, reviewer/roles and the data actions in scope | Not established; the draft branch is not a hosted deployment |
 
 Preparation can continue without those answers, but missing data must not be
-replaced with examples. A financial import needs a confirmed year/timezone;
-quantity-only checks do not need an optional financial report, but they still
+replaced with examples. The confirmed financial reporting context is recorded
+above; quantity-only checks do not need an optional financial report, but they still
 need their own verified inputs and approved policy. Preserve any remaining
 cost/advertising unknowns as review items. The developer fills internal UUIDs
 from actual application evidence; the client supplies business facts.
@@ -60,7 +63,7 @@ from actual application evidence; the client supplies business facts.
 | Deliverable | Implemented evidence | Operational acceptance still needed |
 | --- | --- | --- |
 | Amazon demand, inventory and readiness | Read-only scoped ingestion/readiness; explicit shipped-only order-date coverage, conversions and physical pools | Fresh complete source proof and approved policy for each selected product |
-| ConnectBooks profitability | Signed XLSX preview, original-file retention, financial review/binding/replacement UI and historical context | Confirm year/timezone; reconcile the real report and review cost/advertising coverage and exact links |
+| ConnectBooks profitability | Signed XLSX preview, original-file retention, financial review/binding/replacement UI and historical context | Use the confirmed 2026/fixed UTC−05:00 period; reconcile the real report and review cost/advertising coverage and exact links |
 | Replenishment | Exact per-pool arithmetic, manager-approved policies, source checks, immutable evaluations and finite supplier allocation | Independently reconcile real inputs/results and verify expected blockers |
 | Reviewed inbound | Exact source-bound complete FBA/manual FBM positions and versioned ETA credit | Reconcile real shipments, units and timely/late/expired/missed cases; manager evidence and explicit selection |
 | Vendor comparison | Explicit selected policies; qualified exact current goods-price ordering; complete per-offer evidence | Two comparable supplier offers for the same product where available; preserve unknown/incompatible offers |

@@ -116,8 +116,10 @@ cost basis, canonical SKU binding or persisted profitability import.
 
 - The owner supplied a real October XLSX on 17 November and confirmed USD,
   Item as seller SKU and the store name. ADR 0024 defines the signed XLSX preview.
-  The reporting year/timezone, cost completeness and approved SKU bindings remain
-  prerequisites for a persisted financial import.
+  On 18 November the client confirmed year 2026 and EST, explicitly UTC−05:00;
+  [the reporting context](milestone-2-client-confirmations.md#confirmed-october-reporting-context)
+  records the verified `Etc/GMT+5` profile value and UTC bounds. Actual file
+  acceptance, exact bindings and cost/advertising coverage review remain open.
 - Purchasing-manager decisions on target coverage, velocity window, lead time,
   safety stock, pending-order demand and acceptable inbound timing.
 - Confirmed listing/pack conversion and shared-stock rules.
