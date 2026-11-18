@@ -102,6 +102,7 @@ def setup(session: Session) -> Context:
         status=ImportRowStatus.OK,
         match_result=MatchResult.MATCHED,
         matched_by=MatchMethod.MANUAL_APPROVAL,
+        match_priority=5,
         normalized_data={
             "quantity": 10,
             "availability": "AVAILABLE",
