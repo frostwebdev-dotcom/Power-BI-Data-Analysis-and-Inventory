@@ -686,9 +686,75 @@ def test_same_shipment_reference_cannot_be_confirmed_for_two_pools(db_session: S
         source_sha256=context.source_sha256,
         recorded_at=datetime.now(UTC),
         position=position.model_dump(mode="json"),
+        observed_at=position.observed_at,
+        expires_at=position.expires_at,
     )
     with (
         pytest.raises(DBAPIError, match="shipment cannot be credited to two pools"),
         db_session.begin_nested(),
     ):
         db_session.execute(insert(InboundEvidenceRevision).values(**data))
+
+
+def test_http_confirmation_revoke_roles_and_scoped_history(db_session: Session) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_principal
+    from app.core.config import Settings
+    from app.db.session import get_db
+    from app.main import create_app
+    from app.schemas.inbound import InboundPreview
+
+    ctx = setup(db_session)
+    proposed = proposal(db_session, ctx)
+    app = create_app(Settings(app_env="test"))
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_principal] = lambda: ctx.policy.manager
+    base = f"/api/v1/purchasing-policies/{ctx.policy_id}/inbound"
+    with TestClient(app) as client:
+        response = client.post(
+            base + "/context",
+            json={"expected_approved_revision_id": str(ctx.approval), "pool_id": proposed.pool_id},
+        )
+        assert (
+            response.status_code == 200
+            and response.json()["source_sha256"] == proposed.expected_source_sha256
+        )
+        response = client.post(base + "/preview", json=proposed.model_dump(mode="json"))
+        assert response.status_code == 200, response.text
+        checked = InboundPreview.model_validate(response.json())
+        payload = InboundRecordRequest(
+            **proposed.model_dump(),
+            request_id=uuid.uuid4(),
+            expected_preview_sha256=checked.preview_sha256,
+            reason="Synthetic HTTP complete position review",
+            acknowledge_review=True,
+        ).model_dump(mode="json")
+        response = client.post(base, json=payload)
+        assert response.status_code == 201, response.text
+        identifier = response.json()["id"]
+        assert client.post(base, json=payload).json()["id"] == identifier
+        viewer = Principal(
+            ctx.policy.manager.user_id,
+            ctx.policy.org.id,
+            ctx.policy.manager.email,
+            "Synthetic viewer",
+            frozenset({RoleCode.VIEWER}),
+        )
+        app.dependency_overrides[get_current_principal] = lambda: viewer
+        assert client.get(base).json()["total"] == 1
+        assert client.post(base, json=payload).status_code == 403
+        revoke_payload = {
+            "request_id": str(uuid.uuid4()),
+            "expected_head_id": identifier,
+            "reason": "Synthetic HTTP source withdrawn",
+            "acknowledge_review": True,
+        }
+        assert client.post(base + "/revoke", json=revoke_payload).status_code == 403
+        app.dependency_overrides[get_current_principal] = lambda: ctx.policy.manager
+        assert client.post(base + "/revoke", json=revoke_payload).status_code == 201
+        assert client.get(base).json()["items"][0]["kind"] == "REVOKED"
+        assert client.get(base + "?heads_only=false&page_size=1").json()["total"] == 2
+        foreign = setup(db_session)
+        app.dependency_overrides[get_current_principal] = lambda: foreign.policy.manager
+        assert client.get(base).status_code == 404
