@@ -4,6 +4,8 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { InboundContext, InboundPreview, InboundProposal, InboundRevision } from "../src/lib/inbound";
 import type { EvaluationPreview } from "../src/lib/recommendations";
+test.setTimeout(30_000);
+test.use({ actionTimeout: 10_000 });
 const BASE = JSON.parse(readFileSync(join(process.cwd(), "e2e/fixtures/recommendation-v5.json"), "utf8")) as EvaluationPreview;
 const ROW = BASE.snapshot.inbound_assessments![0]!.revision, POLICY = ROW.policy_id;
 interface Options { role?: string; ambiguous?: boolean; stale?: boolean; existing?: boolean; blocked?: boolean; delayed?: boolean }
