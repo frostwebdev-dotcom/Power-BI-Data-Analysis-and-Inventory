@@ -20,6 +20,7 @@ from app.schemas.amazon_readiness import AmazonReadinessResponse
 from app.schemas.financial_context import FinancialSelection
 from app.schemas.purchasing_policies import PolicyRevisionResponse
 from app.schemas.recommendations import (
+    CommercialRecommendationSnapshot,
     EvaluationSnapshot,
     EvaluationStatus,
     FinancialRecommendationSnapshot,
@@ -37,6 +38,11 @@ from app.schemas.supplier_readiness import SupplierReadinessResponse
 from app.services import audit
 from app.services import purchasing_policies as policies
 from app.services.amazon_readiness import check_amazon_readiness
+from app.services.recommendation_commercials import (
+    allocate_supplier_stock,
+    assess_commercials,
+    current_supplier_price,
+)
 from app.services.recommendation_financials import financial_context
 from app.services.replenishment import calculate_replenishment
 from app.services.supplier_readiness import check_supplier_readiness
@@ -173,7 +179,14 @@ def evidence_digest(snapshot: EvaluationSnapshot) -> str:
     data.pop("evaluated_at")
     data["readiness"].pop("evaluated_at")
     if (
-        isinstance(snapshot, (SupplierRecommendationSnapshot, FinancialRecommendationSnapshot))
+        isinstance(
+            snapshot,
+            (
+                SupplierRecommendationSnapshot,
+                FinancialRecommendationSnapshot,
+                CommercialRecommendationSnapshot,
+            ),
+        )
         and snapshot.supplier is not None
     ):
         data["supplier"].pop("evaluated_at")
@@ -222,6 +235,56 @@ def _evaluate(
             review_reasons=sorted(review),
         )
         snapshot = FinancialRecommendationSnapshot.model_validate(data)
+    if approved.definition.commercial is not None:
+        assert isinstance(
+            snapshot, (SupplierRecommendationSnapshot, FinancialRecommendationSnapshot)
+        )
+        assert snapshot.supplier is not None
+        commercial_policy = approved.definition.commercial
+        allocation = allocate_supplier_stock(
+            snapshot.pools,
+            commercial_policy,
+            approved.definition.quantity,
+            snapshot.supplier,
+            tuple(sorted({*blocks, *(issue.code for issue in readiness.issues)})),
+        )
+        price = current_supplier_price(
+            session,
+            actor.organization_id,
+            approved.vendor_product_id,
+            snapshot.supplier,
+            commercial_policy,
+        )
+        commercial = assess_commercials(
+            commercial_policy,
+            allocation,
+            price,
+            snapshot.supplier,
+            approved.definition.vendor_base_units_per_order_unit,
+        )
+        data = snapshot.model_dump(mode="json")
+        review = set(data.get("review_reasons", [])) - {
+            "SUPPLIER_STOCK_SHARED_ACROSS_POOLS",
+            "SUPPLIER_MINIMUM_VALUE_NOT_EVALUATED",
+            "SUPPLIER_COMMERCIAL_TERMS_REQUIRE_REVIEW",
+        }
+        review.update(commercial.review_reasons)
+        status: EvaluationStatus = "NO_REORDER" if snapshot.status == "NO_REORDER" else "BLOCKED"
+        if (
+            snapshot.status != "BLOCKED"
+            and allocation.total_allocated_units
+            and commercial.status != "CONSTRAINT_NOT_MET"
+        ):
+            status = "REVIEW_REQUIRED"
+        data.update(
+            rule_version="replenishment-evaluation-v4",
+            allocation=allocation.model_dump(mode="json"),
+            commercial=commercial.model_dump(mode="json"),
+            financial=data.get("financial"),
+            review_reasons=sorted(review),
+            status=status,
+        )
+        snapshot = CommercialRecommendationSnapshot.model_validate(data)
     return RecommendationPreview(snapshot=snapshot, evidence_sha256=evidence_digest(snapshot))
 
 

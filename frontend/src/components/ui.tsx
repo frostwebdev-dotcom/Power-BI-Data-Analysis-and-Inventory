@@ -30,6 +30,9 @@ export function PageHeader({
 }
 
 const TONES: Record<string, string> = {
+  ASSESSED: "badge--ok", MET: "badge--ok", COMPLETE: "badge--ok",
+  PARTIAL: "badge--warn", UNCONFIRMED: "badge--warn",
+  CONSTRAINT_NOT_MET: "badge--danger", NOT_MET: "badge--danger", BLOCKED: "badge--danger",
   OK: "badge--ok",
   COMPLETED: "badge--ok",
   DUPLICATE: "badge--ok",

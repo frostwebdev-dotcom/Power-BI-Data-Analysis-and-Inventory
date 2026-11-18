@@ -32,6 +32,7 @@ from app.schemas.purchasing_policies import (
     PurchasingPolicyDefinition,
 )
 from app.services import audit
+from app.services.commercial_policy import commercial_policy_blocks
 from app.services.supplier_readiness import review_supplier_policy
 
 READ = (RoleCode.VIEWER, RoleCode.DATA_OPERATOR, RoleCode.PURCHASING_MANAGER)
@@ -347,6 +348,15 @@ def _review(
         context["supplier"] = supplier_context
         if action == "APPROVE" or revalidate_approval:
             blocked.update(supplier_blocks)
+            if definition.commercial is not None:
+                blocked.update(
+                    commercial_policy_blocks(
+                        definition.commercial,
+                        supplier_context,
+                        tuple(pool.pool_id for pool in definition.amazon.stock_pools),
+                        definition.quantity.order_multiple_units,
+                    )
+                )
     if action == "APPROVE" or revalidate_approval:
         if action == "APPROVE" and head.kind != "DRAFT":
             blocked.add("CURRENT_HEAD_NOT_DRAFT")

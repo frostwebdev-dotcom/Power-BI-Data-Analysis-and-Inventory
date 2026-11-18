@@ -140,3 +140,42 @@ Migration a61117202607 adds nullable report/binding foreign keys and scoped v3
 insert guards, preserves old history, and refuses downgrade over v3 rows.
 Snapshot and audit remain atomic; exact successful retries retain the original
 observation after report/binding changes. Purchasing eligibility remains false.
+
+## Commercial checks and shared stock (ADR 0035)
+
+Optional `commercial` policy settings require supplier checks, explicit USD,
+base units per reported price unit and its reference, and every configured pool
+in an explicit priority sequence with its reference. No priority is inferred
+from array order, demand, urgency or profit. Unknown minimum scopes/terms remain
+visible. Manager review checks the price column/currency, whole-unit compatibility
+and complete priority. Later edits to supplier profile or commercial constraints
+require policy review. Absent settings retain the legacy JSON and snapshot types.
+
+New v4 evaluations retain original independent pool ceilings and a separate
+combined allocation for this product/supplier SKU. Allocate in approved priority
+order from one finite stock count, floor to order multiples, withhold allocations
+below the approved per-pool minimum, and show unmet requests/remaining stock.
+The original quantity policy's minimum applies per pool; supplier-level minimums
+are checked separately. No combined allocation is inferred from unknown stock.
+Stock is not reserved or coordinated between evaluations/products/orders.
+
+Current goods value requires the same verified latest supplier row/snapshot,
+replayed raw discounted price, matching normalized/staged/snapshot prices and
+currency, whole price units and explicit case conversion. Source discount is
+applied once; no historical report cost substitutes for current cost. Null and
+invalid costs stay unknown; zero has a review warning. Decimal products remain
+exact even for large integer quantities, independent of ambient precision.
+
+Minimum quantity is checked only when confirmed as supplier order units for this
+SKU. Minimum value is checked only when confirmed against this SKU's goods line
+at reported price. Missing/null/scopeless requirements are unconfirmed; known
+zero is distinct. Unmet confirmed minimums block. The engine never adds quantity
+to reach a minimum or interprets mixed baskets/free-form terms. Goods value is
+not landed cost or a profit forecast. Unreported freight/tax/fees remain open.
+
+The staff editor/review and evaluation screens show these assumptions, explicit
+priority, allocation rows, current price evidence, minimum checks and optional
+historical report separately. All positive evaluations remain review-required or
+blocked, and purchasing eligibility/stock reservation remain false. Snapshot and
+audit stay atomic; exact retries preserve the original observation. Migration
+a61117202608 preserves v1–v3 and refuses to discard v4/commercial policy history.

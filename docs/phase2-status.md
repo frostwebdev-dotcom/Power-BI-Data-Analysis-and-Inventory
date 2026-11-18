@@ -233,6 +233,23 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Source-specific local and full CI evidence is recorded in draft PR #22.
   No client data/policy, live sync, purchase, merge or deployment is included.
 
+## Fourteenth deliverable: commercial checks and shared supplier stock
+
+- ADR 0035 adds explicit optional price units/currency, SKU minimum scopes, manual
+  terms references and pool-priority decisions to staff policy and manager review.
+  Unknowns start blank; absent settings preserve legacy definitions and history.
+- v4 snapshots preserve exact latest-source price evidence, combined finite-stock
+  allocation by approved priority, per-pool ceilings, remaining stock and scoped
+  minimum checks. Existing quantity minima remain per pool; supplier minimums
+  are assessed separately. No automatic top-up or budget optimization is added.
+- Unknown costs/stock/constraints stay unknown. Source discounts are replayed
+  once, and Decimal goods money remains separate from landed cost, forecast
+  profit and optional historical report context. No stock is reserved.
+- Staff editor/review and preview/history/detail support the new evidence.
+  Migration a61117202608 preserves older versions and refuses destructive
+  commercial-history downgrade. Full source-specific validation is recorded in
+  draft PR #22; no client policy/file, sync, purchase, merge or deployment is included.
+
 ## Remaining Milestone 2 work
 
 - Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
@@ -240,8 +257,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
-- Monetary/commercial constraints and shared supplier-stock allocation in saved
-  recommendations; operational acceptance of historical financial context.
+- Client confirmation and operational acceptance of SKU commercial scopes,
+  pool priority, price conversions, landed-cost inputs and historical financial context.
 - Tenant-scoped APIs and application dashboard/search/filtering.
 - Vendor comparisons, cost/profit displays and real-data acceptance walkthrough.
 

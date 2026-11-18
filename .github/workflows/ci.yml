@@ -254,6 +254,8 @@ jobs:
             frontend/test-results/**/policy-supplier-editor-mobile.png
             frontend/test-results/**/policy-supplier-review-desktop.png
             frontend/test-results/**/policy-supplier-review-mobile.png
+            frontend/test-results/**/policy-commercial-editor-desktop.png
+            frontend/test-results/**/policy-commercial-editor-mobile.png
           if-no-files-found: ignore
           retention-days: 3
 

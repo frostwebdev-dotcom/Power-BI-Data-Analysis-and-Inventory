@@ -80,7 +80,7 @@ export function PolicyEditor({ vendorId, productId, vendorProductId, initial, ex
         {ref("Coverage confirmation", form.coverageReference, value => field("coverageReference", value))}
       </div>
       <h3>Supplier ordering units</h3><div className="grid grid--2">
-        {numeric("minimum", "Minimum order (base units)", "0–1,000,000,000 base units. Enter zero only if there is no confirmed minimum.")}
+        {numeric("minimum", "Minimum order (base units)", "0–1,000,000,000 base units per pool. Supplier-level minimums are checked separately. Enter zero only if confirmed.")}
         {numeric("multiple", "Order multiple (base units)", "1–1,000,000,000 base units; must contain whole supplier order units.")}
         <Field label="Base units per supplier order unit" hint="Blank means unknown. Do not infer this from the product’s pack size."><input inputMode="numeric" pattern="[0-9]+" value={form.vendorFactor} onChange={e => field("vendorFactor", e.target.value)} /></Field>
         {ref("Supplier unit evidence", form.vendorReference, value => field("vendorReference", value))}
@@ -100,6 +100,25 @@ export function PolicyEditor({ vendorId, productId, vendorProductId, initial, ex
           {ref("Supplier availability evidence", form.supplierAvailabilityReference, value => field("supplierAvailabilityReference", value))}
         </div>
       </> : <p className="small muted">Supplier availability remains unverified without these settings.</p>}
+      <h3>Commercial checks and shared supplier stock</h3>
+      <label className="check"><input type="checkbox" checked={form.commercialEnabled} onChange={e => field("commercialEnabled", e.target.checked)} />Include commercial checks and shared-stock allocation</label>
+      {form.commercialEnabled ? <div className="policy-subcard" data-testid="commercial-policy-editor">
+        <Note>These checks cover this product and supplier SKU only. Source price units, minimum-order scopes and pool priorities require explicit confirmation. No stock is reserved.</Note>
+        <div className="grid grid--2">
+          <Field label="Commercial currency"><select required value={form.commercialCurrency} onChange={e => field("commercialCurrency", e.target.value)}><option value="">Choose currency</option><option value="USD">USD</option></select></Field>
+          <Field label="Base units per reported price unit" hint="Blank means unknown. This is separate from source stock units and supplier order units."><input inputMode="numeric" pattern="[0-9]+" value={form.priceFactor} onChange={e => field("priceFactor", e.target.value)} /></Field>
+          {ref("Supplier price-unit evidence", form.priceReference, value => field("priceReference", value))}
+          <Field label="Supplier minimum quantity scope"><select value={form.minimumQuantityScope} onChange={e => field("minimumQuantityScope", e.target.value)}><option value="">Unconfirmed</option><option value="THIS_SKU_SUPPLIER_ORDER_UNITS">This supplier SKU · supplier order units</option></select></Field>
+          <Field label="Supplier minimum value scope"><select value={form.minimumValueScope} onChange={e => field("minimumValueScope", e.target.value)}><option value="">Unconfirmed</option><option value="THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE">This supplier SKU · goods line at reported price</option></select></Field>
+          {ref("Minimum-order scope evidence", form.minimumReference, value => field("minimumReference", value))}
+          {ref("Purchasing terms review", form.termsReference, value => field("termsReference", value))}
+          {ref("Shared-stock allocation evidence", form.allocationReference, value => field("allocationReference", value))}
+        </div>
+        <h4>Explicit pool priority</h4><p className="small muted">Add every pool in the agreed order. Earlier pools use stock first. Renamed or removed pools must be selected again.</p>
+        <ol>{form.allocationPriority.map((id, index) => <li key={id}><strong>{id}</strong>{!form.pools.some(pool => pool.name.trim() === id) ? " · no longer configured" : ""}<div className="policy-actions"><button type="button" className="button" disabled={index === 0} onClick={() => { const order = [...form.allocationPriority]; [order[index-1], order[index]] = [order[index]!, order[index-1]!]; field("allocationPriority", order); }}>Move {id} earlier</button><button type="button" className="button" disabled={index === form.allocationPriority.length-1} onClick={() => { const order = [...form.allocationPriority]; [order[index], order[index+1]] = [order[index+1]!, order[index]!]; field("allocationPriority", order); }}>Move {id} later</button><button type="button" className="button" onClick={() => field("allocationPriority", form.allocationPriority.filter(pool => pool !== id))}>Remove {id} priority</button></div></li>)}</ol>
+        {form.allocationPriority.length === 0 ? <p className="muted">No pool priority confirmed.</p> : null}
+        <div className="policy-actions">{[...new Set(form.pools.map(pool => pool.name.trim()).filter(Boolean))].filter(id => !form.allocationPriority.includes(id)).map(id => <button type="button" className="button" key={id} onClick={() => field("allocationPriority", [...form.allocationPriority, id])}>Add {id} to priority</button>)}</div>
+      </div> : <p className="small muted">Commercial checks and combined supplier allocation are not configured.</p>}
       <h3>Freshness and inbound</h3><div className="grid grid--2">
         {numeric("ordersAge", "Maximum sales-data lag (seconds)", "1–2,678,400 seconds from the complete sales-window cutoff.")}
         {numeric("inventoryAge", "Maximum inventory age (seconds)", "1–2,678,400 seconds; applied to the run and each stock snapshot.")}

@@ -5,12 +5,15 @@ import type { Page } from "@playwright/test";
 import type { EvaluationPreview, SavedEvaluation } from "../src/lib/recommendations";
 
 const BASE = JSON.parse(readFileSync(join(process.cwd(), "e2e/fixtures/recommendation-v3.json"), "utf8")) as EvaluationPreview;
+const COMMERCIAL = JSON.parse(readFileSync(join(process.cwd(), "e2e/fixtures/recommendation-v4.json"), "utf8")) as EvaluationPreview;
 const POLICY = BASE.snapshot.policy_id, REPORT = BASE.snapshot.financial!.import_id, TIME = BASE.snapshot.evaluated_at;
 const ID = "99999999-9999-4999-8999-999999999999";
-interface Options { role?: string; stale?: boolean; ambiguous?: boolean; unsafe?: boolean; noApproval?: boolean; empty?: boolean }
+interface Options { commercial?: boolean; priceUnknown?: boolean; minimumUnmet?: boolean; role?: string; stale?: boolean; ambiguous?: boolean; unsafe?: boolean; noApproval?: boolean; empty?: boolean }
 async function mock(page: Page, options: Options = {}) {
   const calls: { path: string; body: Record<string, unknown> | null; params: URLSearchParams }[] = [];
-  const preview = structuredClone(BASE);
+  const preview = structuredClone(options.commercial ? COMMERCIAL : BASE);
+  if (options.priceUnknown) { preview.snapshot.commercial!.price.status = "UNAVAILABLE"; preview.snapshot.commercial!.price.reported_price = null; preview.snapshot.commercial!.goods_line_value = null; preview.snapshot.commercial!.status = "INCOMPLETE"; }
+  if (options.minimumUnmet) { preview.snapshot.commercial!.checks[1]!.status = "NOT_MET"; preview.snapshot.commercial!.status = "CONSTRAINT_NOT_MET"; preview.snapshot.status = "BLOCKED"; }
   if (options.unsafe) preview.snapshot.pools[0]!.result.suggested_units = 9007199254740992;
   let attempts = 0, saved: SavedEvaluation | null = options.empty ? null : { ...preview, id: ID, request_id: ID, policy_id: POLICY, product_id: preview.snapshot.product_id, status: preview.snapshot.status, snapshot_sha256: "c".repeat(64), recorded_by_user_id: "actor", recorded_at: TIME, reason: "Synthetic reviewed evaluation", historical: true, purchasing_eligible: false };
   const policy = { policy_id: POLICY, head: preview.snapshot.approved_policy, approved: options.noApproval ? null : preview.snapshot.approved_policy, identity: { catalog_item_number: "SYNTHETIC-REVIEW", product_name: "Synthetic evaluation product", vendor_name: "Synthetic supplier", vendor_sku: "SUPPLIER-6" } };
@@ -131,4 +134,39 @@ test("approval is required and saved history supports bounded status/policy filt
   await expect.poll(() => calls.filter(c => c.path === "/replenishment-recommendations").at(-1)?.params.get("status")).toBe("BLOCKED");
   await page.getByRole("button", { name: "Filter history", exact: true }).click();
   await expect.poll(() => calls.filter(c => c.path === "/replenishment-recommendations").at(-1)?.params.get("policy_id")).toBe(POLICY);
+});
+
+
+test("commercial review preserves combined allocation and current/historical cost separation on desktop/mobile", async ({ page }, info) => {
+  await mock(page, { commercial: true }); await page.setViewportSize({ width: 1280, height: 900 }); await begin(page);
+  const allocation = page.getByTestId("shared-stock-allocation"), commercial = page.getByTestId("commercial-assessment");
+  await expect(allocation).toContainText("Combined allocated base units");
+  await expect(allocation).toContainText("90"); await expect(allocation).toContainText("60"); await expect(allocation).toContainText("30");
+  await expect(commercial).toContainText("1,320.00"); await expect(commercial).toContainText("88.00");
+  await expect(page.getByTestId("financial-context")).toContainText("40.00");
+  await expect(page.getByTestId("evaluation-evidence")).toContainText("independent ceilings before shared allocation");
+  await acknowledge(page); await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: info.outputPath("recommendation-commercial-review-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("recommendation-commercial-review-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Record evaluation", exact: true }).click();
+  await expect(page.getByTestId("saved-evaluation")).toBeVisible(); await expect(page.getByTestId("commercial-assessment")).toContainText("1,320.00");
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: info.outputPath("recommendation-commercial-detail-mobile.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 }); await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: info.outputPath("recommendation-commercial-detail-desktop.png"), fullPage: true });
+});
+
+test("unknown current supplier price stays unknown alongside a historical report", async ({ page }) => {
+  await mock(page, { commercial: true, priceUnknown: true }); await begin(page);
+  const commercial = page.getByTestId("commercial-assessment");
+  await expect(commercial).toContainText("Unknown"); await expect(commercial).not.toContainText("1,320.00");
+  await expect(page.getByTestId("financial-context")).toContainText("40.00");
+});
+
+test("unmet minimum is shown as blocked without automatic quantity top-up", async ({ page }) => {
+  await mock(page, { commercial: true, minimumUnmet: true }); await begin(page);
+  await expect(page.getByTestId("commercial-assessment")).toContainText("not met");
+  await expect(page.getByTestId("evaluation-evidence")).toContainText("blocked");
+  await expect(page.getByTestId("shared-stock-allocation")).toContainText("90");
 });

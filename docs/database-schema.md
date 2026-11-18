@@ -909,3 +909,13 @@ organization/marketplace-scoped current report and exact current binding head,
 and matches snapshot profile/file/period identity. Legacy v1/v2 rows retain null
 references and unchanged JSON/digests. Downgrade refuses to discard v3 history.
 No tables, enums or triggers are added: counts remain 35 / 23 / 16.
+
+Migration a61117202608 extends replenishment_guard to accept v4 commercial /
+shared-stock snapshots. v4 must reference approved supplier/commercial settings,
+match the complete commercial policy, keep the one-product/SKU allocation scope,
+and retain false reservation/purchasing/landed-cost markers. Optional financial
+references retain the v3 scoped current-source/head checks. Legacy versions
+cannot discard approved commercial settings. Downgrade refuses to discard v4
+rows or commercial policy history. No columns/tables/enums/triggers are added.
+The existing staged unit_cost annotation is corrected to Decimal, matching its
+unchanged Numeric(14,4) database type. Counts remain 35 tables / 23 enums / 16 triggers.

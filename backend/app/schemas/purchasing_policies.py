@@ -16,6 +16,7 @@ from pydantic import (
 )
 
 from app.schemas.amazon_readiness import AmazonReadinessRequest, Factor, Reference
+from app.schemas.commercials import CommercialPolicy
 from app.schemas.replenishment import PreviewModel, ReplenishmentPolicy
 from app.schemas.supplier_readiness import SupplierPolicy
 
@@ -34,16 +35,21 @@ class PurchasingPolicyDefinition(PreviewModel):
     vendor_base_units_per_order_unit: Factor | None
     vendor_unit_confirmation_reference: Reference | None
     supplier: SupplierPolicy | None = None
+    commercial: CommercialPolicy | None = None
 
     @model_serializer(mode="wrap")
     def preserve_legacy_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         data: dict[str, Any] = handler(self)
         if self.supplier is None:
             data.pop("supplier", None)
+        if self.commercial is None:
+            data.pop("commercial", None)
         return data
 
     @model_validator(mode="after")
     def consistent_units_and_window(self) -> PurchasingPolicyDefinition:
+        if self.commercial is not None and self.supplier is None:
+            raise ValueError("Commercial checks require explicit supplier source settings.")
         if self.quantity.velocity_window_days != self.amazon.velocity_window_days:
             raise ValueError("Quantity and Amazon demand windows must agree.")
         if max(self.quantity.minimum_order_units, self.quantity.order_multiple_units) > 1000000000:

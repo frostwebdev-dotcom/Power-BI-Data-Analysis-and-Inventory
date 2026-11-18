@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, StrictBool, field_validator
 
 from app.schemas.amazon_readiness import AmazonReadinessResponse
+from app.schemas.commercials import CommercialAssessment, SharedStockAllocation
 from app.schemas.financial_context import FinancialSelection, HistoricalFinancialContext
 from app.schemas.purchasing_policies import Digest, PolicyRevisionResponse, ReasonedRequest
 from app.schemas.replenishment import (
@@ -108,8 +109,35 @@ class FinancialRecommendationSnapshot(PreviewModel):
     purchasing_eligible: Literal[False] = False
 
 
+class CommercialRecommendationSnapshot(PreviewModel):
+    rule_version: Literal["replenishment-evaluation-v4"] = "replenishment-evaluation-v4"
+    data_source: Literal["ingested_postgresql"] = "ingested_postgresql"
+    policy_id: uuid.UUID
+    product_id: uuid.UUID
+    vendor_product_id: uuid.UUID
+    marketplace_id: str
+    evaluated_at: datetime
+    approved_policy: PolicyRevisionResponse
+    current_identity_evidence: dict[str, Any]
+    policy_blocking_reasons: tuple[str, ...]
+    readiness: AmazonReadinessResponse
+    pools: tuple[PoolEvaluation, ...]
+    status: Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"]
+    supplier_inputs: Literal["VERIFIED", "BLOCKED"]
+    supplier: SupplierReadinessResponse
+    financial: HistoricalFinancialContext | None
+    profitability: Literal["NOT_INTEGRATED", "HISTORICAL_CONTEXT"]
+    allocation: SharedStockAllocation
+    commercial: CommercialAssessment
+    review_reasons: tuple[str, ...]
+    purchasing_eligible: Literal[False] = False
+
+
 EvaluationSnapshot = Annotated[
-    RecommendationSnapshot | SupplierRecommendationSnapshot | FinancialRecommendationSnapshot,
+    RecommendationSnapshot
+    | SupplierRecommendationSnapshot
+    | FinancialRecommendationSnapshot
+    | CommercialRecommendationSnapshot,
     Field(discriminator="rule_version"),
 ]
 EvaluationStatus = Literal["BLOCKED", "REVIEW_REQUIRED", "NO_REORDER"]

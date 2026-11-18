@@ -9,7 +9,15 @@ export const US_MARKETPLACE = "ATVPDKIKX0DER";
 export interface ListingUnits { listing_id: string; base_units_per_listing_unit: number | null; confirmation_reference: string | null }
 export interface StockPool { pool_id: string; channel: "FBA" | "FBM"; listing_ids: string[]; stock_source_listing_id: string; distinct_stock_reference: string | null }
 export interface SupplierPolicy { profile_id: string | null; inventory_max_age_seconds: number; freshness_basis: "FILE_RECEIPT_TIME"; freshness_confirmation_reference: string | null; base_units_per_source_quantity: number | null; quantity_confirmation_reference: string | null; availability_confirmation_reference: string | null }
+export interface CommercialPolicy {
+  currency: "USD"; base_units_per_price_unit: number | null; price_confirmation_reference: string | null;
+  minimum_quantity_scope: "THIS_SKU_SUPPLIER_ORDER_UNITS" | null;
+  minimum_value_scope: "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE" | null;
+  minimum_confirmation_reference: string | null; terms_review_reference: string | null;
+  pool_priority: string[]; allocation_reference: string | null;
+}
 export interface PolicyDefinition {
+  commercial?: CommercialPolicy;
   supplier?: SupplierPolicy;
   rule_version: "purchasing-policy-v1";
   quantity: { velocity_window_days: 7 | 14 | 30; target_days: number; lead_time_days: number; safety_days: number; minimum_order_units: number; order_multiple_units: number };
@@ -103,16 +111,19 @@ export function policyError(error: unknown): Error {
 export interface UnitForm { listing_id: string; factor: string; reference: string }
 export interface PoolForm { key: string; name: string; channel: string; members: string[]; source: string; reference: string }
 export interface PolicyForm {
+  commercialEnabled: boolean; commercialCurrency: string; priceFactor: string; priceReference: string;
+  minimumQuantityScope: string; minimumValueScope: string; minimumReference: string; termsReference: string;
+  allocationPriority: string[]; allocationReference: string;
   marketplace: string; window: string; target: string; lead: string; safety: string; minimum: string; multiple: string;
   ordersAge: string; inventoryAge: string; demand: string; coverage: string; coverageReference: string;
   supplierEnabled: boolean; supplierProfile: string; supplierAge: string; supplierBasis: string; supplierFreshnessReference: string; supplierFactor: string; supplierQuantityReference: string; supplierAvailabilityReference: string;
   inbound: string; vendorFactor: string; vendorReference: string; units: UnitForm[]; pools: PoolForm[];
 }
 export function policyForm(definition?: PolicyDefinition): PolicyForm {
-  if (!definition) return { supplierEnabled: false, supplierProfile: "", supplierAge: "", supplierBasis: "", supplierFreshnessReference: "", supplierFactor: "", supplierQuantityReference: "", supplierAvailabilityReference: "", marketplace: "", window: "", target: "", lead: "", safety: "", minimum: "", multiple: "", ordersAge: "", inventoryAge: "", demand: "", coverage: "", coverageReference: "", inbound: "", vendorFactor: "", vendorReference: "", units: [], pools: [] };
+  if (!definition) return { commercialEnabled: false, commercialCurrency: "", priceFactor: "", priceReference: "", minimumQuantityScope: "", minimumValueScope: "", minimumReference: "", termsReference: "", allocationPriority: [], allocationReference: "", supplierEnabled: false, supplierProfile: "", supplierAge: "", supplierBasis: "", supplierFreshnessReference: "", supplierFactor: "", supplierQuantityReference: "", supplierAvailabilityReference: "", marketplace: "", window: "", target: "", lead: "", safety: "", minimum: "", multiple: "", ordersAge: "", inventoryAge: "", demand: "", coverage: "", coverageReference: "", inbound: "", vendorFactor: "", vendorReference: "", units: [], pools: [] };
   const q = definition.quantity, a = definition.amazon;
-  const supplier = definition.supplier;
-  return { supplierEnabled: Boolean(supplier), supplierProfile: supplier?.profile_id ?? "", supplierAge: supplier ? String(supplier.inventory_max_age_seconds) : "", supplierBasis: supplier?.freshness_basis ?? "", supplierFreshnessReference: supplier?.freshness_confirmation_reference ?? "", supplierFactor: supplier?.base_units_per_source_quantity?.toString() ?? "", supplierQuantityReference: supplier?.quantity_confirmation_reference ?? "", supplierAvailabilityReference: supplier?.availability_confirmation_reference ?? "", marketplace: a.marketplace_id, window: String(q.velocity_window_days), target: String(q.target_days), lead: String(q.lead_time_days), safety: String(q.safety_days), minimum: String(q.minimum_order_units), multiple: String(q.order_multiple_units), ordersAge: String(a.orders_max_age_seconds), inventoryAge: String(a.inventory_max_age_seconds), demand: a.demand_basis, coverage: definition.coverage_policy, coverageReference: definition.coverage_confirmation_reference ?? "", inbound: definition.inbound_policy, vendorFactor: definition.vendor_base_units_per_order_unit?.toString() ?? "", vendorReference: definition.vendor_unit_confirmation_reference ?? "", units: a.listing_units.map(u => ({ listing_id: u.listing_id, factor: u.base_units_per_listing_unit?.toString() ?? "", reference: u.confirmation_reference ?? "" })), pools: a.stock_pools.map((p, i) => ({ key: String(i), name: p.pool_id, channel: p.channel, members: [...p.listing_ids], source: p.stock_source_listing_id, reference: p.distinct_stock_reference ?? "" })) };
+  const supplier = definition.supplier, commercial = definition.commercial;
+  return { commercialEnabled: Boolean(commercial), commercialCurrency: commercial?.currency ?? "", priceFactor: commercial?.base_units_per_price_unit?.toString() ?? "", priceReference: commercial?.price_confirmation_reference ?? "", minimumQuantityScope: commercial?.minimum_quantity_scope ?? "", minimumValueScope: commercial?.minimum_value_scope ?? "", minimumReference: commercial?.minimum_confirmation_reference ?? "", termsReference: commercial?.terms_review_reference ?? "", allocationPriority: [...(commercial?.pool_priority ?? [])], allocationReference: commercial?.allocation_reference ?? "", supplierEnabled: Boolean(supplier), supplierProfile: supplier?.profile_id ?? "", supplierAge: supplier ? String(supplier.inventory_max_age_seconds) : "", supplierBasis: supplier?.freshness_basis ?? "", supplierFreshnessReference: supplier?.freshness_confirmation_reference ?? "", supplierFactor: supplier?.base_units_per_source_quantity?.toString() ?? "", supplierQuantityReference: supplier?.quantity_confirmation_reference ?? "", supplierAvailabilityReference: supplier?.availability_confirmation_reference ?? "", marketplace: a.marketplace_id, window: String(q.velocity_window_days), target: String(q.target_days), lead: String(q.lead_time_days), safety: String(q.safety_days), minimum: String(q.minimum_order_units), multiple: String(q.order_multiple_units), ordersAge: String(a.orders_max_age_seconds), inventoryAge: String(a.inventory_max_age_seconds), demand: a.demand_basis, coverage: definition.coverage_policy, coverageReference: definition.coverage_confirmation_reference ?? "", inbound: definition.inbound_policy, vendorFactor: definition.vendor_base_units_per_order_unit?.toString() ?? "", vendorReference: definition.vendor_unit_confirmation_reference ?? "", units: a.listing_units.map(u => ({ listing_id: u.listing_id, factor: u.base_units_per_listing_unit?.toString() ?? "", reference: u.confirmation_reference ?? "" })), pools: a.stock_pools.map((p, i) => ({ key: String(i), name: p.pool_id, channel: p.channel, members: [...p.listing_ids], source: p.stock_source_listing_id, reference: p.distinct_stock_reference ?? "" })) };
 }
 function integer(value: string, label: string, min: number, max: number): number {
   if (!/^\d+$/.test(value.trim())) throw new Error(label + " must be an explicit whole number.");
@@ -141,7 +152,19 @@ export function buildPolicy(form: PolicyForm, productId: string, units: UnitForm
     return { pool_id: name, channel: pool.channel, listing_ids: [...pool.members], stock_source_listing_id: pool.source, distinct_stock_reference: reference(pool.reference, "Stock-pool evidence") };
   });
   if (form.supplierEnabled && form.supplierBasis !== "FILE_RECEIPT_TIME") throw new Error("Choose the supplier freshness basis explicitly.");
+  if (form.commercialEnabled && (!form.supplierEnabled || form.commercialCurrency !== "USD")) throw new Error("Commercial checks require supplier source checks and an explicit USD currency selection.");
+  if (form.minimumQuantityScope && form.minimumQuantityScope !== "THIS_SKU_SUPPLIER_ORDER_UNITS") throw new Error("Choose the supported supplier quantity scope or leave it unconfirmed.");
+  if (form.minimumValueScope && form.minimumValueScope !== "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE") throw new Error("Choose the supported supplier value scope or leave it unconfirmed.");
   return {
+    ...(form.commercialEnabled ? { commercial: {
+      currency: "USD" as const, base_units_per_price_unit: form.priceFactor.trim() ? integer(form.priceFactor, "Base units per reported price unit", 1, 1000000) : null,
+      price_confirmation_reference: reference(form.priceReference, "Supplier price-unit evidence"),
+      minimum_quantity_scope: form.minimumQuantityScope ? "THIS_SKU_SUPPLIER_ORDER_UNITS" as const : null,
+      minimum_value_scope: form.minimumValueScope ? "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE" as const : null,
+      minimum_confirmation_reference: reference(form.minimumReference, "Minimum-order scope evidence"),
+      terms_review_reference: reference(form.termsReference, "Purchasing terms review"),
+      pool_priority: [...form.allocationPriority], allocation_reference: reference(form.allocationReference, "Shared-stock allocation evidence"),
+    } } : {}),
     ...(form.supplierEnabled ? { supplier: { profile_id: form.supplierProfile || null, inventory_max_age_seconds: integer(form.supplierAge, "Maximum supplier file receipt age", 1, 2678400), freshness_basis: "FILE_RECEIPT_TIME" as const, freshness_confirmation_reference: reference(form.supplierFreshnessReference, "Supplier receipt-age confirmation"), base_units_per_source_quantity: form.supplierFactor.trim() ? integer(form.supplierFactor, "Source quantity conversion", 1, 1000000) : null, quantity_confirmation_reference: reference(form.supplierQuantityReference, "Source quantity evidence"), availability_confirmation_reference: reference(form.supplierAvailabilityReference, "Supplier availability evidence") } } : {}),
     rule_version: "purchasing-policy-v1",
     quantity: { velocity_window_days: window, target_days: integer(form.target, "Target coverage days", 1, 3650), lead_time_days: integer(form.lead, "Lead time days", 0, 3650), safety_days: integer(form.safety, "Safety days", 0, 3650), minimum_order_units: integer(form.minimum, "Minimum order", 0, 1000000000), order_multiple_units: integer(form.multiple, "Order multiple", 1, 1000000000) },
