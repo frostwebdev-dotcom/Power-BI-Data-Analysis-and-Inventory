@@ -148,7 +148,9 @@ the current approval plus independently checked Amazon source data. Optional
 [supplier checks](supplier-readiness.md) now bind a reviewed import layout,
 receipt-age proxy and explicit source quantity/availability contract. Later drafts
 do not replace approval; changed approval identity blocks evaluation. Supplier
-financial/commercial integration and the recommendation interface remain follow-ups.
+financial context, commercial checks/allocation and the recommendation interface
+are implemented on the draft branch; see the evaluation guide. Real operational
+evidence is still required under the [acceptance walkthrough](milestone-2-acceptance.md).
 Client values, inbound arrival evidence and three-real-SKU acceptance remain
 required. October financial year/timezone and coverage/cost review are still
 unconfirmed; Gmail remains paused.

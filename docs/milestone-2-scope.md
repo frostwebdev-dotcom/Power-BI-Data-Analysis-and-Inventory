@@ -126,3 +126,12 @@ cost basis, canonical SKU binding or persisted profitability import.
 
 Missing profitability is shown as unavailable; quantities are previews requiring
 review until these dependencies and the complete integration are accepted.
+
+## Real-data acceptance preparation
+
+Use the [walkthrough and coverage limits](milestone-2-acceptance.md),
+[client confirmation worksheet](milestone-2-client-confirmations.md) and
+[blank acceptance record](milestone-2-acceptance-record.md). These distinguish
+tested draft-branch behavior from unrun real cases. Historical dashboard counts
+do not complete the current urgency requirement; unsupported inbound evidence
+must remain blocked. No client sign-off is implied by preparing these documents.

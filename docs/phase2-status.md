@@ -268,10 +268,24 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   local, PostgreSQL/browser CI and desktop/mobile layout evidence are recorded
   in draft PR #22. No client data/policy, sync, purchase, merge or deployment is included.
 
+## Sixteenth deliverable: real-data acceptance preparation
+
+- Added a [walkthrough](milestone-2-acceptance.md), client confirmation worksheet
+  and blank three-SKU record. Existing client facts are preserved; unknown year,
+  report timezone, cost/advertising coverage and purchasing inputs remain explicit.
+- The scope matrix distinguishes implementation/CI evidence from unrun real-data
+  acceptance. It records the current adapter's positive-FBA/FBM inbound limits
+  and the distinction between saved dashboard counts and current urgency.
+- No real case, client policy, import, source sync, deployment or sign-off was
+  performed. The client message is prepared only and has not been sent. Completed
+  records and real financial evidence belong in an approved private project location.
+- Documentation checks and source-specific CI evidence are recorded in draft
+  PR #22. Application behavior and schema are unchanged by this preparation.
+
 ## Remaining Milestone 2 work
 
-- Confirmed Amazon pack/pool/freshness policy, inbound arrival evidence (including
-  merchant inbound), supplier-aware recommendations and three-real-SKU acceptance.
+- Confirmed Amazon pack/pool/freshness policy, supported inbound arrival handling
+  (including merchant inbound) and real supplier-aware recommendation acceptance.
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.
@@ -279,6 +293,8 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   pool priority, price conversions, landed-cost inputs and historical financial context.
 - Operational acceptance of the implemented scoped APIs, dashboard, search,
   vendor comparisons and cost/profit context with real data.
+- Current urgency/opportunity behavior beyond the explicitly historical saved
+  dashboard; do not mark that scope item accepted from historical counts.
 - Three-real-SKU acceptance walkthrough with client-approved source/policy inputs.
 
 No revised budget or delivery date is recorded as client-approved. Milestone 1

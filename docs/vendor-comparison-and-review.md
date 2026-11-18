@@ -68,3 +68,8 @@ commercial/source confirmations, landed costs, reporting context and the
 three-real-SKU acceptance walkthrough remain open. Source-specific local,
 PostgreSQL/browser CI and desktop/mobile layout evidence are recorded in draft
 PR #22. No client policy/file, live sync, purchase, merge or deployment is included.
+
+Use the [Milestone 2 acceptance walkthrough](milestone-2-acceptance.md) for the
+real three-SKU review. Its coverage matrix preserves the difference between this
+historical dashboard and current urgency, and records unsupported inbound cases
+without substituting confirmed zero.
