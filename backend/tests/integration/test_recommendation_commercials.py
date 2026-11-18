@@ -317,7 +317,7 @@ def test_two_real_fba_pools_cannot_spend_the_same_supplier_stock_twice(
         seller_sku=listing.seller_sku,
         asin=listing.asin,
         captured_at=ctx.stock.captured_at,
-        fnsku="SYNTHETIC-SECOND-FNSKU",
+        fnsku="SYNTH-FNSKU-2",
         condition="NewItem",
         fulfillable=10,
         raw={**ctx.stock.raw, "seller_sku": listing.seller_sku, "asin": listing.asin},
@@ -384,7 +384,11 @@ def test_actual_csv_pipeline_applies_discount_once_before_current_price_checks(
     source = setup(db_session)
     ctx = source.calculation
     source.profile.price_semantics = {**source.profile.price_semantics, "discount_percent": "12"}
-    approve(db_session, source)
+    approve(
+        db_session,
+        source,
+        price_confirmation_reference="Synthetic manager confirms discounted six-unit case price",
+    )
     storage = LocalStorageBackend(tmp_path / "synthetic-supplier")
     outcome = receive_upload(
         db_session,

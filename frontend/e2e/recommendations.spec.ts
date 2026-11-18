@@ -12,7 +12,13 @@ interface Options { commercial?: boolean; priceUnknown?: boolean; minimumUnmet?:
 async function mock(page: Page, options: Options = {}) {
   const calls: { path: string; body: Record<string, unknown> | null; params: URLSearchParams }[] = [];
   const preview = structuredClone(options.commercial ? COMMERCIAL : BASE);
-  if (options.priceUnknown) { preview.snapshot.commercial!.price.status = "UNAVAILABLE"; preview.snapshot.commercial!.price.reported_price = null; preview.snapshot.commercial!.goods_line_value = null; preview.snapshot.commercial!.status = "INCOMPLETE"; }
+  if (options.priceUnknown) {
+    const commercial = preview.snapshot.commercial!;
+    commercial.price = { ...commercial.price, status: "UNAVAILABLE", reported_price: null, currency: null, evidence: {}, issues: ["SUPPLIER_PRICE_MISSING_OR_INVALID"] };
+    commercial.goods_line_value = null; commercial.status = "INCOMPLETE";
+    commercial.checks[1] = { ...commercial.checks[1]!, observed: null, status: "UNCONFIRMED" };
+    commercial.review_reasons.push("SUPPLIER_PRICE_MISSING_OR_INVALID", "SUPPLIER_GOODS_LINE_VALUE_MINIMUM_UNCONFIRMED");
+  }
   if (options.minimumUnmet) { preview.snapshot.commercial!.checks[1]!.status = "NOT_MET"; preview.snapshot.commercial!.status = "CONSTRAINT_NOT_MET"; preview.snapshot.status = "BLOCKED"; }
   if (options.unsafe) preview.snapshot.pools[0]!.result.suggested_units = 9007199254740992;
   let attempts = 0, saved: SavedEvaluation | null = options.empty ? null : { ...preview, id: ID, request_id: ID, policy_id: POLICY, product_id: preview.snapshot.product_id, status: preview.snapshot.status, snapshot_sha256: "c".repeat(64), recorded_by_user_id: "actor", recorded_at: TIME, reason: "Synthetic reviewed evaluation", historical: true, purchasing_eligible: false };
