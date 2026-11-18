@@ -24,6 +24,7 @@ from app.models.financial import (
     FinancialImportRow,
 )
 from app.models.identity import Role, User, UserRole
+from app.models.inbound import InboundEvidenceRevision
 from app.models.ingestion import ImportFile, ImportJob, ImportJobRow
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
 from app.models.matching import ProductMappingException
@@ -48,6 +49,7 @@ __all__ = [
     "ImportFile",
     "ImportJob",
     "ImportJobRow",
+    "InboundEvidenceRevision",
     "MarketplaceListing",
     "NineyardSyncRun",
     "OosStatusHistory",

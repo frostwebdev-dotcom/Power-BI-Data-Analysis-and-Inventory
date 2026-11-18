@@ -17,6 +17,7 @@ from app.schemas.recommendations import (
     EvaluationSnapshot,
     EvaluationStatus,
     FinancialRecommendationSnapshot,
+    InboundRecommendationSnapshot,
 )
 from app.schemas.replenishment_review import SavedReviewItem, SavedReviewPage, SavedReviewSummary
 from app.services.purchasing_policies import READ
@@ -101,12 +102,21 @@ def review_page(
         financial = (
             snapshot.financial
             if isinstance(
-                snapshot, (FinancialRecommendationSnapshot, CommercialRecommendationSnapshot)
+                snapshot,
+                (
+                    FinancialRecommendationSnapshot,
+                    CommercialRecommendationSnapshot,
+                    InboundRecommendationSnapshot,
+                ),
             )
             else None
         )
         commercial = (
-            snapshot.commercial if isinstance(snapshot, CommercialRecommendationSnapshot) else None
+            snapshot.commercial
+            if isinstance(
+                snapshot, (CommercialRecommendationSnapshot, InboundRecommendationSnapshot)
+            )
+            else None
         )
         identity = PolicyIdentity(
             catalog_item_number=row.catalog_item_number,

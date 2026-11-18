@@ -298,10 +298,26 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
 - Client confirmations, supported positive-FBA/FBM inbound arrival handling and
   real-data acceptance remain open. No client file/policy, merge or deployment occurred.
 
+## Eighteenth deliverable: reviewed inbound arrival evidence
+
+- ADR 0038 and [the guide](reviewed-inbound.md) add an immutable manager
+  confirmation/revocation ledger tied to exact approval, inventory source and
+  pack/pool context. FBA totals reconcile to native evidence; FBM permits an
+  explicit complete manual position. Unknowns are never defaulted to zero.
+- Explicit revision choices compose with recommendations, current checks,
+  vendor comparisons and saved review. V5/V2 snapshots preserve native issues,
+  provenance and per-arrival qualification. Existing v1–v4 shapes/retries remain.
+- Exact ETA qualification credits arrivals strictly before stockout and within
+  coverage. Expiry, missed ETAs or changed sources require review again. Scoped
+  roles, atomic audits, exact retries and database guards protect the ledger.
+- Local and PostgreSQL/browser CI evidence is recorded in draft PR #22. Real
+  client evidence/policies, acceptance, merge and deployment remain outstanding.
+  No mailbox, provider sync, inventory mutation or purchase occurs.
+
 ## Remaining Milestone 2 work
 
-- Confirmed Amazon pack/pool/freshness policy, supported inbound arrival handling
-  (including merchant inbound) and real supplier-aware recommendation acceptance.
+- Client-approved Amazon pack/pool/freshness policy, operational acceptance of
+  reviewed FBA/FBM positions and real supplier-aware recommendations.
 - Client reporting year/timezone, coverage assertions and cost review before
   real-file operational acceptance.
   The database/API and staff interface are implemented on the draft branch.

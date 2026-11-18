@@ -4,10 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type { Page } from "./api";
 import type { FinancialControl, FinancialProfile } from "./financial-imports";
+import type { InboundSelection, InboundAssessment } from "./inbound";
 import type { CommercialPolicy, PolicyRevision } from "./purchasing-policies";
 
 export interface FinancialSelection { import_id: string; expected_binding_revision_id: string | null }
-export interface EvaluationRequest { expected_approved_revision_id: string; financial?: FinancialSelection }
+export interface EvaluationRequest { expected_approved_revision_id: string; financial?: FinancialSelection; inbound?: InboundSelection }
 export interface RecordRequest extends EvaluationRequest { request_id: string; expected_evidence_sha256: string; reason: string; acknowledge_review: true }
 export interface HistoricalFinancialRow {
   listing_id: string; seller_sku: string; source_row_id: string | null; source_row_number: number | null;
@@ -41,12 +42,13 @@ export interface CommercialAssessment {
   status: "ASSESSED" | "INCOMPLETE" | "CONSTRAINT_NOT_MET"; review_reasons: string[]; landed_cost_verified: false;
 }
 export interface EvaluationSnapshot {
-  rule_version: "replenishment-evaluation-v1" | "replenishment-evaluation-v2" | "replenishment-evaluation-v3" | "replenishment-evaluation-v4";
+  rule_version: "replenishment-evaluation-v1" | "replenishment-evaluation-v2" | "replenishment-evaluation-v3" | "replenishment-evaluation-v4" | "replenishment-evaluation-v5";
   policy_id: string; product_id: string; vendor_product_id: string; evaluated_at: string;
   approved_policy: PolicyRevision; status: string; policy_blocking_reasons: string[];
   readiness: { status: string; demand_window_start: string; demand_window_end: string; issues: { code: string }[]; [key: string]: unknown };
   supplier_inputs: string; supplier?: Record<string, unknown> | null; pools: PoolEvaluation[];
-  allocation?: SharedStockAllocation; commercial?: CommercialAssessment;
+  inbound_assessments?: InboundAssessment[];
+  allocation?: SharedStockAllocation | null; commercial?: CommercialAssessment | null;
   financial?: HistoricalFinancialContext | null; review_reasons?: string[]; profitability: string; purchasing_eligible: false;
 }
 export interface EvaluationPreview { snapshot: EvaluationSnapshot; evidence_sha256: string }

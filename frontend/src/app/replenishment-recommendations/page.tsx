@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { InboundChoices } from "@/components/InboundChoices";
 import { ProductPicker } from "@/components/ProductPicker";
 import { EmptyState, ErrorNote, KeyValues, Loading, Note, PageHeader, Pager, StatusBadge, fmtDate } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -53,12 +54,13 @@ function Detail({ id }: { id: string }) {
 }
 function NewEvaluation({ id }: { id: string }) {
   const query = usePolicy(id), [report, setReport] = useState(""), [reportPage, setReportPage] = useState(1), [locked, setLocked] = useState(false), [frozen, setFrozen] = useState<EvaluationRequest | null>(null), [session, setSession] = useState(0), [message, setMessage] = useState("");
+  const [inbound, setInbound] = useState<string[]>([]);
   const reports = useFinancialImports(reportPage, true);
   const selected = useQuery({ queryKey: ["financial-imports", report], enabled: Boolean(report), queryFn: () => api.get<FinancialImport>("/financial-imports/" + encodeURIComponent(report)) });
   const bindings = useQuery({ queryKey: ["financial-imports", report, "bindings", 1], enabled: Boolean(report), queryFn: () => api.get<Page<FinancialBindingRevision>>("/financial-imports/" + encodeURIComponent(report) + "/binding-revisions", { page: 1, page_size: 25 }) });
   const policy = query.data, approval = policy?.approved;
   const reportReady = !report || Boolean(selected.data && !selected.data.replaced_by_import_id && bindings.data && !selected.isFetching && !bindings.isFetching && !selected.error && !bindings.error);
-  const request: EvaluationRequest | null = approval && !query.isFetching && !query.error && reportReady ? { expected_approved_revision_id: approval.id, ...(report ? { financial: { import_id: report, expected_binding_revision_id: bindings.data?.items[0]?.id ?? null } } : {}) } : null;
+  const request: EvaluationRequest | null = approval && !query.isFetching && !query.error && reportReady ? { expected_approved_revision_id: approval.id, ...(inbound.length ? { inbound: { revision_ids: inbound } } : {}), ...(report ? { financial: { import_id: report, expected_binding_revision_id: bindings.data?.items[0]?.id ?? null } } : {}) } : null;
   const effectiveRequest = locked ? frozen : request;
   const contextKey = JSON.stringify([effectiveRequest, session]);
   return <><p><Link href="/replenishment-recommendations">All recommendations</Link></p><PageHeader title="Review recommendation" lede={policy ? policy.identity.catalog_item_number + " · " + policy.identity.product_name + " · " + policy.identity.vendor_sku : undefined} actions={<button className="button" disabled={locked} onClick={() => { setSession(s => s + 1); void query.refetch(); if (report) { void selected.refetch(); void bindings.refetch(); } }}>Reload evidence choices</button>} />
@@ -71,8 +73,9 @@ function NewEvaluation({ id }: { id: string }) {
       {reports.data?.total === 0 ? <p className="muted">No current financial reports are recorded.</p> : null}
       {reports.data ? <Pager page={reportPage} pageSize={reports.data.page_size} total={reports.data.total} onPage={page => { if (!locked) setReportPage(page); }} /> : null}
     </section>
+    {approval ? <InboundChoices key={approval.id + session} policy={id} approval={approval.id} value={inbound} onChange={setInbound} disabled={locked} /> : null}
     {message ? <Note tone="warn">{message}</Note> : null}
-    {policy && effectiveRequest ? <EvaluationPanel key={contextKey} policyId={id} request={effectiveRequest} onLock={value => { if (value) setFrozen(effectiveRequest); setLocked(value); }} onStale={() => { setMessage("Evidence changed. Preview again and review the latest inputs before recording."); setSession(s => s + 1); void query.refetch(); if (report) { void selected.refetch(); void bindings.refetch(); } }} /> : null}
+    {policy && effectiveRequest ? <EvaluationPanel key={contextKey} policyId={id} request={effectiveRequest} onLock={value => { if (value) setFrozen(effectiveRequest); setLocked(value); }} onStale={() => { setInbound([]); setMessage("Evidence changed. Preview again and review the latest inputs before recording."); setSession(s => s + 1); void query.refetch(); if (report) { void selected.refetch(); void bindings.refetch(); } }} /> : null}
   </>;
 }
 function EvaluationPanel({ policyId, request, onLock, onStale }: { policyId: string; request: EvaluationRequest; onLock: (value: boolean) => void; onStale: () => void }) {

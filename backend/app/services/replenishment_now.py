@@ -17,6 +17,7 @@ from app.schemas.purchasing_policies import PolicyIdentity
 from app.schemas.recommendations import (
     CommercialRecommendationSnapshot,
     EvaluationSnapshot,
+    InboundRecommendationSnapshot,
     RecommendationPreview,
     RecommendationPreviewRequest,
 )
@@ -119,7 +120,11 @@ def opportunity(
         return "UNAVAILABLE", ("CURRENT_SUPPLIER_STOCK_UNAVAILABLE",)
     if supplier.availability != "IN_STOCK" or supplier.stock_base_units is None:
         return "UNCONFIRMED", ("CURRENT_SUPPLIER_STOCK_UNCONFIRMED",)
-    if not isinstance(snapshot, CommercialRecommendationSnapshot):
+    if (
+        not isinstance(snapshot, (CommercialRecommendationSnapshot, InboundRecommendationSnapshot))
+        or snapshot.commercial is None
+        or snapshot.allocation is None
+    ):
         return "UNCONFIRMED", ("COMMERCIAL_CHECKS_NOT_CONFIGURED",)
     if snapshot.commercial.status == "CONSTRAINT_NOT_MET":
         return "UNAVAILABLE", ("SUPPLIER_MINIMUM_NOT_MET",)
@@ -220,7 +225,8 @@ def current_check(
                 actor,
                 root.id,
                 RecommendationPreviewRequest(
-                    expected_approved_revision_id=choice.expected_approved_revision_id
+                    expected_approved_revision_id=choice.expected_approved_revision_id,
+                    inbound=choice.inbound,
                 ),
                 now=lambda: at,
             )

@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type { Page } from "./api";
 import type { PolicyIdentity } from "./purchasing-policies";
+import type { InboundSelection } from "./inbound";
 import type { ComparisonChoice } from "./replenishment-review";
 import type { EvaluationSnapshot } from "./recommendations";
 
 export type Urgency = "URGENT" | "REPLENISH" | "NO_REORDER" | "UNKNOWN";
 export type Opportunity = "REVIEW_OPPORTUNITY" | "UNAVAILABLE" | "UNCONFIRMED" | "NO_SHORTFALL";
-export interface CurrentPolicyChoice { policy_id: string; product_id: string; approved_revision_id: string; approved_revision_number: number; identity: PolicyIdentity }
+export interface CurrentPolicyChoice { policy_id: string; product_id: string; approved_revision_id: string; approved_revision_number: number; identity: PolicyIdentity; inbound?: InboundSelection }
 export interface CurrentPoolSignal {
   pool_id: string; channel: string; urgency: Urgency; sales_base_units: number | null;
   on_hand_base_units: number | null; usable_inbound_base_units: number | null;

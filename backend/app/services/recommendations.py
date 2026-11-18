@@ -18,12 +18,14 @@ from app.repositories.purchasing_policies import PurchasingPolicyRepository
 from app.repositories.recommendations import RecommendationRepository
 from app.schemas.amazon_readiness import AmazonReadinessResponse
 from app.schemas.financial_context import FinancialSelection
+from app.schemas.inbound import InboundAssessment, InboundSelection
 from app.schemas.purchasing_policies import PolicyRevisionResponse
 from app.schemas.recommendations import (
     CommercialRecommendationSnapshot,
     EvaluationSnapshot,
     EvaluationStatus,
     FinancialRecommendationSnapshot,
+    InboundRecommendationSnapshot,
     PoolEvaluation,
     RecommendationPage,
     RecommendationPreview,
@@ -38,6 +40,7 @@ from app.schemas.supplier_readiness import SupplierReadinessResponse
 from app.services import audit
 from app.services import purchasing_policies as policies
 from app.services.amazon_readiness import check_amazon_readiness
+from app.services.inbound import apply_selected
 from app.services.recommendation_commercials import (
     allocate_supplier_stock,
     assess_commercials,
@@ -185,6 +188,7 @@ def evidence_digest(snapshot: EvaluationSnapshot) -> str:
                 SupplierRecommendationSnapshot,
                 FinancialRecommendationSnapshot,
                 CommercialRecommendationSnapshot,
+                InboundRecommendationSnapshot,
             ),
         )
         and snapshot.supplier is not None
@@ -205,11 +209,23 @@ def _evaluate(
     approval: uuid.UUID,
     now: Callable[[], datetime],
     financial: FinancialSelection | None = None,
+    inbound: InboundSelection | None = None,
 ) -> RecommendationPreview:
     approved, identity, blocks = policies.calculation_policy(session, actor, identifier, approval)
     readiness = check_amazon_readiness(
         session, actor, approved.definition.amazon, now=now, lock_sources=True
     )
+    reviewed_readiness = None
+    inbound_assessments: tuple[InboundAssessment, ...] = ()
+    if inbound is not None:
+        reviewed_readiness, inbound_assessments = apply_selected(
+            session, actor, approved, readiness, inbound, readiness.evaluated_at, identity, blocks
+        )
+        effective = reviewed_readiness.model_dump(
+            mode="json", exclude={"original_inbound_issues", "inbound_revision_ids"}
+        )
+        effective.update(rule_version="amazon-readiness-v1", confirmations_persisted=False)
+        readiness = AmazonReadinessResponse.model_validate(effective)
     snapshot: EvaluationSnapshot = build_snapshot(approved, identity, blocks, readiness)
     if approved.definition.supplier is not None:
         supplier = check_supplier_readiness(
@@ -285,6 +301,19 @@ def _evaluate(
             status=status,
         )
         snapshot = CommercialRecommendationSnapshot.model_validate(data)
+    if reviewed_readiness is not None:
+        data = snapshot.model_dump(mode="json")
+        data.update(
+            rule_version="replenishment-evaluation-v5",
+            readiness=reviewed_readiness.model_dump(mode="json"),
+            inbound_assessments=[a.model_dump(mode="json") for a in inbound_assessments],
+            supplier=data.get("supplier"),
+            financial=data.get("financial"),
+            allocation=data.get("allocation"),
+            commercial=data.get("commercial"),
+            review_reasons=data.get("review_reasons", []),
+        )
+        snapshot = InboundRecommendationSnapshot.model_validate(data)
     return RecommendationPreview(snapshot=snapshot, evidence_sha256=evidence_digest(snapshot))
 
 
@@ -298,7 +327,13 @@ def preview_recommendation(
 ) -> RecommendationPreview:
     actor.require_roles(READ)
     return _evaluate(
-        session, actor, identifier, payload.expected_approved_revision_id, now, payload.financial
+        session,
+        actor,
+        identifier,
+        payload.expected_approved_revision_id,
+        now,
+        payload.financial,
+        payload.inbound,
     )
 
 
@@ -334,6 +369,8 @@ def record_recommendation(
     request_data = payload.model_dump(mode="json")
     if payload.financial is None:
         request_data.pop("financial")  # Preserve exact legacy retry fingerprints.
+    if payload.inbound is None:
+        request_data.pop("inbound")  # Preserve legacy successful retry fingerprints.
     fingerprint = policies.digest({"policy_id": str(identifier), **request_data})
     with transaction(session):
         repository.lock_request(payload.request_id)
@@ -353,6 +390,7 @@ def record_recommendation(
             payload.expected_approved_revision_id,
             now,
             payload.financial,
+            payload.inbound,
         )
         if preview.evidence_sha256 != payload.expected_evidence_sha256:
             raise RecommendationConflict(details={"code": "RECOMMENDATION_EVIDENCE_CHANGED"})

@@ -926,3 +926,17 @@ records are selected per organization/policy before queue filters; current
 approval uses the latest non-draft decision. The immutable JSON remains the
 historical source for quantities and reasons. No table, index, enum, trigger or
 migration is added; counts remain 35 / 23 / 16 and head a61117202608.
+
+
+### `a61118202601` — reviewed inbound evidence (Milestone 2 draft)
+
+`inbound_evidence_revisions` stores UUID-scoped immutable confirmation/revocation
+chains per policy pool. Rows bind an approval, inventory run/snapshot, source
+listing/context digest, complete position, referenced arrivals, observation/expiry,
+actor/reason and request fingerprint. Unique request/head/revision indexes and
+insert/no-mutation triggers enforce ownership, reconciliation and history.
+Downgrade refuses ledger or v5 evaluation data. The evaluation guard validates
+current references and exact arrival credits. See ADR 0038.
+
+Draft head: 35 business tables plus `alembic_version`, 23 enums, 18 triggers.
+No source inventory, receipt or purchase is written by this ledger.

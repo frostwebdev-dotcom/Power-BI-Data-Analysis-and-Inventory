@@ -84,3 +84,9 @@ continue to block readiness. Client reporting/purchasing confirmations and the
 real three-SKU [acceptance walkthrough](milestone-2-acceptance.md) remain pending.
 No client file/policy, Gmail setup, source sync, purchase, merge or deployment is
 performed by this increment. Full validation is recorded against source in PR #22.
+
+
+Reviewed inbound revisions can be explicitly selected for each chosen policy.
+No revision is selected automatically. Source context, expiry and ETAs are
+revalidated and shown as v5 evidence. See [the inbound guide](reviewed-inbound.md).
+Changed/expired/missed positions yield unknown inputs pending reconciliation.

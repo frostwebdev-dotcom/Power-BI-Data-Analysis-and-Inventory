@@ -1,0 +1,287 @@
+{
+  "snapshot": {
+    "rule_version": "replenishment-evaluation-v5",
+    "data_source": "ingested_postgresql",
+    "policy_id": "5a9a7361-73da-43b3-a844-407a8fdfce72",
+    "product_id": "11111111-1111-4111-8111-111111111111",
+    "vendor_product_id": "bd7f8868-dbc5-4eaf-98e5-5bc10c218d4b",
+    "marketplace_id": "ATVPDKIKX0DER",
+    "evaluated_at": "2026-11-17T20:00:00Z",
+    "approved_policy": {
+      "id": "e20ffe04-6f77-404c-9299-399ebcc8a792",
+      "policy_id": "5a9a7361-73da-43b3-a844-407a8fdfce72",
+      "product_id": "11111111-1111-4111-8111-111111111111",
+      "vendor_product_id": "bd7f8868-dbc5-4eaf-98e5-5bc10c218d4b",
+      "marketplace_id": "ATVPDKIKX0DER",
+      "revision_number": 2,
+      "supersedes_revision_id": "dac36706-42f5-4ab6-b1b9-e1140aadf88f",
+      "reviewed_revision_id": "4f841d7a-d9ff-4135-a93f-78d5fb9653fd",
+      "kind": "APPROVED",
+      "definition": {
+        "rule_version": "purchasing-policy-v1",
+        "quantity": {
+          "velocity_window_days": 14,
+          "target_days": 14,
+          "lead_time_days": 2,
+          "safety_days": 1,
+          "minimum_order_units": 0,
+          "order_multiple_units": 6
+        },
+        "amazon": {
+          "product_id": "11111111-1111-4111-8111-111111111111",
+          "marketplace_id": "ATVPDKIKX0DER",
+          "sales_channel": "Amazon.com",
+          "demand_basis": "FULLY_SHIPPED_ONLY",
+          "velocity_window_days": 14,
+          "orders_max_age_seconds": 7200,
+          "inventory_max_age_seconds": 3600,
+          "listing_units": [
+            {
+              "listing_id": "22222222-2222-4222-8222-222222222222",
+              "base_units_per_listing_unit": 6,
+              "confirmation_reference": "Synthetic confirmed six pack"
+            }
+          ],
+          "stock_pools": [
+            {
+              "pool_id": "fba",
+              "channel": "FBA",
+              "listing_ids": [
+                "22222222-2222-4222-8222-222222222222"
+              ],
+              "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+              "distinct_stock_reference": "Synthetic independent FBA stock"
+            }
+          ]
+        },
+        "coverage_policy": "target-plus-lead-plus-safety",
+        "coverage_confirmation_reference": "Synthetic manager says target excludes lead and safety",
+        "inbound_policy": "CONFIRMED_BEFORE_STOCKOUT_ONLY",
+        "vendor_base_units_per_order_unit": 6,
+        "vendor_unit_confirmation_reference": "Synthetic vendor sells six base units per order"
+      },
+      "definition_sha256": "a4a30f49d57d00dccab24ee955881a6d6d973264f18d1602d35a913f91254d67",
+      "review_context": {},
+      "context_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "recorded_by_user_id": "add5f6ce-829f-405a-9eb9-470f6a9a44cc",
+      "recorded_at": "2026-11-17T19:59:00Z",
+      "reason": "Synthetic reviewed policy",
+      "purchasing_eligible": false
+    },
+    "current_identity_evidence": {},
+    "policy_blocking_reasons": [],
+    "readiness": {
+      "rule_version": "amazon-readiness-v2",
+      "data_source": "ingested_postgresql",
+      "scope": "known_product_listings",
+      "readiness_only": true,
+      "purchasing_eligible": false,
+      "confirmations_persisted": true,
+      "request": {
+        "product_id": "11111111-1111-4111-8111-111111111111",
+        "marketplace_id": "ATVPDKIKX0DER",
+        "sales_channel": "Amazon.com",
+        "demand_basis": "FULLY_SHIPPED_ONLY",
+        "velocity_window_days": 14,
+        "orders_max_age_seconds": 7200,
+        "inventory_max_age_seconds": 3600,
+        "listing_units": [
+          {
+            "listing_id": "22222222-2222-4222-8222-222222222222",
+            "base_units_per_listing_unit": 6,
+            "confirmation_reference": "Synthetic confirmed six pack"
+          }
+        ],
+        "stock_pools": [
+          {
+            "pool_id": "fba",
+            "channel": "FBA",
+            "listing_ids": [
+              "22222222-2222-4222-8222-222222222222"
+            ],
+            "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+            "distinct_stock_reference": "Synthetic independent FBA stock"
+          }
+        ]
+      },
+      "evaluated_at": "2026-11-17T20:00:00Z",
+      "demand_window_start": "2026-11-03T20:00:00Z",
+      "demand_window_end": "2026-11-17T20:00:00Z",
+      "status": "DATA_AVAILABLE",
+      "issues": [],
+      "latest_orders_run": null,
+      "order_coverage_run_ids": [
+        "8b1b1129-b39f-44cc-ad20-3012b32e1081"
+      ],
+      "inventory_run": null,
+      "listings": [
+        {
+          "listing_id": "22222222-2222-4222-8222-222222222222",
+          "seller_sku": "0000123",
+          "asin": "B000000001",
+          "mapping_status": "APPROVED",
+          "mapping_method": "MANUAL_APPROVAL",
+          "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+          "approved_at": "2026-11-17T00:00:00Z",
+          "base_units_per_listing_unit": 1,
+          "snapshot_id": null,
+          "captured_at": null,
+          "fba_sold_listing_units": null,
+          "fbm_sold_listing_units": null
+        }
+      ],
+      "pools": [
+        {
+          "pool_id": "fba",
+          "channel": "FBA",
+          "listing_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+          "sales_base_units": 280,
+          "on_hand_base_units": 50,
+          "observed_inbound_base_units": 10,
+          "usable_inbound_base_units": 4,
+          "quantity_input_ready": true
+        }
+      ],
+      "inbound_revision_ids": [
+        "88888888-8888-4888-8888-888888888888"
+      ],
+      "original_inbound_issues": [
+        {
+          "code": "INBOUND_ARRIVAL_UNCONFIRMED",
+          "pool_id": "fba",
+          "listing_id": null
+        }
+      ]
+    },
+    "pools": [
+      {
+        "pool_id": "fba",
+        "inputs": {
+          "policy": {
+            "velocity_window_days": 14,
+            "target_days": 14,
+            "lead_time_days": 2,
+            "safety_days": 1,
+            "minimum_order_units": 0,
+            "order_multiple_units": 6
+          },
+          "sales_units": 280,
+          "on_hand_units": 50,
+          "inbound_units": 4,
+          "vendor_availability": "UNKNOWN",
+          "vendor_stock_units": null,
+          "mapping_approved": true,
+          "units_confirmed": true,
+          "source_data_current": true
+        },
+        "result": {
+          "rule_version": "quantity-preview-v1",
+          "status": "BLOCKED",
+          "reasons": [
+            "VENDOR_AVAILABILITY_UNKNOWN"
+          ],
+          "calculation": {
+            "coverage_policy": "target-plus-lead-plus-safety",
+            "coverage_days": 17,
+            "daily_sales": "20",
+            "days_of_supply": "2.5",
+            "required_units": 340,
+            "net_shortfall_units": 290,
+            "order_quantity_before_vendor_cap": 294
+          },
+          "suggested_units": null
+        },
+        "blocking_reasons": [
+          "SUPPLIER_INPUTS_NOT_VERIFIED",
+          "VENDOR_AVAILABILITY_UNKNOWN"
+        ]
+      }
+    ],
+    "status": "BLOCKED",
+    "supplier_inputs": "NOT_INTEGRATED",
+    "supplier": null,
+    "financial": null,
+    "review_reasons": [
+      "HISTORICAL_FINANCIAL_CONTEXT_ONLY"
+    ],
+    "profitability": "NOT_INTEGRATED",
+    "purchasing_eligible": false,
+    "inbound_assessments": [
+      {
+        "revision": {
+          "id": "88888888-8888-4888-8888-888888888888",
+          "policy_id": "5a9a7361-73da-43b3-a844-407a8fdfce72",
+          "approved_revision_id": "e20ffe04-6f77-404c-9299-399ebcc8a792",
+          "pool_id": "fba",
+          "channel": "FBA",
+          "revision_number": 1,
+          "previous_revision_id": null,
+          "kind": "CONFIRMED",
+          "inventory_run_id": "77777777-7777-4777-8777-777777777777",
+          "stock_snapshot_id": "66666666-6666-4666-8666-666666666666",
+          "source_context": {
+            "policy_id": "5a9a7361-73da-43b3-a844-407a8fdfce72",
+            "approved_revision_id": "e20ffe04-6f77-404c-9299-399ebcc8a792",
+            "source_capture_at": "2026-11-17T20:00:00Z",
+            "on_hand_base_units": 50,
+            "observed_inbound_base_units": 10,
+            "inventory_run": {
+              "id": "77777777-7777-4777-8777-777777777777"
+            }
+          },
+          "source_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "position": {
+            "declared_total_base_units": 10,
+            "arrivals": [
+              {
+                "reference": "SYNTHETIC-EARLY",
+                "base_units": 4,
+                "expected_at": "2026-11-18T20:00:00Z"
+              },
+              {
+                "reference": "SYNTHETIC-LATE",
+                "base_units": 6,
+                "expected_at": "2026-11-25T20:00:00Z"
+              }
+            ],
+            "observed_at": "2026-11-17T20:00:00Z",
+            "expires_at": "2026-11-19T20:00:00Z",
+            "evidence_reference": "Synthetic complete shipment manifest",
+            "complete_position_confirmed": true,
+            "no_on_hand_overlap_confirmed": true
+          },
+          "recorded_by_user_id": "synthetic-manager",
+          "recorded_at": "2026-11-17T20:00:00Z",
+          "reason": "Synthetic complete position reviewed",
+          "purchasing_eligible": false
+        },
+        "basis": "MANAGER_REVIEWED_COMPLETE_POSITION",
+        "status": "APPLIED",
+        "source_capture_at": "2026-11-17T20:00:00Z",
+        "usable_base_units": 4,
+        "arrivals": [
+          {
+            "reference": "SYNTHETIC-EARLY",
+            "base_units": 4,
+            "expected_at": "2026-11-18T20:00:00Z",
+            "disposition": "BEFORE_STOCKOUT",
+            "credited_units": 4
+          },
+          {
+            "reference": "SYNTHETIC-LATE",
+            "base_units": 6,
+            "expected_at": "2026-11-25T20:00:00Z",
+            "disposition": "AFTER_STOCKOUT",
+            "credited_units": 0
+          }
+        ],
+        "reasons": [],
+        "purchasing_eligible": false
+      }
+    ]
+  },
+  "evidence_sha256": "546fad18af7602bc5aa9d5f2854682c13dc2de82b27a0fdd74f6a86a2a671c09"
+}

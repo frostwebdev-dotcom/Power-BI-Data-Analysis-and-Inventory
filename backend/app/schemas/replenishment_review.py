@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 
 from app.schemas.financial_context import FinancialSelection
+from app.schemas.inbound import InboundSelection
 from app.schemas.purchasing_policies import PolicyIdentity
 from app.schemas.recommendations import EvaluationSnapshot, EvaluationStatus
 from app.schemas.replenishment import PreviewModel
@@ -18,6 +19,7 @@ from app.schemas.replenishment import PreviewModel
 class ComparisonChoice(PreviewModel):
     policy_id: uuid.UUID
     expected_approved_revision_id: uuid.UUID
+    inbound: InboundSelection | None = None
 
 
 class VendorComparisonRequest(PreviewModel):

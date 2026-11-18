@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { InboundChoices } from "@/components/InboundChoices";
 import { ProductPicker } from "@/components/ProductPicker";
 import { EmptyState, ErrorNote, KeyValues, Loading, Note, PageHeader, Pager, StatusBadge, fmtDate } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -21,7 +22,7 @@ function Current() {
     setMessage("");
     setSelected(old => old.some(c => c.policy_id === choice.policy_id) ? old.filter(c => c.policy_id !== choice.policy_id) : old.length < 10 ? [...old, choice] : old);
   }
-  const request: CurrentRequest = { choices: selected.map(c => ({ policy_id: c.policy_id, expected_approved_revision_id: c.approved_revision_id })) };
+  const request: CurrentRequest = { choices: selected.map(c => ({ policy_id: c.policy_id, expected_approved_revision_id: c.approved_revision_id, ...(c.inbound ? { inbound: c.inbound } : {}) })) };
   return <div className="recommendations current-replenishment"><PageHeader title="Current replenishment check" lede="Recheck selected approved policies for stockout urgency and supplier review opportunities." actions={<Link className="button" href="/replenishment-review">Saved evaluations</Link>} />
     <Note>Checks use ingested source data at the displayed time. They do not refresh Amazon or supplier feeds. Unknown inputs stay unknown; stock is not reserved and purchasing eligibility remains disabled.</Note>
     <section className="card"><h2>Choose approved policies · {selected.length} / 10</h2><p className="muted">Choose up to ten policies explicitly. Selections are retained across search pages and filters; results cover only that selected set.</p>
@@ -34,6 +35,7 @@ function Current() {
       {choices.data ? <Pager page={page} pageSize={choices.data.page_size} total={choices.data.total} onPage={setPage} /> : null}
       {selected.length ? <ul aria-label="Policies selected for current check">{selected.map(c => <li key={c.policy_id}>{c.identity.catalog_item_number} · {c.identity.vendor_name} · {c.identity.vendor_sku} · version {c.approved_revision_number}{" "}<button className="button button--ghost" aria-label={"Remove " + c.identity.catalog_item_number + " " + c.identity.vendor_name} onClick={() => setSelected(old => old.filter(item => item.policy_id !== c.policy_id))}>Remove</button></li>)}</ul> : <p>No policies selected.</p>}
     </section>
+    {selected.map(c => <div key={c.policy_id}><h3>{c.identity.catalog_item_number} · {c.identity.vendor_name}</h3><InboundChoices policy={c.policy_id} approval={c.approved_revision_id} value={c.inbound?.revision_ids ?? []} onChange={ids => setSelected(old => old.map(item => item.policy_id === c.policy_id ? { ...item, inbound: ids.length ? { revision_ids: ids } : undefined } : item))} /></div>)}
     {message ? <Note tone="warn">{message}</Note> : null}
     {selected.length ? <CheckRunner key={JSON.stringify(request)} request={request} onStale={() => { setSelected([]); setMessage("A selected approval changed. Reload choices and select the policies again."); void choices.refetch(); }} /> : null}
   </div>;

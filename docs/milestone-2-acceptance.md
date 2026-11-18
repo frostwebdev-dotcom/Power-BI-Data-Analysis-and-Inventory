@@ -134,3 +134,9 @@ passing behavior check while operational readiness remains BLOCKED. Keep those
 two decisions separate. No blank result means pass. Every failure/gap has an
 owner, next action and retest reference. Only the client can provide final
 operational sign-off after the agreed scope and real-data checks are satisfied.
+
+
+Reviewed arrival evidence is implemented on the draft branch (ADR 0038). Earlier
+native-adapter limitations above still describe the unselected path. Explicit
+manager-reviewed complete FBA/FBM positions follow [the inbound guide](reviewed-inbound.md).
+Real-data acceptance remains open; FBM is manual evidence, not a native feed.

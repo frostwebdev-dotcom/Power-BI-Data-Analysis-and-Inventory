@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type { Page } from "./api";
 import type { FinancialSelection, EvaluationSnapshot } from "./recommendations";
+import type { InboundSelection } from "./inbound";
 import type { PolicyIdentity } from "./purchasing-policies";
 
-export interface ComparisonChoice { policy_id: string; expected_approved_revision_id: string }
+export interface ComparisonChoice { policy_id: string; expected_approved_revision_id: string; inbound?: InboundSelection }
 export interface ComparisonRequest { product_id: string; choices: ComparisonChoice[]; financial?: FinancialSelection; order_by: "VENDOR_NAME" | "BASE_PRICE" }
 export interface ComparedOffer {
   identity: PolicyIdentity; policy_id: string; approved_revision_id: string; price_comparable: boolean;

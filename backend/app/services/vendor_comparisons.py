@@ -16,6 +16,7 @@ from app.repositories.purchasing_policies import PurchasingPolicyRepository
 from app.schemas.purchasing_policies import PolicyIdentity
 from app.schemas.recommendations import (
     CommercialRecommendationSnapshot,
+    InboundRecommendationSnapshot,
     RecommendationPreview,
     RecommendationPreviewRequest,
 )
@@ -30,7 +31,10 @@ from app.services.recommendations import preview_recommendation
 
 
 def normalized_price(snapshot: object) -> BasePrice | None:
-    if not isinstance(snapshot, CommercialRecommendationSnapshot):
+    if (
+        not isinstance(snapshot, (CommercialRecommendationSnapshot, InboundRecommendationSnapshot))
+        or snapshot.commercial is None
+    ):
         return None
     units = snapshot.approved_policy.definition.amazon.listing_units
     if not units or any(unit.base_units_per_listing_unit is None for unit in units):
@@ -40,6 +44,7 @@ def normalized_price(snapshot: object) -> BasePrice | None:
     tax = price.evidence.get("price_semantics", {}).get("includes_tax")
     if (
         snapshot.policy_blocking_reasons
+        or snapshot.supplier is None
         or snapshot.supplier.status != "VERIFIED"
         or price.status != "VERIFIED"
         or price.currency != "USD"
@@ -206,6 +211,7 @@ def preview_vendor_comparison(
                 root.id,
                 RecommendationPreviewRequest(
                     expected_approved_revision_id=choice.expected_approved_revision_id,
+                    inbound=choice.inbound,
                     financial=payload.financial,
                 ),
                 now=lambda: at,

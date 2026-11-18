@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { InboundChoices } from "@/components/InboundChoices";
 import { ProductPicker } from "@/components/ProductPicker";
 import { EmptyState, ErrorNote, KeyValues, Loading, Note, PageHeader, Pager, StatusBadge, fmtDate } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -32,7 +33,7 @@ function ProductComparison({ product }: { product: string }) {
   const selected = useQuery({ queryKey: ["financial-imports", report], enabled: Boolean(report), queryFn: () => api.get<FinancialImport>("/financial-imports/" + encodeURIComponent(report)) });
   const bindings = useQuery({ queryKey: ["financial-imports", report, "bindings", 1], enabled: Boolean(report), queryFn: () => api.get<Page<FinancialBindingRevision>>("/financial-imports/" + encodeURIComponent(report) + "/binding-revisions", { page: 1, page_size: 25 }) });
   const financialReady = !report || Boolean(selected.data && !selected.data.replaced_by_import_id && bindings.data && !selected.isFetching && !bindings.isFetching && !selected.error && !bindings.error);
-  const request: ComparisonRequest | null = choices.length && financialReady ? { product_id: product, choices: choices.map(({ policy_id, expected_approved_revision_id }) => ({ policy_id, expected_approved_revision_id })), order_by: order, ...(report ? { financial: { import_id: report, expected_binding_revision_id: bindings.data?.items[0]?.id ?? null } } : {}) } : null;
+  const request: ComparisonRequest | null = choices.length && financialReady ? { product_id: product, choices: choices.map(({ policy_id, expected_approved_revision_id, inbound }) => ({ policy_id, expected_approved_revision_id, ...(inbound ? { inbound } : {}) })), order_by: order, ...(report ? { financial: { import_id: report, expected_binding_revision_id: bindings.data?.items[0]?.id ?? null } } : {}) } : null;
   function toggle(policy: PolicySummary) {
     setMessage("");
     if (choices.some(c => c.policy_id === policy.policy_id)) setChoices(old => old.filter(c => c.policy_id !== policy.policy_id));
@@ -46,6 +47,7 @@ function ProductComparison({ product }: { product: string }) {
     {policies.data ? <Pager page={page} pageSize={policies.data.page_size} total={policies.data.total} onPage={setPage} /> : null}
     {choices.length ? <ul aria-label="Selected offer approvals">{choices.map(c => <li key={c.policy_id}>{c.label} <button className="button button--ghost" onClick={() => setChoices(old => old.filter(choice => choice.policy_id !== c.policy_id))}>Remove {c.label}</button></li>)}</ul> : <p className="muted">No offers selected.</p>}
   </section>
+  {choices.map(c => <div key={c.policy_id}><h3>{c.label}</h3><InboundChoices policy={c.policy_id} approval={c.expected_approved_revision_id} value={c.inbound?.revision_ids ?? []} onChange={ids => setChoices(old => old.map(item => item.policy_id === c.policy_id ? { ...item, inbound: ids.length ? { revision_ids: ids } : undefined } : item))} /></div>)}
   <details className="card"><summary>Optional historical financial report</summary><Note>Historical figures are shown separately from current supplier prices. No report is selected automatically.</Note>
     <button className="button" onClick={() => setReport("")}>Use no financial report</button><p data-testid="comparison-selected-report">{report ? selected.data?.original_filename ?? "Loading selected report…" : "No financial report selected"}</p>
     <ErrorNote error={reports.error ?? selected.error ?? bindings.error} />
