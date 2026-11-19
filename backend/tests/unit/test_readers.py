@@ -90,6 +90,39 @@ class TestStreaming:
         assert rows[0].cells == ["1", "2"]
         assert stream.notes == ["row 2 had 3 cells for 2 headers; extra ignored"]
 
+    @pytest.mark.parametrize("file_format", [FileFormat.CSV, FileFormat.XLSX])
+    def test_only_mapped_trailing_header_positions_are_retained(
+        self, file_format: FileFormat
+    ) -> None:
+        content = (
+            b"UPC,Qty,,\n012345678905,2,CLEAN,padding\n"
+            if file_format is FileFormat.CSV
+            else xlsx([["UPC", "Qty", None, None], ["012345678905", 2, "CLEAN", "padding"]])
+        )
+        stream = open_rows(
+            content, ReadOptions(file_format=file_format, mapped_column_indexes=(0, 1, 2, 99))
+        )
+        assert stream.headers == ["UPC", "Qty", ""]
+        rows = list(stream.rows)
+        assert rows[0].cells == ["012345678905", "2", "CLEAN"]
+        assert stream.notes == ["row 2 had 4 cells for 3 headers; extra ignored"]
+
+    def test_a_mapping_beyond_the_header_does_not_invent_a_column(self) -> None:
+        stream = open_rows(
+            b"UPC,Qty,,\n012345678905,2\n",
+            ReadOptions(file_format=FileFormat.CSV, mapped_column_indexes=(99,)),
+        )
+        assert stream.headers == ["UPC", "Qty"]
+        rows = list(stream.rows)
+        assert rows[0].cells == ["012345678905", "2"]
+
+    def test_positional_mappings_do_not_make_an_empty_header_valid(self) -> None:
+        with pytest.raises(UnreadableFile, match="header row is empty"):
+            open_rows(
+                b",,\n012345678905,2,CLEAN\n",
+                ReadOptions(file_format=FileFormat.CSV, mapped_column_indexes=(2,)),
+            )
+
     @pytest.mark.parametrize("footer", [b"\x1a", b"\x1a\r\n", b" \x1a \r\n\r\n"])
     def test_a_terminal_dos_eof_record_is_not_inventory(self, footer: bytes) -> None:
         content = b"UPC,Qty\r\n012345678905,2\r\n\r\n" + footer
