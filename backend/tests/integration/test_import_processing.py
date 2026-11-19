@@ -273,6 +273,47 @@ def audit_actions(db_session: Session, job_id: str) -> list[str]:
 # --- the brief's layouts -------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("old_pin", [False, True])
+def test_unnamed_condition_is_preserved_in_staged_offers_or_refused_by_old_pin(
+    client: TestClient, operator: Headers, vendor: Vendor, old_pin: bool
+) -> None:
+    headers = ["UPC", "Description", "Quantity", "Cost", ""]
+    content = xlsx_bytes(
+        headers,
+        [
+            ["012345678905", "Synthetic item", 7, "3.50", "CLEAN"],
+            ["012345678905", "Synthetic item", 11, "2.50", "TESTER"],
+        ],
+    )
+    profile = profile_a(
+        file_format="XLSX",
+        column_map={
+            "columns": [
+                {"target": target, "source": index}
+                for index, target in enumerate(
+                    ["upc", "description", "quantity_available", "unit_cost", "offer_variant"]
+                )
+            ]
+        },
+        normalization_rules={"vendor_sku_from_offer": True, "review_shared_upc_offers": True},
+        header_signature=compute_header_signature(headers[:-1] if old_pin else headers),
+    )
+    job = import_file(client, operator, vendor, profile, "conditions.xlsx", content)
+    staged = rows(client, operator, job["id"])
+    if old_pin:
+        assert job["status"] == "FAILED"
+        assert job["error_details"]["code"] == "HEADER_SIGNATURE_MISMATCH"
+        assert job["error_details"]["observed_headers"] == headers
+        assert staged == []
+    else:
+        assert job["status"] != "FAILED"
+        assert [row["raw_data"]["offer_variant"] for row in staged] == ["CLEAN", "TESTER"]
+        assert len({row["vendor_sku"] for row in staged}) == 2
+        assert all(row["normalized_data"]["upc_shared_by_offers"] for row in staged)
+    retained = client.get(f"{IMPORTS}/{job['id']}/raw", headers=operator)
+    assert retained.status_code == 200 and retained.content == content
+
+
 class TestBriefLayouts:
     def test_profile_discount_is_persisted_without_rewriting_the_source(
         self, client: TestClient, operator: Headers, vendor: Vendor

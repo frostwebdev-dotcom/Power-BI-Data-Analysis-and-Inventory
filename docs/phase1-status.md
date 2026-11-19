@@ -1,3 +1,12 @@
+> 2026-11-18 Gmail setup follow-up: the owner supplied an original vendor email,
+> allowing one exact HAZ attachment rule to be saved **paused**. No mailbox poll
+> or client inventory import ran. Inspection found the mapped condition column
+> has an unnamed trailing header that the deployed reader discards. An isolated
+> Milestone 1 correction preserves explicitly mapped source positions without
+> inventing columns; existing pins require review/versioning where their width
+> changes. Local checks and a private structural probe pass; CI and deployment
+> remain pending. See [unnamed vendor columns](unnamed-vendor-columns.md).
+>
 > 2026-11-09 public Google Branding release: PR #21 is merged at
 > `799472f47a3b7a9151397b5447f513f32c0b9048`. CI #134 and the manual
 > [staging release #136](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42667199712)

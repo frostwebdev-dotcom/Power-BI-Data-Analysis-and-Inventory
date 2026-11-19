@@ -24,7 +24,7 @@ from app.core.logging import get_logger
 from app.core.security import Principal
 from app.db.transaction import transaction
 from app.imports.mapping import MappingPreview, map_table
-from app.imports.profile_rules import ProfileRules
+from app.imports.profile_rules import ColumnMap, ColumnTarget, ProfileRules
 from app.imports.readers import ReadOptions, UnreadableFile, read_table
 from app.models.vendor import VendorImportProfile
 from app.repositories.import_profiles import ImportProfileRepository
@@ -266,6 +266,7 @@ def preview_file(
 
 
 def read_options_of(profile: VendorImportProfile | ImportProfileCreate) -> ReadOptions:
+    columns = ColumnMap.model_validate(profile.column_map).columns
     return ReadOptions(
         file_format=profile.file_format,
         encoding=profile.encoding,
@@ -275,6 +276,11 @@ def read_options_of(profile: VendorImportProfile | ImportProfileCreate) -> ReadO
         skip_rows=profile.skip_rows,
         sheet_name=profile.sheet_name,
         sheet_index=profile.sheet_index,
+        mapped_column_indexes=tuple(
+            column.source
+            for column in columns
+            if isinstance(column.source, int) and column.target is not ColumnTarget.IGNORE
+        ),
     )
 
 
