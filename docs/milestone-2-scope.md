@@ -1,7 +1,9 @@
 # Milestone 2 — Amazon analytics, profitability and replenishment
 
 Owner instruction, 11 November 2026: "I would like to start Milestone 2 first."
-Gmail vendor-intake setup remains paused and Milestone 1 acceptance remains open.
+Milestone 1 acceptance remains open. Its Gmail connection and HAZ v2 source were
+enabled on 18 November after successful live authorization and mailbox checks;
+the first new matching email/file acceptance is still pending.
 This authorizes development, not a revised client price, deadline or acceptance.
 The September proposal contains superseded dates and proposed prices; none is
 silently carried into a new commitment here.

@@ -128,8 +128,10 @@ Do not manufacture a second supplier or a new mapping for comparison coverage.
 This sequence describes later authorized data actions; preparation has performed
 none of them on client systems. Readiness/preview/comparison do not fetch new
 source data. If baseline/import work is needed, record its target/scope separately
-and follow the existing ingestion runbooks. Gmail remains paused; an authorized
-manual original-file import does not prove unattended email intake works.
+and follow the existing ingestion runbooks. Gmail polling and the HAZ v2 rule
+are active in Milestone 1 staging, with successful manual and scheduled mailbox
+checks; a new matching email/file and replay acceptance are still pending. An
+authorized manual original-file import does not prove unattended file intake.
 
 ## Independent reconciliation
 

@@ -73,6 +73,8 @@ class ReadOptions:
     sheet_index: int | None = None
     strict_row_width: bool = False
     strict_csv_quoting: bool = False
+    #: Explicit positional mappings may address an unnamed trailing column.
+    mapped_column_indexes: tuple[int, ...] = ()
 
 
 @dataclass(slots=True)
@@ -365,7 +367,11 @@ def _assemble(
         raise UnreadableFile("the file has no header row where the profile expects one")
     header_number, header_cells = header
     headers = [str(cell).strip() for cell in header_cells]
-    while headers and headers[-1] == "":
+    mapped_width = max(
+        (index + 1 for index in options.mapped_column_indexes if 0 <= index < len(headers)),
+        default=0,
+    )
+    while len(headers) > mapped_width and headers[-1] == "":
         headers.pop()  # trailing empty header cells are padding, not columns
     if not any(headers):
         raise UnreadableFile("the header row is empty")

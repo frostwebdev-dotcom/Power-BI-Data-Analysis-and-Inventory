@@ -1,7 +1,10 @@
 # Milestone 2 status
 
-Started 11 November 2026 by explicit owner instruction. Work is isolated from
-the deployed Milestone 1 system. Gmail authorization/source setup remains paused.
+Started 11 November 2026 by explicit owner instruction. Milestone 2 work remains
+isolated from the deployed Milestone 1 system. In Milestone 1 staging, Gmail and
+the HAZ v2 source were enabled on 18 November after successful authorization;
+both a manual and a later scheduled mailbox check succeeded. The first new
+matching HAZ delivery and real-file acceptance remain pending.
 
 ## First deliverable
 
@@ -345,6 +348,23 @@ the deployed Milestone 1 system. Gmail authorization/source setup remains paused
   manager policy approvals and client sign-off remain pending; nothing deployed.
 - Documentation/context update only; application code, schema and test cases
   are unchanged. Full validation for the source is recorded in draft PR #22.
+
+## Compatibility with the deployed HAZ reader — 18 November 2026
+
+- Integrated main at `6a33741c9d6a99c7673d1cf16e6dc5e7af840d41` into the
+  Milestone 2 draft. The shared `ReadOptions` conflict retains both opt-in strict
+  financial width/quoting checks and the explicit unnamed-column mappings used
+  by the deployed HAZ fix. Neither option changes the other's defaults.
+- Retained the upstream CSV/XLSX condition, old-header-pin and persisted-import
+  regressions. Added four combined-option cases: a valid mapped unnamed cell,
+  short and wide records, and malformed CSV quoting. Invalid strict records
+  remain refused instead of being padded, truncated or accepted.
+- All 1,494 local unit tests, Ruff formatting/lint and strict mypy (292 source
+  files) passed. Full PostgreSQL/browser/Compose validation for the combined
+  source is recorded in draft PR #22; local unit evidence does not replace it.
+- Updated current Gmail/HAZ status in the handoff documents while preserving
+  historical entries. This branch update does not deploy Milestone 2, upload a
+  client report, approve a policy or establish real-email/file acceptance.
 
 ## Remaining Milestone 2 work
 

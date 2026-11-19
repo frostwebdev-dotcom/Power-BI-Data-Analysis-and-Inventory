@@ -1,3 +1,23 @@
+> 2026-11-18 Gmail activation: PR #23 is merged at
+> `6a33741c9d6a99c7673d1cf16e6dc5e7af840d41`; release #229 passed with
+> 1,436 backend and 23 browser tests. The corrected HAZ profile is v2. After
+> the owner renewed local Google consent and saved the token privately, live
+> authorization passed. API revision `ca-prms-api-staging--0000014` is Running
+> with polling enabled every five minutes. The manual mailbox check completed
+> at 21:12:25 EST and a later scheduled check completed at 21:16:03 EST.
+> HAZ is active and waiting for its first matching new file. No new email
+> delivery/import, duplicate replay or Milestone 1 acceptance is claimed.
+> Earlier entries below describe prior states.
+>
+> 2026-11-18 Gmail setup follow-up: the owner supplied an original vendor email,
+> allowing one exact HAZ attachment rule to be saved **paused**. No mailbox poll
+> or client inventory import ran. Inspection found the mapped condition column
+> has an unnamed trailing header that the deployed reader discards. An isolated
+> Milestone 1 correction preserves explicitly mapped source positions without
+> inventing columns; existing pins require review/versioning where their width
+> changes. Local checks and a private structural probe pass; CI and deployment
+> remain pending. See [unnamed vendor columns](unnamed-vendor-columns.md).
+>
 > 2026-11-09 public Google Branding release: PR #21 is merged at
 > `799472f47a3b7a9151397b5447f513f32c0b9048`. CI #134 and the manual
 > [staging release #136](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/42667199712)
