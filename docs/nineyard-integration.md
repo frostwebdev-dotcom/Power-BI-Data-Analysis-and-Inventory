@@ -313,6 +313,14 @@ with the exact `Account` + `Sku` filters and joined through
 skipped without discarding valid IDs from the batch. Repeated pages are
 rejected rather than looping.
 
+Read-only verification on 2026-11-20 observed a second successful mapping
+response format: `{totalRecords, totalPages, mappings: [...]}`. Both this
+envelope and the previously observed bare array are supported. The envelope's
+pagination metadata must be valid and complete; partial batches are re-read as
+smaller ID sets. An incomplete single-ID response or an unrecognized error
+object fails the run, preserving the last successful catalog. Probes with one,
+three, and 100 requested IDs returned complete one-page mapping envelopes.
+
 `run_nineyard_sync` materializes the complete remote snapshot before opening
 the catalog-write transaction. It upserts products by the documented `itemId`,
 normalizes valid vendor UPCs, stores content-addressed raw payloads, and creates
