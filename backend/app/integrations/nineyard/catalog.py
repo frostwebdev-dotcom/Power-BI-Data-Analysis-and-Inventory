@@ -194,15 +194,43 @@ class NineyardCatalogReader:
         except NineyardNotFoundError:
             if len(account_sku_ids) == 1:
                 return []
-            middle = len(account_sku_ids) // 2
-            return self._mapping_records(account_sku_ids[:middle]) + self._mapping_records(
-                account_sku_ids[middle:]
-            )
-        if not isinstance(body, list):
+            return self._split_mapping_records(account_sku_ids)
+        if isinstance(body, list):
+            return body
+        records = body.get("mappings") if isinstance(body, Mapping) else None
+        if not isinstance(records, list):
             raise NineyardProtocolError(
-                f"{SKU_MAPPINGS_PATH} returned {type(body).__name__}, expected array"
+                f"{SKU_MAPPINGS_PATH} returned {type(body).__name__}, "
+                "expected array or mappings envelope"
             )
-        return body
+
+        # Live responses also wrap the array in pagination metadata. Validate
+        # that the batch is complete before allowing the snapshot to be applied.
+        total_records = body.get("totalRecords")
+        total_pages = body.get("totalPages")
+        if (
+            type(total_records) is not int
+            or type(total_pages) is not int
+            or total_records < len(records)
+            or total_pages < 0
+            or (total_pages == 0 and total_records != 0)
+        ):
+            raise NineyardProtocolError(f"{SKU_MAPPINGS_PATH} has invalid mappings pagination")
+        if total_records != len(records) or total_pages > 1:
+            # Avoid guessing unsupported paging parameters. Re-query smaller
+            # ID sets until each response is complete, just as for stale IDs.
+            if len(account_sku_ids) == 1:
+                raise NineyardProtocolError(
+                    f"{SKU_MAPPINGS_PATH} returned incomplete mappings for one account SKU"
+                )
+            return self._split_mapping_records(account_sku_ids)
+        return records
+
+    def _split_mapping_records(self, account_sku_ids: list[int]) -> list[Any]:
+        middle = len(account_sku_ids) // 2
+        return self._mapping_records(account_sku_ids[:middle]) + self._mapping_records(
+            account_sku_ids[middle:]
+        )
 
     def _json(self, path: str, *, params: dict[str, Any]) -> Any:
         response = self._client.get(path, params=params)

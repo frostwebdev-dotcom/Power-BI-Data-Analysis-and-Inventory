@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx2 as httpx
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.integrations.nineyard.catalog import SkuProductMapping
+from app.integrations.nineyard.catalog import NineyardCatalogReader, SkuProductMapping
+from app.integrations.nineyard.errors import NineyardProtocolError
 from app.models import NineyardSyncRun, Product, ProductIdentifier, SourceRecord
 from app.models.enums import IdentifierType, ListingStatus, SourceSystem, SyncStatus, TriggerType
 from app.services.nineyard_sync import amazon_listing_skus, run_nineyard_sync
@@ -185,3 +187,57 @@ def test_network_failure_marks_run_failed_and_preserves_catalog(db_session: Sess
     ).scalar_one()
     assert run.status is SyncStatus.FAILED
     assert run.error_message == "Nineyard disconnected"
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_mapping_envelope_is_applied_only_when_complete(db_session: Session, valid: bool) -> None:
+    organization = factories.make_organization(db_session)
+    existing = factories.make_product(
+        db_session, organization, nineyard_item_id="101", catalog_item_number="101", name="Keep me"
+    )
+
+    class EnvelopeClient:
+        def get(self, path: str, *, params: dict[str, Any] | None = None) -> httpx.Response:
+            if path == "/api/Items":
+                body: Any = {"totalPages": 1, "itemMapping": [ITEM]}
+            elif path == "/api/Skus":
+                body = [{"accountSkuId": 11, "sku": "AMZ-SKU-101"}]
+            else:
+                body = {
+                    "totalRecords": 1 if valid else 2,
+                    "totalPages": 1 if valid else 2,
+                    "mappings": [{"accountSkuId": 11, "mappedItems": [{"itemId": 101}]}],
+                }
+            return httpx.Response(200, json=body)
+
+    source = NineyardCatalogReader(
+        EnvelopeClient(),
+        sku_account="Seller Account",
+        seller_skus=["AMZ-SKU-101"],
+        sku_request_interval_seconds=0,
+    )
+    if valid:
+        run_nineyard_sync(db_session, organization.id, source, TriggerType.MANUAL, now=lambda: NOW)
+    else:
+        with pytest.raises(NineyardProtocolError, match="incomplete mappings"):
+            run_nineyard_sync(
+                db_session, organization.id, source, TriggerType.MANUAL, now=lambda: NOW
+            )
+
+    db_session.expire_all()
+    assert existing.name == ("Blue Widget" if valid else "Keep me")
+    run = db_session.scalars(
+        select(NineyardSyncRun).where(NineyardSyncRun.organization_id == organization.id)
+    ).one()
+    assert run.status is (SyncStatus.COMPLETED if valid else SyncStatus.FAILED)
+    raw = db_session.scalars(
+        select(SourceRecord).where(SourceRecord.organization_id == organization.id)
+    ).all()
+    assert len(raw) == (1 if valid else 0)
+    sku_identifiers = db_session.scalars(
+        select(ProductIdentifier).where(
+            ProductIdentifier.organization_id == organization.id,
+            ProductIdentifier.identifier_type == IdentifierType.AMAZON_SKU,
+        )
+    ).all()
+    assert len(sku_identifiers) == (1 if valid else 0)
