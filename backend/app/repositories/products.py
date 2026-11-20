@@ -11,7 +11,8 @@ from sqlalchemy import Select, func, or_, select
 
 from app.matching.normalize import normalize_gtin
 from app.models.catalog import MarketplaceListing, Product, ProductIdentifier
-from app.models.enums import IdentifierType
+from app.models.enums import IdentifierType, Marketplace
+from app.models.vendor import Vendor, VendorProduct
 from app.repositories.scoping import ScopedRepository
 
 T = TypeVar("T")
@@ -103,12 +104,51 @@ class ProductRepository(ScopedRepository):
         )
 
     def listings(
-        self, product_id: uuid.UUID, page: int, page_size: int
+        self,
+        product_id: uuid.UUID,
+        page: int,
+        page_size: int,
+        *,
+        marketplace: Marketplace | None = None,
+        marketplace_id: str | None = None,
     ) -> ProductPage[MarketplaceListing]:
+        query = self.select(MarketplaceListing).where(MarketplaceListing.product_id == product_id)
+        if marketplace is not None:
+            query = query.where(MarketplaceListing.marketplace == marketplace)
+        if marketplace_id is not None:
+            query = query.where(MarketplaceListing.marketplace_id == marketplace_id)
         return self._page(
-            self.select(MarketplaceListing)
-            .where(MarketplaceListing.product_id == product_id)
-            .order_by(MarketplaceListing.seller_sku, MarketplaceListing.id),
+            query.order_by(MarketplaceListing.seller_sku, MarketplaceListing.id),
             page,
             page_size,
         )
+
+    def vendor_products(
+        self, product_id: uuid.UUID, page: int, page_size: int, q: str | None
+    ) -> tuple[Sequence[tuple[VendorProduct, Vendor]], int]:
+        query = (
+            self.select(VendorProduct, VendorProduct, Vendor)
+            .join(
+                Vendor,
+                (Vendor.id == VendorProduct.vendor_id)
+                & (Vendor.organization_id == self.scope.organization_id),
+            )
+            .where(VendorProduct.product_id == product_id)
+        )
+        if q and (term := q.strip()):
+            escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            query = query.where(
+                or_(
+                    Vendor.name.ilike(pattern, escape="\\"),
+                    Vendor.code.ilike(pattern, escape="\\"),
+                    VendorProduct.vendor_sku.ilike(pattern, escape="\\"),
+                )
+            )
+        total = self.session.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = self.session.execute(
+            query.order_by(Vendor.name, VendorProduct.vendor_sku, VendorProduct.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [(row[0], row[1]) for row in rows], total

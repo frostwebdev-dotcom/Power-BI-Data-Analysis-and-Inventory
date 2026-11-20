@@ -17,11 +17,20 @@ from __future__ import annotations
 from app.models.amazon import AmazonInventorySnapshot, AmazonOrderLine, AmazonSyncRun
 from app.models.audit import AuditEvent
 from app.models.catalog import MarketplaceListing, Product, ProductIdentifier
+from app.models.financial import (
+    FinancialBindingRevision,
+    FinancialBindingRow,
+    FinancialImport,
+    FinancialImportRow,
+)
 from app.models.identity import Role, User, UserRole
+from app.models.inbound import InboundEvidenceRevision
 from app.models.ingestion import ImportFile, ImportJob, ImportJobRow
 from app.models.inventory import AvailabilityEvent, VendorInventorySnapshot
 from app.models.matching import ProductMappingException
 from app.models.organization import Organization
+from app.models.purchasing import PurchasingPolicyRevision
+from app.models.recommendations import ReplenishmentRecommendation
 from app.models.sync import NineyardSyncRun, SourceRecord
 from app.models.vendor import Vendor, VendorContact, VendorImportProfile, VendorProduct
 from app.models.vendor_mail import VendorMailDelivery, VendorMailSource, VendorMailState
@@ -33,9 +42,14 @@ __all__ = [
     "AmazonSyncRun",
     "AuditEvent",
     "AvailabilityEvent",
+    "FinancialBindingRevision",
+    "FinancialBindingRow",
+    "FinancialImport",
+    "FinancialImportRow",
     "ImportFile",
     "ImportJob",
     "ImportJobRow",
+    "InboundEvidenceRevision",
     "MarketplaceListing",
     "NineyardSyncRun",
     "OosStatusHistory",
@@ -44,6 +58,8 @@ __all__ = [
     "Product",
     "ProductIdentifier",
     "ProductMappingException",
+    "PurchasingPolicyRevision",
+    "ReplenishmentRecommendation",
     "Role",
     "SourceRecord",
     "User",

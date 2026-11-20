@@ -833,3 +833,110 @@ tests, all passing against PostgreSQL 16. Current totals are in
 
 They run against a real PostgreSQL and skip with an explanation when none is
 reachable, so the unit suite still runs anywhere.
+## Milestone 2 financial recording extension
+
+ADR 0025 and [financial-imports.md](financial-imports.md) describe
+financial_imports and financial_import_rows, added by revision a61117202601.
+Both are UUID-keyed, organization-scoped immutable snapshots with UTC timestamps.
+The rows have a composite import/organization foreign key and RESTRICT references
+to approved listing/product UUIDs. A batch records original-file/profile hashes,
+UTC calendar-month bounds, pre-binding controls and linkage/review counters.
+Rows preserve exact source JSON and NUMERIC(38,16) monetary values. Database
+guards enforce uploader/link tenancy, no overlapping periods, atomic row counts
+and no updates/deletes or later row appends. They do not change vendor inventory
+or grant eligibility for purchasing.
+
+ADR 0027 adds financial_binding_revisions and financial_binding_rows in revision
+a61117202602. Revision ancestry has one sequential head per original import;
+each complete binding set references its original financial rows through tenant
+and import composite UUID foreign keys. Binding rows contain no money. Insert
+guards enforce ownership, active approved links, preserved source warnings,
+complete/changed counters and original-transaction insertion. Headers and rows
+are append-only; a reasoned revision and its audit event commit together.
+
+ADR 0028 adds nullable immutable source lineage to financial_imports in revision
+a61117202603: supersedes_import_id is a unique composite tenant FK to the source
+report, with a bounded replacement reason and preview digest. A source can have
+one successor with the same full profile/period/context and distinct bytes.
+Overlaps outside the predecessor ancestry remain blocked. The extra binding
+insertion guard rejects new revisions on superseded reports. Source-head status
+is derived, not mutable; financial history must be filtered to heads before
+aggregating amounts. Downgrade refuses to drop recorded replacement lineage.
+
+
+## Milestone 2 purchasing-policy history
+
+ADR 0030 and [the purchasing policy guide](purchasing-policies.md) define the
+purchasing_policy_revisions ledger, added by a61117202604. Its UUID stream records
+immutable DRAFT/APPROVED/REVOKED snapshots, scope/identity keys, sequence and
+predecessor, reviewed revision, definition/context SHA-256 values, actor, reason
+and UTC time. The first entry is unique per product/vendor-product/marketplace.
+PostgreSQL enforces ownership, contiguous ancestry, one successor and legal
+review-copy transitions. Insert and mutation guards preserve history; revisions
+commit with audit events. Latest non-draft decision selects the approved snapshot;
+a later draft does not revoke it. No row authorizes purchases or certifies current
+data. Downgrade refuses to discard recorded policy history. The complete empty
+schema now has 33 business tables plus alembic_version, 23 enums and 14 triggers.
+
+## Milestone 2 saved replenishment evaluations
+
+Migration a61117202605 adds replenishment_recommendations: an immutable UUID
+snapshot with organization, current policy approval, product/vendor-product,
+marketplace, actor/time/reason, client request UUID and request/evidence/content
+digests. A unique organization/request key supports exact successful retries.
+Policy/recorded-time indexing supports bounded history; snapshots retain the
+approved definition, identity/source evidence and per-pool inputs/results.
+Versioned supplier and historical financial evidence extend this original
+snapshot contract; no record authorizes a purchase.
+
+The insert guard serializes with policy review and requires the scoped current
+approval, matching snapshot references, active actor/organization and valid
+chronology. A second trigger refuses updates/deletes; downgrade refuses to
+discard snapshots. The schema now has 34 business tables plus alembic_version
+(35 total), 23 enums and 16 triggers.
+
+Migration a61117202606 extends replenishment_recommendations status to include
+REVIEW_REQUIRED and replaces its insert guard to accept versioned v1/v2
+snapshots. v2 requires approved supplier settings and supplier evidence; v1 may
+not silently discard those settings. Existing definitions omit absent supplier
+settings, retaining their original JSON and digests. No tables, enums or triggers
+are added. Downgrade refuses to discard v2 snapshots or supplier policy history.
+
+Migration a61117202607 adds nullable financial_import_id and
+financial_binding_revision_id UUID foreign keys to replenishment_recommendations.
+The v3 insert guard serializes with financial report/binding writes, requires an
+organization/marketplace-scoped current report and exact current binding head,
+and matches snapshot profile/file/period identity. Legacy v1/v2 rows retain null
+references and unchanged JSON/digests. Downgrade refuses to discard v3 history.
+No tables, enums or triggers are added: counts remain 35 / 23 / 16.
+
+Migration a61117202608 extends replenishment_guard to accept v4 commercial /
+shared-stock snapshots. v4 must reference approved supplier/commercial settings,
+match the complete commercial policy, keep the one-product/SKU allocation scope,
+and retain false reservation/purchasing/landed-cost markers. Optional financial
+references retain the v3 scoped current-source/head checks. Legacy versions
+cannot discard approved commercial settings. Downgrade refuses to discard v4
+rows or commercial policy history. No columns/tables/enums/triggers are added.
+The existing staged unit_cost annotation is corrected to Decimal, matching its
+unchanged Numeric(14,4) database type. Counts remain 35 tables / 23 enums / 16 triggers.
+
+ADR 0036 adds scoped read projections over existing policy decisions and saved
+evaluations for vendor comparison and dashboard/review discovery. Latest saved
+records are selected per organization/policy before queue filters; current
+approval uses the latest non-draft decision. The immutable JSON remains the
+historical source for quantities and reasons. No table, index, enum, trigger or
+migration is added; counts remain 35 / 23 / 16 and head a61117202608.
+
+
+### `a61118202601` — reviewed inbound evidence (Milestone 2 draft)
+
+`inbound_evidence_revisions` stores UUID-scoped immutable confirmation/revocation
+chains per policy pool. Rows bind an approval, inventory run/snapshot, source
+listing/context digest, complete position, referenced arrivals, observation/expiry,
+actor/reason and request fingerprint. Unique request/head/revision indexes and
+insert/no-mutation triggers enforce ownership, reconciliation and history.
+Downgrade refuses ledger or v5 evaluation data. The evaluation guard validates
+current references and exact arrival credits. See ADR 0038.
+
+Draft head: 35 business tables plus `alembic_version`, 23 enums, 18 triggers.
+No source inventory, receipt or purchase is written by this ledger.

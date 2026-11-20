@@ -34,9 +34,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Final, Protocol
+from typing import Any, Final, Literal, Protocol
 
-from sqlalchemy import case, select
+from sqlalchemy import and_, case, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -52,6 +52,8 @@ _logger = get_logger(__name__)
 
 #: The report that lists every order line changed in a window.
 REPORT_TYPE: Final = "GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL"
+ORDER_DATE_REPORT_TYPE: Final = "GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL"
+ORDER_EVIDENCE_VERSION: Final = "amazon-order-line-v1"
 
 #: Amazon caps this report's window. A longer request is rejected here rather
 #: than by Amazon, with a message that says why.
@@ -163,6 +165,7 @@ class ParsedOrderLine:
     item_price: Decimal | None
     #: The retained columns of the latest line, verbatim. Never a ship-* field.
     raw: dict[str, str]
+    aggregated: bool = False
 
 
 @dataclass(slots=True)
@@ -218,6 +221,7 @@ def parse_orders_report(content: bytes) -> ParseResult:
         if existing is None:
             aggregated[key] = _Aggregate(latest=parsed, quantity=parsed.quantity_ordered)
         else:
+            existing.count += 1
             existing.quantity += parsed.quantity_ordered
             if parsed.last_updated_at >= existing.latest.last_updated_at:
                 existing.latest = parsed
@@ -239,6 +243,7 @@ def parse_orders_report(content: bytes) -> ParseResult:
                 currency=latest.currency,
                 item_price=latest.item_price,
                 raw=latest.raw,
+                aggregated=aggregate.count > 1,
             )
         )
     return result
@@ -248,6 +253,7 @@ def parse_orders_report(content: bytes) -> ParseResult:
 class _Aggregate:
     latest: ParsedOrderLine
     quantity: int
+    count: int = 1
 
 
 def _parse_row(row: Mapping[str, str | None]) -> ParsedOrderLine:
@@ -414,13 +420,38 @@ def _upsert_statement(
             "item_price": line.item_price,
             "first_seen_sync_run_id": sync_run_id,
             "last_seen_sync_run_id": sync_run_id,
-            "raw": line.raw,
+            "raw": {
+                **line.raw,
+                "_prms_readiness": {
+                    "version": ORDER_EVIDENCE_VERSION,
+                    "run_id": str(sync_run_id),
+                    "aggregated": line.aggregated,
+                },
+            },
         }
         for line in batch
     ]
     statement = insert(AmazonOrderLine).values(values)
     excluded = statement.excluded
     is_newer = excluded.last_updated_at > AmazonOrderLine.last_updated_at
+    same_values = and_(
+        *(
+            getattr(AmazonOrderLine, name).is_not_distinct_from(getattr(excluded, name))
+            for name in (
+                "asin",
+                "quantity_ordered",
+                "purchase_date",
+                "last_updated_at",
+                "order_status",
+                "item_status",
+                "fulfillment_channel",
+                "sales_channel",
+                "marketplace_id",
+                "currency",
+                "item_price",
+            )
+        )
+    )
 
     def only_if_newer(column: Any) -> Any:
         return case((is_newer, getattr(excluded, column.key)), else_=column)
@@ -442,7 +473,9 @@ def _upsert_statement(
             "sales_channel": only_if_newer(AmazonOrderLine.sales_channel),
             "currency": only_if_newer(AmazonOrderLine.currency),
             "item_price": only_if_newer(AmazonOrderLine.item_price),
-            "raw": only_if_newer(AmazonOrderLine.raw),
+            # Certify an equal observation without replacing any business values.
+            # Ignored older/conflicting observations retain their original marker.
+            "raw": case((is_newer | same_values, excluded.raw), else_=AmazonOrderLine.raw),
             # Every line the report mentioned was seen by this run.
             "last_seen_sync_run_id": excluded.last_seen_sync_run_id,
         },
@@ -462,6 +495,7 @@ def run_orders_sync(
     client: ReportFetcher | None = None,
     *,
     marketplace_id: str | None = None,
+    report_basis: Literal["LAST_UPDATE", "ORDER_DATE"] = "LAST_UPDATE",
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> AmazonSyncRun:
     """Perform one orders ingestion run and return its closed run record.
@@ -472,6 +506,8 @@ def run_orders_sync(
     exception recorded. The row is never left ``RUNNING``.
     """
     started_at = now()
+    if report_basis not in ("LAST_UPDATE", "ORDER_DATE"):
+        raise ValueError("Unsupported orders report basis")
     validate_window(window_start, window_end, now=started_at)
 
     settings = get_settings()
@@ -496,7 +532,8 @@ def run_orders_sync(
 
     failure: BaseException | None = None
     try:
-        content = client.fetch_report(REPORT_TYPE, window_start, window_end)
+        report_type = ORDER_DATE_REPORT_TYPE if report_basis == "ORDER_DATE" else REPORT_TYPE
+        content = client.fetch_report(report_type, window_start, window_end)
         parsed = parse_orders_report(content)
         _logger.info(
             "amazon.orders_sync.parsed",
@@ -529,7 +566,14 @@ def run_orders_sync(
                 rows_updated=counts.updated,
                 rows_unchanged=counts.unchanged,
                 rows_failed=parsed.rows_failed,
-                error_details={"rows": parsed.errors[:100]} if parsed.errors else {},
+                error_details={
+                    "rows": parsed.errors[:100],
+                    "readiness": {
+                        "version": ORDER_EVIDENCE_VERSION,
+                        "report_basis": report_basis,
+                        "report_type": report_type,
+                    },
+                },
             )
     except BaseException as exc:
         failure = exc

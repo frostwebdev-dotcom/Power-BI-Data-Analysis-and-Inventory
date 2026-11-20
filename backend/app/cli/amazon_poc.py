@@ -97,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     orders = commands.add_parser("sync-orders", help="Pull the trailing orders window.")
     orders.add_argument(
+        "--order-date-baseline",
+        action="store_true",
+        help="Explicitly request an order-date baseline instead of the default update-date report.",
+    )
+    orders.add_argument(
         "--days",
         type=positive_int,
         default=DEFAULT_ORDER_DAYS,
@@ -208,7 +213,9 @@ def _exit_for(runs: Sequence[AmazonSyncRun]) -> int:
     return EXIT_RUN_FAILED if any(r.status is SyncStatus.FAILED for r in runs) else EXIT_OK
 
 
-def command_sync_orders(settings: Settings, days: int) -> Outcome:
+def command_sync_orders(
+    settings: Settings, days: int, *, order_date_baseline: bool = False
+) -> Outcome:
     from app.jobs.amazon import orders_windows, prepare_run
     from app.services.amazon_orders import run_orders_sync
 
@@ -220,9 +227,19 @@ def command_sync_orders(settings: Settings, days: int) -> Outcome:
         lines: list[str] = []
         for window_start, window_end in orders_windows(days, now=now):
             try:
-                run = run_orders_sync(
-                    session, organization_id, window_start, window_end, TriggerType.MANUAL
-                )
+                if order_date_baseline:
+                    run = run_orders_sync(
+                        session,
+                        organization_id,
+                        window_start,
+                        window_end,
+                        TriggerType.MANUAL,
+                        report_basis="ORDER_DATE",
+                    )
+                else:
+                    run = run_orders_sync(
+                        session, organization_id, window_start, window_end, TriggerType.MANUAL
+                    )
             except SyncAlreadyRunning as exc:
                 return Outcome(EXIT_RUN_FAILED, [str(exc)])
             except Exception as exc:  # the run is already FAILED; report and stop
@@ -322,6 +339,8 @@ def dispatch(args: argparse.Namespace, settings: Settings) -> Outcome:
     if args.command == "auth":
         return command_auth(settings)
     if args.command == "sync-orders":
+        if args.order_date_baseline:
+            return command_sync_orders(settings, args.days, order_date_baseline=True)
         return command_sync_orders(settings, args.days)
     if args.command == "sync-inventory":
         return command_sync_inventory(settings)

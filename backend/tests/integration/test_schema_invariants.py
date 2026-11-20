@@ -65,6 +65,13 @@ def test_the_migration_creates_every_required_entity(migrated_engine: Engine) ->
         "amazon_order_lines",
         "amazon_inventory_snapshots",
         "vendor_contacts",
+        "financial_imports",
+        "financial_import_rows",
+        "financial_binding_revisions",
+        "financial_binding_rows",
+        "purchasing_policy_revisions",
+        "replenishment_recommendations",
+        "inbound_evidence_revisions",
     }
 
     assert required <= set(_all_tables(migrated_engine))

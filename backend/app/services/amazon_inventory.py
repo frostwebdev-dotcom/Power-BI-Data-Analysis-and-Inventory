@@ -281,6 +281,7 @@ def merge_snapshot_rows(
     """
     result = MergeResult()
     fbm = fbm_quantities(listings)
+    fbm_evidence = {listing.seller_sku: listing.raw for listing in listings if listing.is_fbm}
     seen: set[str] = set()
 
     for summary in summaries:
@@ -314,7 +315,14 @@ def merge_snapshot_rows(
                 researching_total=summary.researching_total or 0,
                 fbm_quantity=fbm.get(summary.seller_sku),
                 amazon_last_updated_at=summary.last_updated,
-                raw=_summary_raw(summary),
+                raw={
+                    **_summary_raw(summary),
+                    **(
+                        {"listing": fbm_evidence[summary.seller_sku]}
+                        if summary.seller_sku in fbm_evidence
+                        else {}
+                    ),
+                },
             )
         )
 

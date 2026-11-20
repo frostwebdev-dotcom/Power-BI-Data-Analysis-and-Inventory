@@ -1270,3 +1270,107 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.financial-imports .card { margin-bottom: 20px; }
+.financial-imports h1 { overflow-wrap: anywhere; min-width: 0; }
+.financial-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.financial-fields .grid { align-items: start; }
+.financial-check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.financial-check input { width: auto; }
+.financial-number, .table td.financial-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.financial-digest { overflow-wrap: anywhere; }
+.financial-imports .kv__value { overflow-wrap: anywhere; }
+.financial-imports .drawer .financial-number { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .financial-fields .grid--2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+.financial-binding-action { margin-top: 1.25rem; }
+.financial-binding-action h3 { margin-top: 1rem; }
+.financial-binding-action fieldset { border: 0; padding: 0; margin: 1rem 0 0; min-width: 0; display: grid; gap: .8rem; }
+.financial-binding-action fieldset > .button { justify-self: start; }
+.financial-revision-reason { max-width: 28rem; white-space: normal; overflow-wrap: anywhere; }
+
+/* Purchasing policies use the same operational form and table vocabulary. */
+.purchasing-policies { min-width: 0; }
+.purchasing-policies .card { margin: 18px 0; min-width: 0; }
+.purchasing-policies h1, .purchasing-policies .kv__value, .purchasing-policies td { overflow-wrap: anywhere; }
+.purchasing-policies .grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.purchasing-policies fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.purchasing-policies h3 { margin-top: 24px; }
+.purchasing-policies h4 { margin: 0 0 8px; }
+.purchasing-policies .field { min-width: 0; }
+.policy-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
+.policy-actions h2, .policy-actions h4 { flex: 1; min-width: 180px; margin: 0; }
+.policy-subcard { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); margin: 14px 0; min-width: 0; }
+.policy-members { display: grid; gap: 8px; margin: 12px 0; max-height: 280px; overflow: auto; }
+.policy-members .check { overflow-wrap: anywhere; }
+.policy-review { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
+.policy-evidence { margin: 18px 0; }
+.purchasing-policies .check { align-items: flex-start; }
+.purchasing-policies .check input { margin-top: 3px; flex-shrink: 0; }
+.purchasing-policies textarea { resize: vertical; }
+@media (max-width: 720px) {
+  .purchasing-policies .grid--2 { grid-template-columns: minmax(0, 1fr); }
+  .purchasing-policies .candidate { flex-wrap: wrap; }
+  .purchasing-policies .candidate > div { min-width: 0; overflow-wrap: anywhere; }
+  .purchasing-policies .kv__row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .policy-subcard { padding: 12px; }
+}
+.purchasing-policies .kv__row { align-items: flex-start; }
+.purchasing-policies .kv__key { flex: 0 0 38%; }
+.purchasing-policies .kv__value { flex: 1; white-space: normal; overflow: visible; text-overflow: clip; }
+.purchasing-policies .button { max-width: 100%; white-space: normal; }
+.purchasing-policies .table { min-width: 700px; }
+.purchasing-policies .table td { vertical-align: top; }
+@media (max-width: 720px) {
+  .purchasing-policies .kv__row { display: grid; }
+  .purchasing-policies .kv__value { text-align: left; }
+}
+
+/* Historical recommendation review: keep evidence readable at narrow widths. */
+.recommendations { min-width: 0; }
+.recommendations h1, .recommendations .kv__value, .recommendations td { overflow-wrap: anywhere; }
+.recommendations .kv__value { flex: 1; white-space: normal; overflow: visible; text-overflow: clip; }
+.recommendations .json-block { max-width: 100%; overflow: auto; font-size: 0.75rem; padding: 12px; background: var(--bg-subtle); border-radius: 6px; }
+.recommendations .card { margin-top: 16px; }
+.recommendations .checkbox-row { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; }
+.recommendations .checkbox-row input { width: auto; margin-top: 4px; }
+@media (max-width: 700px) {
+  .recommendations .candidate { flex-wrap: wrap; }
+  .recommendations .candidate > div { min-width: 0; overflow-wrap: anywhere; }
+  .recommendations .toolbar { flex-wrap: wrap; }
+}
+.recommendations .kv__row { align-items: flex-start; }
+.recommendations .kv__key { flex: 0 0 38%; }
+.recommendations .table { min-width: 680px; }
+.recommendations [aria-label="Historical SKU financial amounts"] .table { min-width: 1100px; }
+@media (max-width: 640px) {
+  .recommendations .kv__row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .recommendations .kv__value { text-align: left; }
+}
+
+.replenishment-overview { margin-top: 24px; min-width: 0; }
+.replenishment-overview .counters { margin-top: 16px; }
+.vendor-comparisons [aria-label="Selected vendor offer comparison"] .table { min-width: 1500px; }
+.saved-review .table { min-width: 1200px; }
+.vendor-comparisons .checkbox-row, .saved-review .checkbox-row { margin: 8px 0; }
+.vendor-comparisons [aria-label="Selected offer approvals"] { overflow-wrap: anywhere; }
+
+.vendor-comparisons [aria-label="Selected offer approvals"] .button { white-space: normal; max-width: 100%; text-align: left; }
+.vendor-comparisons .candidate label { min-width: 0; overflow-wrap: anywhere; flex: 1; }
+
+.current-replenishment .candidate label { min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.current-replenishment [aria-label="Policies selected for current check"] { overflow-wrap: anywhere; }
+.current-replenishment [aria-label="Current selected-policy replenishment results"] .table { min-width: 1300px; }
+.current-replenishment [aria-label="Current selected-policy replenishment results"] details { margin-bottom: 8px; }
+.replenishment-links { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: flex-end; }
+.replenishment-overview .card__header { flex-wrap: wrap; gap: 12px; }
+
+.inbound-evidence fieldset { min-width: 0; margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 6px; }
+.inbound-evidence legend { font-size: 13px; font-weight: 600; }
+.inbound-evidence input, .inbound-evidence textarea { min-width: 0; max-width: 100%; }
+.inbound-evidence .button, .inbound-choices .button { max-width: 100%; white-space: normal; }
+.inbound-choices { overflow-wrap: anywhere; }
+.inbound-choices ul { padding-left: 20px; }
+
+.inbound-evidence .checkbox-row input, .inbound-choices .checkbox-row input { flex-shrink: 0; min-width: 13px; }

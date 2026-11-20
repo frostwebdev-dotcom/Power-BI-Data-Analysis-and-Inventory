@@ -116,6 +116,43 @@ class TestStreaming:
         rows = list(stream.rows)
         assert rows[0].cells == ["012345678905", "2"]
 
+    def test_mapped_unnamed_column_can_be_read_with_strict_csv_options(self) -> None:
+        stream = open_rows(
+            b"UPC,Qty,\n012345678905,2,CLEAN\n",
+            ReadOptions(
+                file_format=FileFormat.CSV,
+                mapped_column_indexes=(2,),
+                strict_row_width=True,
+                strict_csv_quoting=True,
+            ),
+        )
+        assert stream.headers == ["UPC", "Qty", ""]
+        assert [row.cells for row in stream.rows] == [["012345678905", "2", "CLEAN"]]
+        assert stream.notes == []
+
+    @pytest.mark.parametrize(
+        ("record", "message"),
+        [
+            (b"012345678905,2\n", "row 2 has 2 cells for 3 headers"),
+            (b"012345678905,2,CLEAN,extra\n", "row 2 has 4 cells for 3 headers"),
+            (b'012345678905,2,"unterminated\n', "CSV quoting or field error"),
+        ],
+    )
+    def test_mapped_unnamed_column_does_not_relax_strict_csv_checks(
+        self, record: bytes, message: str
+    ) -> None:
+        stream = open_rows(
+            b"UPC,Qty,\n" + record,
+            ReadOptions(
+                file_format=FileFormat.CSV,
+                mapped_column_indexes=(2,),
+                strict_row_width=True,
+                strict_csv_quoting=True,
+            ),
+        )
+        with pytest.raises(UnreadableFile, match=message):
+            list(stream.rows)
+
     def test_positional_mappings_do_not_make_an_empty_header_valid(self) -> None:
         with pytest.raises(UnreadableFile, match="header row is empty"):
             open_rows(

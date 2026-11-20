@@ -1,0 +1,47 @@
+{
+  "vendor_product_id": "33333333-3333-4333-8333-333333333333",
+  "definition": {
+    "rule_version": "purchasing-policy-v1",
+    "quantity": {
+      "velocity_window_days": 14,
+      "target_days": 14,
+      "lead_time_days": 2,
+      "safety_days": 1,
+      "minimum_order_units": 0,
+      "order_multiple_units": 6
+    },
+    "amazon": {
+      "product_id": "11111111-1111-4111-8111-111111111111",
+      "marketplace_id": "ATVPDKIKX0DER",
+      "sales_channel": "Amazon.com",
+      "demand_basis": "FULLY_SHIPPED_ONLY",
+      "velocity_window_days": 14,
+      "orders_max_age_seconds": 7200,
+      "inventory_max_age_seconds": 3600,
+      "listing_units": [
+        {
+          "listing_id": "22222222-2222-4222-8222-222222222222",
+          "base_units_per_listing_unit": 6,
+          "confirmation_reference": "Synthetic fixture: six base units per listing unit"
+        }
+      ],
+      "stock_pools": [
+        {
+          "pool_id": "synthetic-fba",
+          "channel": "FBA",
+          "listing_ids": [
+            "22222222-2222-4222-8222-222222222222"
+          ],
+          "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+          "distinct_stock_reference": "Synthetic fixture: physically independent FBA pool"
+        }
+      ]
+    },
+    "coverage_policy": "target-plus-lead-plus-safety",
+    "coverage_confirmation_reference": "Synthetic fixture: target excludes separately added lead and safety",
+    "inbound_policy": "CONFIRMED_BEFORE_STOCKOUT_ONLY",
+    "vendor_base_units_per_order_unit": 6,
+    "vendor_unit_confirmation_reference": "Synthetic fixture: vendor order unit is six base units"
+  },
+  "reason": "Synthetic fixture proposed for review; not a real client policy"
+}

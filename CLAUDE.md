@@ -9,7 +9,10 @@ before writing code.
 ## 1. What this project is
 
 A production Purchasing and Replenishment Management System. Work is delivered in
-milestones. **The repository is currently in Milestone 1.**
+milestones. **Milestone 1 operational acceptance remains open; Milestone 2
+development was authorized by the owner on 11 November 2026.** Milestone 2 work
+starts on an isolated branch under [docs/milestone-2-scope.md](docs/milestone-2-scope.md)
+and ADR 0022. Starting it does not accept Milestone 1 or enable Gmail ingestion.
 
 Authoritative scope documents:
 
@@ -17,6 +20,8 @@ Authoritative scope documents:
 - [docs/architecture.md](docs/architecture.md) — structure, stack, entities, plan
 - [docs/acceptance-criteria.md](docs/acceptance-criteria.md) — definition of done
 - [docs/phase1-status.md](docs/phase1-status.md) — current progress
+- [docs/milestone-2-scope.md](docs/milestone-2-scope.md) — authorized next milestone
+- [docs/phase2-status.md](docs/phase2-status.md) — Milestone 2 evidence and remaining work
 - [docs/decisions/](docs/decisions/) — architecture decision records (ADRs)
 
 ---
@@ -42,6 +47,10 @@ Authoritative scope documents:
     mailbox: attachments and approved direct download links only.
 
 ## 3. Explicitly OUT of Milestone 1
+
+These are Milestone 1 boundaries. The separately authorized Milestone 2 scope
+permits its documented ConnectBooks, profitability and replenishment work;
+it does not authorize later milestones such as RFQs, POs or budget optimization.
 
 Do not build, stub, scaffold, or add dependencies for any of the following:
 

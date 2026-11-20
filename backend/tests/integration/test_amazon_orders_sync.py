@@ -388,3 +388,80 @@ def test_a_bad_window_is_refused_before_any_run_is_opened(db_session: Session) -
 
     assert runs_for(db_session, organization.id) == []
     assert fetcher.requests == []
+
+
+def test_order_date_baseline_records_actual_report_and_line_evidence(db_session: Session) -> None:
+    from app.services.amazon_orders import ORDER_DATE_REPORT_TYPE, ORDER_EVIDENCE_VERSION
+
+    organization = factories.make_organization(db_session)
+    fetcher = FakeFetcher(FIXTURE_UTF8)
+    run = sync(db_session, organization.id, fetcher, report_basis="ORDER_DATE")
+    assert fetcher.requests == [(ORDER_DATE_REPORT_TYPE, *WINDOW)]
+    assert run.error_details["readiness"] == {
+        "version": ORDER_EVIDENCE_VERSION,
+        "report_basis": "ORDER_DATE",
+        "report_type": ORDER_DATE_REPORT_TYPE,
+    }
+    lines = lines_for(db_session, organization.id)
+    for line in lines.values():
+        assert line.raw["_prms_readiness"] == {
+            "version": ORDER_EVIDENCE_VERSION,
+            "run_id": str(run.id),
+            "aggregated": line.amazon_order_id == "111-1000000-0000005",
+        }
+
+
+def test_identical_replay_refreshes_provenance_but_not_business_values(db_session: Session) -> None:
+    organization = factories.make_organization(db_session)
+    first = sync(db_session, organization.id, FakeFetcher(FIXTURE_UTF8))
+    before = {
+        key: (line.quantity_ordered, line.last_updated_at, line.item_status)
+        for key, line in lines_for(db_session, organization.id).items()
+    }
+    second = sync(db_session, organization.id, FakeFetcher(FIXTURE_UTF8), report_basis="ORDER_DATE")
+    db_session.expire_all()
+    for key, line in lines_for(db_session, organization.id).items():
+        assert (line.quantity_ordered, line.last_updated_at, line.item_status) == before[key]
+        assert line.first_seen_sync_run_id == first.id
+        assert line.last_seen_sync_run_id == second.id
+        assert line.raw["_prms_readiness"]["run_id"] == str(second.id)
+    assert second.rows_updated == 0 and second.rows_unchanged == FIXTURE_LINE_COUNT
+
+
+@pytest.mark.parametrize("older", [False, True])
+def test_ignored_conflicting_observation_cannot_certify_source(
+    db_session: Session,
+    older: bool,
+) -> None:
+    from dataclasses import replace
+
+    from app.services.amazon_orders import parse_orders_report, upsert_order_lines
+
+    organization = factories.make_organization(db_session)
+    first = sync(db_session, organization.id, FakeFetcher(FIXTURE_UTF8))
+    parsed = parse_orders_report(FIXTURE_UTF8).lines[0]
+    conflicting = replace(
+        parsed,
+        quantity_ordered=999,
+        last_updated_at=parsed.last_updated_at - timedelta(days=int(older)),
+    )
+    later = factories.make_amazon_sync_run(
+        db_session,
+        organization,
+        job_type=AmazonSyncJobType.ORDERS_REPORT,
+        status=SyncStatus.COMPLETED,
+        started_at=NOW + timedelta(minutes=1),
+        completed_at=NOW + timedelta(minutes=2),
+    )
+    upsert_order_lines(
+        db_session,
+        organization_id=organization.id,
+        sync_run_id=later.id,
+        marketplace_id=first.marketplace_id,
+        lines=[conflicting],
+    )
+    db_session.expire_all()
+    line = lines_for(db_session, organization.id)[(parsed.amazon_order_id, parsed.seller_sku)]
+    assert line.quantity_ordered == parsed.quantity_ordered
+    assert line.last_seen_sync_run_id == later.id
+    assert line.raw["_prms_readiness"]["run_id"] == str(first.id)

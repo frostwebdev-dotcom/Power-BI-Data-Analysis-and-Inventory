@@ -1,0 +1,1303 @@
+{
+  "comparison": {
+    "product_id": "11111111-1111-4111-8111-111111111111",
+    "catalog_item_number": "SYNTHETIC",
+    "product_name": "Synthetic product",
+    "evaluated_at": "2026-11-17T20:00:00Z",
+    "scope": "EXPLICITLY_SELECTED_POLICIES",
+    "selected_count": 2,
+    "comparable_price_count": 2,
+    "price_comparison_status": "AVAILABLE",
+    "requested_order": "BASE_PRICE",
+    "applied_order": "BASE_PRICE",
+    "issues": [],
+    "offers": [
+      {
+        "identity": {
+          "catalog_item_number": "SYNTHETIC",
+          "product_name": "Synthetic product",
+          "vendor_id": "a3e3bc52-af6f-417d-b7fd-17d8f3850c56",
+          "vendor_name": "Zulu Supply",
+          "vendor_code": "ZULU SUPPLY",
+          "vendor_sku": "SYNTHETIC-SKU"
+        },
+        "policy_id": "696d9ff5-c0be-4ce0-9907-17d089f723be",
+        "approved_revision_id": "68450d79-eab8-4fe9-a056-2ad2984eab48",
+        "base_price": {
+          "currency": "USD",
+          "reported_price": "6",
+          "base_units_per_price_unit": 6,
+          "includes_tax": false,
+          "exact_numerator": "1",
+          "exact_denominator": "1",
+          "display_per_base_unit": "1",
+          "display_is_rounded": false
+        },
+        "price_comparable": true,
+        "comparison_reasons": [],
+        "evidence_sha256": "96d5693bf64b3c5cf602a3797f8fba289f855916d254da59a391bb0310818680",
+        "snapshot": {
+          "rule_version": "replenishment-evaluation-v4",
+          "data_source": "ingested_postgresql",
+          "policy_id": "696d9ff5-c0be-4ce0-9907-17d089f723be",
+          "product_id": "11111111-1111-4111-8111-111111111111",
+          "vendor_product_id": "4f0c7a10-6f41-4861-8d9d-0d89908869bf",
+          "marketplace_id": "ATVPDKIKX0DER",
+          "evaluated_at": "2026-11-17T20:00:00Z",
+          "approved_policy": {
+            "id": "68450d79-eab8-4fe9-a056-2ad2984eab48",
+            "policy_id": "696d9ff5-c0be-4ce0-9907-17d089f723be",
+            "product_id": "11111111-1111-4111-8111-111111111111",
+            "vendor_product_id": "4f0c7a10-6f41-4861-8d9d-0d89908869bf",
+            "marketplace_id": "ATVPDKIKX0DER",
+            "revision_number": 2,
+            "supersedes_revision_id": "dac36706-42f5-4ab6-b1b9-e1140aadf88f",
+            "reviewed_revision_id": "4f841d7a-d9ff-4135-a93f-78d5fb9653fd",
+            "kind": "APPROVED",
+            "definition": {
+              "rule_version": "purchasing-policy-v1",
+              "quantity": {
+                "velocity_window_days": 7,
+                "target_days": 7,
+                "lead_time_days": 0,
+                "safety_days": 0,
+                "minimum_order_units": 12,
+                "order_multiple_units": 6
+              },
+              "amazon": {
+                "product_id": "11111111-1111-4111-8111-111111111111",
+                "marketplace_id": "ATVPDKIKX0DER",
+                "sales_channel": "Amazon.com",
+                "demand_basis": "FULLY_SHIPPED_ONLY",
+                "velocity_window_days": 7,
+                "orders_max_age_seconds": 7200,
+                "inventory_max_age_seconds": 3600,
+                "listing_units": [
+                  {
+                    "listing_id": "22222222-2222-4222-8222-222222222222",
+                    "base_units_per_listing_unit": 6,
+                    "confirmation_reference": "Synthetic confirmed six pack"
+                  }
+                ],
+                "stock_pools": [
+                  {
+                    "pool_id": "a",
+                    "channel": "FBA",
+                    "listing_ids": [
+                      "22222222-2222-4222-8222-222222222222"
+                    ],
+                    "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                    "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                  },
+                  {
+                    "pool_id": "b",
+                    "channel": "FBM",
+                    "listing_ids": [
+                      "22222222-2222-4222-8222-222222222222"
+                    ],
+                    "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                    "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                  }
+                ]
+              },
+              "coverage_policy": "target-plus-lead-plus-safety",
+              "coverage_confirmation_reference": "Synthetic manager says target excludes lead and safety",
+              "inbound_policy": "CONFIRMED_BEFORE_STOCKOUT_ONLY",
+              "vendor_base_units_per_order_unit": 6,
+              "vendor_unit_confirmation_reference": "Synthetic vendor sells six base units per order",
+              "supplier": {
+                "profile_id": "11820bba-cf00-4172-8338-7a22bd120d65",
+                "inventory_max_age_seconds": 3600,
+                "freshness_basis": "FILE_RECEIPT_TIME",
+                "freshness_confirmation_reference": "Synthetic manager accepts receipt-age proxy",
+                "base_units_per_source_quantity": 6,
+                "quantity_confirmation_reference": "Synthetic source case has six base units",
+                "availability_confirmation_reference": "Synthetic supplier confirms listed availability"
+              },
+              "commercial": {
+                "currency": "USD",
+                "base_units_per_price_unit": 6,
+                "price_confirmation_reference": "Synthetic confirmed reported price for six base units",
+                "minimum_quantity_scope": "THIS_SKU_SUPPLIER_ORDER_UNITS",
+                "minimum_value_scope": "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE",
+                "minimum_confirmation_reference": "Synthetic confirmed SKU-level minimums",
+                "terms_review_reference": "Synthetic purchasing terms reviewed separately",
+                "pool_priority": [
+                  "a",
+                  "b"
+                ],
+                "allocation_reference": "Synthetic manager selects a before b"
+              }
+            },
+            "definition_sha256": "a4a30f49d57d00dccab24ee955881a6d6d973264f18d1602d35a913f91254d67",
+            "review_context": {},
+            "context_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "recorded_by_user_id": "add5f6ce-829f-405a-9eb9-470f6a9a44cc",
+            "recorded_at": "2026-11-17T19:59:00Z",
+            "reason": "Synthetic reviewed policy",
+            "purchasing_eligible": false
+          },
+          "current_identity_evidence": {},
+          "policy_blocking_reasons": [],
+          "readiness": {
+            "rule_version": "amazon-readiness-v1",
+            "data_source": "ingested_postgresql",
+            "scope": "known_product_listings",
+            "readiness_only": true,
+            "purchasing_eligible": false,
+            "confirmations_persisted": false,
+            "request": {
+              "product_id": "11111111-1111-4111-8111-111111111111",
+              "marketplace_id": "ATVPDKIKX0DER",
+              "sales_channel": "Amazon.com",
+              "demand_basis": "FULLY_SHIPPED_ONLY",
+              "velocity_window_days": 7,
+              "orders_max_age_seconds": 7200,
+              "inventory_max_age_seconds": 3600,
+              "listing_units": [
+                {
+                  "listing_id": "22222222-2222-4222-8222-222222222222",
+                  "base_units_per_listing_unit": 6,
+                  "confirmation_reference": "Synthetic confirmed six pack"
+                }
+              ],
+              "stock_pools": [
+                {
+                  "pool_id": "a",
+                  "channel": "FBA",
+                  "listing_ids": [
+                    "22222222-2222-4222-8222-222222222222"
+                  ],
+                  "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                  "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                },
+                {
+                  "pool_id": "b",
+                  "channel": "FBM",
+                  "listing_ids": [
+                    "22222222-2222-4222-8222-222222222222"
+                  ],
+                  "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                  "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                }
+              ]
+            },
+            "evaluated_at": "2026-11-17T20:00:00Z",
+            "demand_window_start": "2026-11-03T20:00:00Z",
+            "demand_window_end": "2026-11-17T20:00:00Z",
+            "status": "DATA_AVAILABLE",
+            "issues": [],
+            "latest_orders_run": null,
+            "order_coverage_run_ids": [
+              "8b1b1129-b39f-44cc-ad20-3012b32e1081"
+            ],
+            "inventory_run": null,
+            "listings": [
+              {
+                "listing_id": "22222222-2222-4222-8222-222222222222",
+                "seller_sku": "0000123",
+                "asin": "B000000001",
+                "mapping_status": "APPROVED",
+                "mapping_method": "MANUAL_APPROVAL",
+                "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+                "approved_at": "2026-11-17T00:00:00Z",
+                "base_units_per_listing_unit": 1,
+                "snapshot_id": null,
+                "captured_at": null,
+                "fba_sold_listing_units": null,
+                "fbm_sold_listing_units": null
+              }
+            ],
+            "pools": [
+              {
+                "pool_id": "a",
+                "channel": "FBA",
+                "listing_ids": [
+                  "22222222-2222-4222-8222-222222222222"
+                ],
+                "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                "sales_base_units": 60,
+                "on_hand_base_units": 0,
+                "observed_inbound_base_units": 0,
+                "usable_inbound_base_units": 0,
+                "quantity_input_ready": true
+              },
+              {
+                "pool_id": "b",
+                "channel": "FBM",
+                "listing_ids": [
+                  "22222222-2222-4222-8222-222222222222"
+                ],
+                "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                "sales_base_units": 60,
+                "on_hand_base_units": 0,
+                "observed_inbound_base_units": 0,
+                "usable_inbound_base_units": 0,
+                "quantity_input_ready": true
+              }
+            ]
+          },
+          "pools": [
+            {
+              "pool_id": "a",
+              "inputs": {
+                "policy": {
+                  "velocity_window_days": 7,
+                  "target_days": 7,
+                  "lead_time_days": 0,
+                  "safety_days": 0,
+                  "minimum_order_units": 12,
+                  "order_multiple_units": 6
+                },
+                "sales_units": 60,
+                "on_hand_units": 0,
+                "inbound_units": 0,
+                "vendor_availability": "IN_STOCK",
+                "vendor_stock_units": 90,
+                "mapping_approved": true,
+                "units_confirmed": true,
+                "source_data_current": true
+              },
+              "result": {
+                "rule_version": "quantity-preview-v1",
+                "status": "READY",
+                "reasons": [],
+                "calculation": {
+                  "coverage_policy": "target-plus-lead-plus-safety",
+                  "coverage_days": 7,
+                  "daily_sales": "8.571428571428571428571428571",
+                  "days_of_supply": "0",
+                  "required_units": 60,
+                  "net_shortfall_units": 60,
+                  "order_quantity_before_vendor_cap": 60
+                },
+                "suggested_units": 60
+              },
+              "blocking_reasons": []
+            },
+            {
+              "pool_id": "b",
+              "inputs": {
+                "policy": {
+                  "velocity_window_days": 7,
+                  "target_days": 7,
+                  "lead_time_days": 0,
+                  "safety_days": 0,
+                  "minimum_order_units": 12,
+                  "order_multiple_units": 6
+                },
+                "sales_units": 60,
+                "on_hand_units": 0,
+                "inbound_units": 0,
+                "vendor_availability": "IN_STOCK",
+                "vendor_stock_units": 90,
+                "mapping_approved": true,
+                "units_confirmed": true,
+                "source_data_current": true
+              },
+              "result": {
+                "rule_version": "quantity-preview-v1",
+                "status": "READY",
+                "reasons": [],
+                "calculation": {
+                  "coverage_policy": "target-plus-lead-plus-safety",
+                  "coverage_days": 7,
+                  "daily_sales": "8.571428571428571428571428571",
+                  "days_of_supply": "0",
+                  "required_units": 60,
+                  "net_shortfall_units": 60,
+                  "order_quantity_before_vendor_cap": 60
+                },
+                "suggested_units": 60
+              },
+              "blocking_reasons": []
+            }
+          ],
+          "status": "BLOCKED",
+          "supplier_inputs": "VERIFIED",
+          "supplier": {
+            "rule_version": "supplier-readiness-v1",
+            "evaluated_at": "2026-11-17T20:00:00Z",
+            "freshness_basis": "FILE_RECEIPT_TIME",
+            "supplier_effective_time_verified": false,
+            "status": "VERIFIED",
+            "availability": "IN_STOCK",
+            "stock_base_units": 90,
+            "issues": [],
+            "review_reasons": [],
+            "evidence": {
+              "vendor_constraints": {
+                "minimum_order_quantity": 0,
+                "minimum_order_value": "1500",
+                "currency": "USD",
+                "purchasing_terms": {
+                  "freight": "Synthetic terms require separate review"
+                }
+              }
+            },
+            "purchasing_eligible": false
+          },
+          "financial": {
+            "basis": "HISTORICAL_REPORT_ONLY",
+            "import_id": "77777777-7777-4777-8777-777777777777",
+            "binding_revision_id": null,
+            "original_filename": "synthetic-october.xlsx",
+            "raw_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "profile_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "profile_snapshot": {
+              "layout_version": "connectbooks-signed-pnl-xlsx-v1",
+              "sheet_name": "Main sheet",
+              "store_name": "Synthetic Store-Amazon",
+              "source_store_name": "Synthetic Store",
+              "marketplace_id": "ATVPDKIKX0DER",
+              "currency": "USD",
+              "reporting_month": 10,
+              "reporting_year": 2026,
+              "reporting_timezone": "America/New_York",
+              "advertising_coverage_confirmed": true
+            },
+            "marketplace_id": "ATVPDKIKX0DER",
+            "store_name": "Synthetic Store-Amazon",
+            "currency": "USD",
+            "period_start": "2026-10-01T04:00:00Z",
+            "period_end": "2026-11-01T04:00:00Z",
+            "received_at": "2026-11-17T20:00:00Z",
+            "report_status": "RECORDED",
+            "status": "REVIEW_REQUIRED",
+            "controls": [
+              {
+                "field": "sales_qty",
+                "detail_total": "10",
+                "reported_total": "10",
+                "difference": "0",
+                "status": "MATCH"
+              },
+              {
+                "field": "refund_qty",
+                "detail_total": "-2",
+                "reported_total": "-2",
+                "difference": "0",
+                "status": "MATCH"
+              },
+              {
+                "field": "total_units",
+                "detail_total": "8",
+                "reported_total": "8",
+                "difference": "0",
+                "status": "MATCH"
+              },
+              {
+                "field": "sales",
+                "detail_total": "100",
+                "reported_total": "100.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "refunds",
+                "detail_total": "-20",
+                "reported_total": "-20.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "adjustments",
+                "detail_total": "30",
+                "reported_total": "30.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "net_sales",
+                "detail_total": "110",
+                "reported_total": "110.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "fees",
+                "detail_total": "-15",
+                "reported_total": "-15.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "ad_spend",
+                "detail_total": "5",
+                "reported_total": "5.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "cost",
+                "detail_total": "40",
+                "reported_total": "40.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "profit",
+                "detail_total": "50",
+                "reported_total": "50.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              }
+            ],
+            "unallocated_rows": 0,
+            "rows": [
+              {
+                "listing_id": "22222222-2222-4222-8222-222222222222",
+                "seller_sku": "0000123",
+                "source_row_id": "12bd0e36-6bf9-4c53-b876-4e30dd9bd8a0",
+                "source_row_number": 2,
+                "mapping_snapshot": {
+                  "listing_id": "22222222-2222-4222-8222-222222222222",
+                  "product_id": "11111111-1111-4111-8111-111111111111",
+                  "seller_sku": "0000123",
+                  "asin": "B000000001",
+                  "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+                  "approved_at": "2026-11-17T00:00:00+00:00",
+                  "mapping_method": "MANUAL_APPROVAL",
+                  "match_priority": 4
+                },
+                "current_mapping_snapshot": {
+                  "listing_id": "22222222-2222-4222-8222-222222222222",
+                  "product_id": "11111111-1111-4111-8111-111111111111",
+                  "seller_sku": "0000123",
+                  "asin": "B000000001",
+                  "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+                  "approved_at": "2026-11-17T00:00:00+00:00",
+                  "mapping_method": "MANUAL_APPROVAL",
+                  "match_priority": 4
+                },
+                "included_in_totals": true,
+                "amounts": {
+                  "sales_qty": "10",
+                  "refund_qty": "-2",
+                  "total_units": "8",
+                  "sales": "100",
+                  "refunds": "-20",
+                  "adjustments": "30",
+                  "net_sales": "110",
+                  "fees": "-15",
+                  "ad_spend": "5",
+                  "cost": "40",
+                  "profit": "50"
+                },
+                "computed_profit": "50",
+                "computed_margin_percent": "45.454545454545454545454545454545454545",
+                "computed_roi_percent": "125.00",
+                "review_reasons": []
+              }
+            ],
+            "totals": {
+              "net_sales": "110",
+              "fees": "-15",
+              "cost": "40",
+              "ad_spend": "5",
+              "profit": "50"
+            },
+            "review_reasons": [
+              "FINANCIAL_AND_DEMAND_WINDOWS_DIFFER"
+            ],
+            "purchasing_eligible": false
+          },
+          "profitability": "HISTORICAL_CONTEXT",
+          "allocation": {
+            "rule_version": "approved-pool-priority-v1",
+            "scope": "THIS_PRODUCT_SUPPLIER_SKU_EVALUATION",
+            "status": "PARTIAL",
+            "supplier_stock_units": 90,
+            "total_allocated_units": 90,
+            "remaining_supplier_units": 0,
+            "rows": [
+              {
+                "pool_id": "a",
+                "priority": 1,
+                "requested_units": 60,
+                "allocated_units": 60,
+                "remaining_supplier_units": 30,
+                "reasons": []
+              },
+              {
+                "pool_id": "b",
+                "priority": 2,
+                "requested_units": 60,
+                "allocated_units": 30,
+                "remaining_supplier_units": 0,
+                "reasons": [
+                  "SHARED_STOCK_SHORTFALL"
+                ]
+              }
+            ],
+            "reasons": [],
+            "stock_reserved": false,
+            "purchasing_eligible": false
+          },
+          "commercial": {
+            "basis": "CURRENT_SUPPLIER_REPORTED_PRICE",
+            "policy": {
+              "currency": "USD",
+              "base_units_per_price_unit": 6,
+              "price_confirmation_reference": "Synthetic confirmed reported price for six base units",
+              "minimum_quantity_scope": "THIS_SKU_SUPPLIER_ORDER_UNITS",
+              "minimum_value_scope": "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE",
+              "minimum_confirmation_reference": "Synthetic confirmed SKU-level minimums",
+              "terms_review_reference": "Synthetic purchasing terms reviewed separately",
+              "pool_priority": [
+                "a",
+                "b"
+              ],
+              "allocation_reference": "Synthetic manager selects a before b"
+            },
+            "price": {
+              "status": "VERIFIED",
+              "reported_price": "6",
+              "currency": "USD",
+              "base_units_per_price_unit": 6,
+              "evidence": {
+                "job_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "row_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "snapshot_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "price_semantics": {
+                  "currency": "USD",
+                  "includes_tax": false,
+                  "per": "case",
+                  "discount_percent": "0"
+                },
+                "raw_reported_price": "6",
+                "normalized_reported_price": "6",
+                "snapshot_price": "6"
+              },
+              "issues": []
+            },
+            "goods_line_value": "90",
+            "currency": "USD",
+            "supplier_order_units": 15,
+            "price_units": 15,
+            "checks": [
+              {
+                "name": "SUPPLIER_ORDER_UNITS",
+                "scope": "THIS_SKU_SUPPLIER_ORDER_UNITS",
+                "minimum": "0",
+                "observed": "15",
+                "status": "MET"
+              },
+              {
+                "name": "GOODS_LINE_VALUE",
+                "scope": "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE",
+                "minimum": "1500",
+                "observed": "90",
+                "status": "NOT_MET"
+              }
+            ],
+            "status": "CONSTRAINT_NOT_MET",
+            "review_reasons": [
+              "LANDED_COST_NOT_EVALUATED",
+              "SHARED_STOCK_SHORTFALL",
+              "SUPPLIER_STOCK_NOT_RESERVED"
+            ],
+            "landed_cost_verified": false,
+            "purchasing_eligible": false
+          },
+          "review_reasons": [
+            "HISTORICAL_FINANCIAL_CONTEXT_ONLY",
+            "LANDED_COST_NOT_EVALUATED",
+            "SHARED_STOCK_SHORTFALL",
+            "SUPPLIER_STOCK_NOT_RESERVED"
+          ],
+          "purchasing_eligible": false
+        },
+        "purchasing_eligible": false
+      },
+      {
+        "identity": {
+          "catalog_item_number": "SYNTHETIC",
+          "product_name": "Synthetic product",
+          "vendor_id": "1ee70eaa-dbe2-42c2-8323-aa3d3be73109",
+          "vendor_name": "Alpha Supply",
+          "vendor_code": "ALPHA SUPPLY",
+          "vendor_sku": "SYNTHETIC-SKU"
+        },
+        "policy_id": "f83def4e-18d3-4d99-84be-5e503e5257bb",
+        "approved_revision_id": "6600c453-ca23-4927-b4ea-25540b0e779b",
+        "base_price": {
+          "currency": "USD",
+          "reported_price": "12",
+          "base_units_per_price_unit": 6,
+          "includes_tax": false,
+          "exact_numerator": "2",
+          "exact_denominator": "1",
+          "display_per_base_unit": "2",
+          "display_is_rounded": false
+        },
+        "price_comparable": true,
+        "comparison_reasons": [],
+        "evidence_sha256": "6d26e7fc4e6db80d676561b369e113bd9eef68c0ed4c863f83a3cad10ffb21a3",
+        "snapshot": {
+          "rule_version": "replenishment-evaluation-v4",
+          "data_source": "ingested_postgresql",
+          "policy_id": "f83def4e-18d3-4d99-84be-5e503e5257bb",
+          "product_id": "11111111-1111-4111-8111-111111111111",
+          "vendor_product_id": "f875c954-2a3f-49b8-a408-e85478e44a43",
+          "marketplace_id": "ATVPDKIKX0DER",
+          "evaluated_at": "2026-11-17T20:00:00Z",
+          "approved_policy": {
+            "id": "6600c453-ca23-4927-b4ea-25540b0e779b",
+            "policy_id": "f83def4e-18d3-4d99-84be-5e503e5257bb",
+            "product_id": "11111111-1111-4111-8111-111111111111",
+            "vendor_product_id": "f875c954-2a3f-49b8-a408-e85478e44a43",
+            "marketplace_id": "ATVPDKIKX0DER",
+            "revision_number": 2,
+            "supersedes_revision_id": "dac36706-42f5-4ab6-b1b9-e1140aadf88f",
+            "reviewed_revision_id": "4f841d7a-d9ff-4135-a93f-78d5fb9653fd",
+            "kind": "APPROVED",
+            "definition": {
+              "rule_version": "purchasing-policy-v1",
+              "quantity": {
+                "velocity_window_days": 7,
+                "target_days": 7,
+                "lead_time_days": 0,
+                "safety_days": 0,
+                "minimum_order_units": 12,
+                "order_multiple_units": 6
+              },
+              "amazon": {
+                "product_id": "11111111-1111-4111-8111-111111111111",
+                "marketplace_id": "ATVPDKIKX0DER",
+                "sales_channel": "Amazon.com",
+                "demand_basis": "FULLY_SHIPPED_ONLY",
+                "velocity_window_days": 7,
+                "orders_max_age_seconds": 7200,
+                "inventory_max_age_seconds": 3600,
+                "listing_units": [
+                  {
+                    "listing_id": "22222222-2222-4222-8222-222222222222",
+                    "base_units_per_listing_unit": 6,
+                    "confirmation_reference": "Synthetic confirmed six pack"
+                  }
+                ],
+                "stock_pools": [
+                  {
+                    "pool_id": "a",
+                    "channel": "FBA",
+                    "listing_ids": [
+                      "22222222-2222-4222-8222-222222222222"
+                    ],
+                    "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                    "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                  },
+                  {
+                    "pool_id": "b",
+                    "channel": "FBM",
+                    "listing_ids": [
+                      "22222222-2222-4222-8222-222222222222"
+                    ],
+                    "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                    "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                  }
+                ]
+              },
+              "coverage_policy": "target-plus-lead-plus-safety",
+              "coverage_confirmation_reference": "Synthetic manager says target excludes lead and safety",
+              "inbound_policy": "CONFIRMED_BEFORE_STOCKOUT_ONLY",
+              "vendor_base_units_per_order_unit": 6,
+              "vendor_unit_confirmation_reference": "Synthetic vendor sells six base units per order",
+              "supplier": {
+                "profile_id": "11820bba-cf00-4172-8338-7a22bd120d65",
+                "inventory_max_age_seconds": 3600,
+                "freshness_basis": "FILE_RECEIPT_TIME",
+                "freshness_confirmation_reference": "Synthetic manager accepts receipt-age proxy",
+                "base_units_per_source_quantity": 6,
+                "quantity_confirmation_reference": "Synthetic source case has six base units",
+                "availability_confirmation_reference": "Synthetic supplier confirms listed availability"
+              },
+              "commercial": {
+                "currency": "USD",
+                "base_units_per_price_unit": 6,
+                "price_confirmation_reference": "Synthetic confirmed reported price for six base units",
+                "minimum_quantity_scope": "THIS_SKU_SUPPLIER_ORDER_UNITS",
+                "minimum_value_scope": "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE",
+                "minimum_confirmation_reference": "Synthetic confirmed SKU-level minimums",
+                "terms_review_reference": "Synthetic purchasing terms reviewed separately",
+                "pool_priority": [
+                  "a",
+                  "b"
+                ],
+                "allocation_reference": "Synthetic manager selects a before b"
+              }
+            },
+            "definition_sha256": "a4a30f49d57d00dccab24ee955881a6d6d973264f18d1602d35a913f91254d67",
+            "review_context": {},
+            "context_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "recorded_by_user_id": "add5f6ce-829f-405a-9eb9-470f6a9a44cc",
+            "recorded_at": "2026-11-17T19:59:00Z",
+            "reason": "Synthetic reviewed policy",
+            "purchasing_eligible": false
+          },
+          "current_identity_evidence": {},
+          "policy_blocking_reasons": [],
+          "readiness": {
+            "rule_version": "amazon-readiness-v1",
+            "data_source": "ingested_postgresql",
+            "scope": "known_product_listings",
+            "readiness_only": true,
+            "purchasing_eligible": false,
+            "confirmations_persisted": false,
+            "request": {
+              "product_id": "11111111-1111-4111-8111-111111111111",
+              "marketplace_id": "ATVPDKIKX0DER",
+              "sales_channel": "Amazon.com",
+              "demand_basis": "FULLY_SHIPPED_ONLY",
+              "velocity_window_days": 7,
+              "orders_max_age_seconds": 7200,
+              "inventory_max_age_seconds": 3600,
+              "listing_units": [
+                {
+                  "listing_id": "22222222-2222-4222-8222-222222222222",
+                  "base_units_per_listing_unit": 6,
+                  "confirmation_reference": "Synthetic confirmed six pack"
+                }
+              ],
+              "stock_pools": [
+                {
+                  "pool_id": "a",
+                  "channel": "FBA",
+                  "listing_ids": [
+                    "22222222-2222-4222-8222-222222222222"
+                  ],
+                  "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                  "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                },
+                {
+                  "pool_id": "b",
+                  "channel": "FBM",
+                  "listing_ids": [
+                    "22222222-2222-4222-8222-222222222222"
+                  ],
+                  "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                  "distinct_stock_reference": "Synthetic distinct channel stock for preview fixture"
+                }
+              ]
+            },
+            "evaluated_at": "2026-11-17T20:00:00Z",
+            "demand_window_start": "2026-11-03T20:00:00Z",
+            "demand_window_end": "2026-11-17T20:00:00Z",
+            "status": "DATA_AVAILABLE",
+            "issues": [],
+            "latest_orders_run": null,
+            "order_coverage_run_ids": [
+              "8b1b1129-b39f-44cc-ad20-3012b32e1081"
+            ],
+            "inventory_run": null,
+            "listings": [
+              {
+                "listing_id": "22222222-2222-4222-8222-222222222222",
+                "seller_sku": "0000123",
+                "asin": "B000000001",
+                "mapping_status": "APPROVED",
+                "mapping_method": "MANUAL_APPROVAL",
+                "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+                "approved_at": "2026-11-17T00:00:00Z",
+                "base_units_per_listing_unit": 1,
+                "snapshot_id": null,
+                "captured_at": null,
+                "fba_sold_listing_units": null,
+                "fbm_sold_listing_units": null
+              }
+            ],
+            "pools": [
+              {
+                "pool_id": "a",
+                "channel": "FBA",
+                "listing_ids": [
+                  "22222222-2222-4222-8222-222222222222"
+                ],
+                "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                "sales_base_units": 60,
+                "on_hand_base_units": 0,
+                "observed_inbound_base_units": 0,
+                "usable_inbound_base_units": 0,
+                "quantity_input_ready": true
+              },
+              {
+                "pool_id": "b",
+                "channel": "FBM",
+                "listing_ids": [
+                  "22222222-2222-4222-8222-222222222222"
+                ],
+                "stock_source_listing_id": "22222222-2222-4222-8222-222222222222",
+                "sales_base_units": 60,
+                "on_hand_base_units": 0,
+                "observed_inbound_base_units": 0,
+                "usable_inbound_base_units": 0,
+                "quantity_input_ready": true
+              }
+            ]
+          },
+          "pools": [
+            {
+              "pool_id": "a",
+              "inputs": {
+                "policy": {
+                  "velocity_window_days": 7,
+                  "target_days": 7,
+                  "lead_time_days": 0,
+                  "safety_days": 0,
+                  "minimum_order_units": 12,
+                  "order_multiple_units": 6
+                },
+                "sales_units": 60,
+                "on_hand_units": 0,
+                "inbound_units": 0,
+                "vendor_availability": "IN_STOCK",
+                "vendor_stock_units": 90,
+                "mapping_approved": true,
+                "units_confirmed": true,
+                "source_data_current": true
+              },
+              "result": {
+                "rule_version": "quantity-preview-v1",
+                "status": "READY",
+                "reasons": [],
+                "calculation": {
+                  "coverage_policy": "target-plus-lead-plus-safety",
+                  "coverage_days": 7,
+                  "daily_sales": "8.571428571428571428571428571",
+                  "days_of_supply": "0",
+                  "required_units": 60,
+                  "net_shortfall_units": 60,
+                  "order_quantity_before_vendor_cap": 60
+                },
+                "suggested_units": 60
+              },
+              "blocking_reasons": []
+            },
+            {
+              "pool_id": "b",
+              "inputs": {
+                "policy": {
+                  "velocity_window_days": 7,
+                  "target_days": 7,
+                  "lead_time_days": 0,
+                  "safety_days": 0,
+                  "minimum_order_units": 12,
+                  "order_multiple_units": 6
+                },
+                "sales_units": 60,
+                "on_hand_units": 0,
+                "inbound_units": 0,
+                "vendor_availability": "IN_STOCK",
+                "vendor_stock_units": 90,
+                "mapping_approved": true,
+                "units_confirmed": true,
+                "source_data_current": true
+              },
+              "result": {
+                "rule_version": "quantity-preview-v1",
+                "status": "READY",
+                "reasons": [],
+                "calculation": {
+                  "coverage_policy": "target-plus-lead-plus-safety",
+                  "coverage_days": 7,
+                  "daily_sales": "8.571428571428571428571428571",
+                  "days_of_supply": "0",
+                  "required_units": 60,
+                  "net_shortfall_units": 60,
+                  "order_quantity_before_vendor_cap": 60
+                },
+                "suggested_units": 60
+              },
+              "blocking_reasons": []
+            }
+          ],
+          "status": "REVIEW_REQUIRED",
+          "supplier_inputs": "VERIFIED",
+          "supplier": {
+            "rule_version": "supplier-readiness-v1",
+            "evaluated_at": "2026-11-17T20:00:00Z",
+            "freshness_basis": "FILE_RECEIPT_TIME",
+            "supplier_effective_time_verified": false,
+            "status": "VERIFIED",
+            "availability": "IN_STOCK",
+            "stock_base_units": 90,
+            "issues": [],
+            "review_reasons": [],
+            "evidence": {
+              "vendor_constraints": {
+                "minimum_order_quantity": 0,
+                "minimum_order_value": "0",
+                "currency": "USD",
+                "purchasing_terms": {
+                  "freight": "Synthetic terms require separate review"
+                }
+              }
+            },
+            "purchasing_eligible": false
+          },
+          "financial": {
+            "basis": "HISTORICAL_REPORT_ONLY",
+            "import_id": "77777777-7777-4777-8777-777777777777",
+            "binding_revision_id": null,
+            "original_filename": "synthetic-october.xlsx",
+            "raw_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "profile_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "profile_snapshot": {
+              "layout_version": "connectbooks-signed-pnl-xlsx-v1",
+              "sheet_name": "Main sheet",
+              "store_name": "Synthetic Store-Amazon",
+              "source_store_name": "Synthetic Store",
+              "marketplace_id": "ATVPDKIKX0DER",
+              "currency": "USD",
+              "reporting_month": 10,
+              "reporting_year": 2026,
+              "reporting_timezone": "America/New_York",
+              "advertising_coverage_confirmed": true
+            },
+            "marketplace_id": "ATVPDKIKX0DER",
+            "store_name": "Synthetic Store-Amazon",
+            "currency": "USD",
+            "period_start": "2026-10-01T04:00:00Z",
+            "period_end": "2026-11-01T04:00:00Z",
+            "received_at": "2026-11-17T20:00:00Z",
+            "report_status": "RECORDED",
+            "status": "REVIEW_REQUIRED",
+            "controls": [
+              {
+                "field": "sales_qty",
+                "detail_total": "10",
+                "reported_total": "10",
+                "difference": "0",
+                "status": "MATCH"
+              },
+              {
+                "field": "refund_qty",
+                "detail_total": "-2",
+                "reported_total": "-2",
+                "difference": "0",
+                "status": "MATCH"
+              },
+              {
+                "field": "total_units",
+                "detail_total": "8",
+                "reported_total": "8",
+                "difference": "0",
+                "status": "MATCH"
+              },
+              {
+                "field": "sales",
+                "detail_total": "100",
+                "reported_total": "100.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "refunds",
+                "detail_total": "-20",
+                "reported_total": "-20.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "adjustments",
+                "detail_total": "30",
+                "reported_total": "30.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "net_sales",
+                "detail_total": "110",
+                "reported_total": "110.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "fees",
+                "detail_total": "-15",
+                "reported_total": "-15.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "ad_spend",
+                "detail_total": "5",
+                "reported_total": "5.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "cost",
+                "detail_total": "40",
+                "reported_total": "40.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              },
+              {
+                "field": "profit",
+                "detail_total": "50",
+                "reported_total": "50.00000000",
+                "difference": "0E-8",
+                "status": "MATCH"
+              }
+            ],
+            "unallocated_rows": 0,
+            "rows": [
+              {
+                "listing_id": "22222222-2222-4222-8222-222222222222",
+                "seller_sku": "0000123",
+                "source_row_id": "12bd0e36-6bf9-4c53-b876-4e30dd9bd8a0",
+                "source_row_number": 2,
+                "mapping_snapshot": {
+                  "listing_id": "22222222-2222-4222-8222-222222222222",
+                  "product_id": "11111111-1111-4111-8111-111111111111",
+                  "seller_sku": "0000123",
+                  "asin": "B000000001",
+                  "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+                  "approved_at": "2026-11-17T00:00:00+00:00",
+                  "mapping_method": "MANUAL_APPROVAL",
+                  "match_priority": 4
+                },
+                "current_mapping_snapshot": {
+                  "listing_id": "22222222-2222-4222-8222-222222222222",
+                  "product_id": "11111111-1111-4111-8111-111111111111",
+                  "seller_sku": "0000123",
+                  "asin": "B000000001",
+                  "approved_by_user_id": "e21f521f-6efe-441d-abea-4ef3d3e28be8",
+                  "approved_at": "2026-11-17T00:00:00+00:00",
+                  "mapping_method": "MANUAL_APPROVAL",
+                  "match_priority": 4
+                },
+                "included_in_totals": true,
+                "amounts": {
+                  "sales_qty": "10",
+                  "refund_qty": "-2",
+                  "total_units": "8",
+                  "sales": "100",
+                  "refunds": "-20",
+                  "adjustments": "30",
+                  "net_sales": "110",
+                  "fees": "-15",
+                  "ad_spend": "5",
+                  "cost": "40",
+                  "profit": "50"
+                },
+                "computed_profit": "50",
+                "computed_margin_percent": "45.454545454545454545454545454545454545",
+                "computed_roi_percent": "125.00",
+                "review_reasons": []
+              }
+            ],
+            "totals": {
+              "net_sales": "110",
+              "fees": "-15",
+              "cost": "40",
+              "ad_spend": "5",
+              "profit": "50"
+            },
+            "review_reasons": [
+              "FINANCIAL_AND_DEMAND_WINDOWS_DIFFER"
+            ],
+            "purchasing_eligible": false
+          },
+          "profitability": "HISTORICAL_CONTEXT",
+          "allocation": {
+            "rule_version": "approved-pool-priority-v1",
+            "scope": "THIS_PRODUCT_SUPPLIER_SKU_EVALUATION",
+            "status": "PARTIAL",
+            "supplier_stock_units": 90,
+            "total_allocated_units": 90,
+            "remaining_supplier_units": 0,
+            "rows": [
+              {
+                "pool_id": "a",
+                "priority": 1,
+                "requested_units": 60,
+                "allocated_units": 60,
+                "remaining_supplier_units": 30,
+                "reasons": []
+              },
+              {
+                "pool_id": "b",
+                "priority": 2,
+                "requested_units": 60,
+                "allocated_units": 30,
+                "remaining_supplier_units": 0,
+                "reasons": [
+                  "SHARED_STOCK_SHORTFALL"
+                ]
+              }
+            ],
+            "reasons": [],
+            "stock_reserved": false,
+            "purchasing_eligible": false
+          },
+          "commercial": {
+            "basis": "CURRENT_SUPPLIER_REPORTED_PRICE",
+            "policy": {
+              "currency": "USD",
+              "base_units_per_price_unit": 6,
+              "price_confirmation_reference": "Synthetic confirmed reported price for six base units",
+              "minimum_quantity_scope": "THIS_SKU_SUPPLIER_ORDER_UNITS",
+              "minimum_value_scope": "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE",
+              "minimum_confirmation_reference": "Synthetic confirmed SKU-level minimums",
+              "terms_review_reference": "Synthetic purchasing terms reviewed separately",
+              "pool_priority": [
+                "a",
+                "b"
+              ],
+              "allocation_reference": "Synthetic manager selects a before b"
+            },
+            "price": {
+              "status": "VERIFIED",
+              "reported_price": "12",
+              "currency": "USD",
+              "base_units_per_price_unit": 6,
+              "evidence": {
+                "job_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "row_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "snapshot_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "price_semantics": {
+                  "currency": "USD",
+                  "includes_tax": false,
+                  "per": "case",
+                  "discount_percent": "0"
+                },
+                "raw_reported_price": "12",
+                "normalized_reported_price": "12",
+                "snapshot_price": "12"
+              },
+              "issues": []
+            },
+            "goods_line_value": "180",
+            "currency": "USD",
+            "supplier_order_units": 15,
+            "price_units": 15,
+            "checks": [
+              {
+                "name": "SUPPLIER_ORDER_UNITS",
+                "scope": "THIS_SKU_SUPPLIER_ORDER_UNITS",
+                "minimum": "0",
+                "observed": "15",
+                "status": "MET"
+              },
+              {
+                "name": "GOODS_LINE_VALUE",
+                "scope": "THIS_SKU_GOODS_LINE_AT_REPORTED_PRICE",
+                "minimum": "0",
+                "observed": "180",
+                "status": "MET"
+              }
+            ],
+            "status": "ASSESSED",
+            "review_reasons": [
+              "LANDED_COST_NOT_EVALUATED",
+              "SHARED_STOCK_SHORTFALL",
+              "SUPPLIER_STOCK_NOT_RESERVED"
+            ],
+            "landed_cost_verified": false,
+            "purchasing_eligible": false
+          },
+          "review_reasons": [
+            "HISTORICAL_FINANCIAL_CONTEXT_ONLY",
+            "LANDED_COST_NOT_EVALUATED",
+            "SHARED_STOCK_SHORTFALL",
+            "SUPPLIER_STOCK_NOT_RESERVED"
+          ],
+          "purchasing_eligible": false
+        },
+        "purchasing_eligible": false
+      }
+    ],
+    "saved": false,
+    "stock_reserved": false,
+    "purchasing_eligible": false
+  },
+  "review_items": [
+    {
+      "id": "99999999-9999-4999-8999-000000000001",
+      "product_id": "11111111-1111-4111-8111-111111111111",
+      "policy_id": "696d9ff5-c0be-4ce0-9907-17d089f723be",
+      "approved_revision_id": "68450d79-eab8-4fe9-a056-2ad2984eab48",
+      "identity": {
+        "catalog_item_number": "SYNTHETIC",
+        "product_name": "Synthetic product",
+        "vendor_id": "a3e3bc52-af6f-417d-b7fd-17d8f3850c56",
+        "vendor_name": "Zulu Supply",
+        "vendor_code": "ZULU SUPPLY",
+        "vendor_sku": "SYNTHETIC-SKU"
+      },
+      "status": "BLOCKED",
+      "approval_current": true,
+      "recorded_at": "2026-11-17T20:00:00+00:00",
+      "evaluated_at": "2026-11-17T20:00:00+00:00",
+      "demand_window_end": "2026-11-17T20:00:00+00:00",
+      "positive_shortfall": true,
+      "stockout_risk_at_evaluation": true,
+      "supplier_inputs": "VERIFIED",
+      "commercial_status": "CONSTRAINT_NOT_MET",
+      "financial_import_id": "77777777-7777-4777-8777-777777777777",
+      "reasons": [
+        "HISTORICAL_FINANCIAL_CONTEXT_ONLY",
+        "LANDED_COST_NOT_EVALUATED",
+        "SHARED_STOCK_SHORTFALL",
+        "SUPPLIER_STOCK_NOT_RESERVED"
+      ],
+      "reason_count": 4,
+      "reasons_truncated": false,
+      "reason": "Synthetic staff review of saved source inputs",
+      "historical": true,
+      "source_freshness_rechecked": false,
+      "purchasing_eligible": false
+    },
+    {
+      "id": "99999999-9999-4999-8999-000000000002",
+      "product_id": "11111111-1111-4111-8111-111111111111",
+      "policy_id": "f83def4e-18d3-4d99-84be-5e503e5257bb",
+      "approved_revision_id": "6600c453-ca23-4927-b4ea-25540b0e779b",
+      "identity": {
+        "catalog_item_number": "SYNTHETIC",
+        "product_name": "Synthetic product",
+        "vendor_id": "1ee70eaa-dbe2-42c2-8323-aa3d3be73109",
+        "vendor_name": "Alpha Supply",
+        "vendor_code": "ALPHA SUPPLY",
+        "vendor_sku": "SYNTHETIC-SKU"
+      },
+      "status": "REVIEW_REQUIRED",
+      "approval_current": false,
+      "recorded_at": "2026-11-17T20:00:00+00:00",
+      "evaluated_at": "2026-11-17T20:00:00+00:00",
+      "demand_window_end": "2026-11-17T20:00:00+00:00",
+      "positive_shortfall": true,
+      "stockout_risk_at_evaluation": true,
+      "supplier_inputs": "VERIFIED",
+      "commercial_status": "ASSESSED",
+      "financial_import_id": "77777777-7777-4777-8777-777777777777",
+      "reasons": [
+        "HISTORICAL_FINANCIAL_CONTEXT_ONLY",
+        "LANDED_COST_NOT_EVALUATED",
+        "SHARED_STOCK_SHORTFALL",
+        "SUPPLIER_STOCK_NOT_RESERVED"
+      ],
+      "reason_count": 4,
+      "reasons_truncated": false,
+      "reason": "Synthetic staff review of saved source inputs",
+      "historical": true,
+      "source_freshness_rechecked": false,
+      "purchasing_eligible": false
+    }
+  ],
+  "summary": {
+    "generated_at": "2026-11-17T20:00:00+00:00",
+    "latest_saved_total": 2,
+    "current_approval_total": 1,
+    "approval_changed_total": 1,
+    "current_approval_blocked": 1,
+    "current_approval_review_required": 0,
+    "current_approval_no_reorder": 0,
+    "current_approval_positive_shortfall": 1,
+    "historical": true,
+    "source_freshness_rechecked": false,
+    "purchasing_eligible": false
+  }
+}

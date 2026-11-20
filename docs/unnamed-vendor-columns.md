@@ -1,14 +1,17 @@
 # Explicitly mapped unnamed vendor columns
 
-Status: implemented on an isolated Milestone 1 fix branch; not deployed. Gmail
-polling remains paused. Local unit tests, lint, formatting and strict types pass;
-PostgreSQL and browser regression checks are pending CI.
+Status: merged in PR #23 at `6a33741c9d6a99c7673d1cf16e6dc5e7af840d41` and
+deployed by [release #229](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/44435083353).
+All 1,436 backend and 23 browser release checks passed. The live HAZ source uses
+the reviewed seven-column v2 profile. Gmail authorization and manual/scheduled
+mailbox checks succeeded; polling and HAZ are enabled. First-email/file and
+duplicate replay acceptance remain pending.
 
 ## Problem and scope
 
 A vendor workbook can have a populated condition column after its last named
 header. The profile explicitly maps that column by its zero-based index, but
-the reader currently trims its blank header and then discards the row cells.
+the previous reader trimmed its blank header and then discarded the row cells.
 Distinct conditions can consequently derive the same offer key.
 
 Correct the shared vendor reader and profile-to-reader adapter in Milestone 1.
@@ -50,6 +53,9 @@ and derives 717 distinct offer keys. It reports 703 OK rows, 14 warning rows
 the corrected seven-column pin. This is a read-only parser probe, not a live
 import, approved mapping, successful mailbox check or client acceptance.
 
-The live HAZ attachment source has been saved paused with its current v1
-profile. It must be repointed to a newly validated profile version after this
-fix is deployed. No inventory file, profile version or Gmail grant was changed.
+The live HAZ attachment source now uses the newly validated v2 profile and is
+enabled for new matching emails. The refreshed grant passed the exact-mailbox
+check in the deployed container. A manual poll and a later scheduled poll both
+completed successfully, with no deliveries yet. No existing inventory file,
+historical offer key or old profile was rewritten; no new file import or replay
+acceptance is inferred from those successful empty mailbox checks.

@@ -15,10 +15,16 @@ from app.api.v1.routes import (
     auth,
     dashboard,
     exceptions,
+    financial_imports,
     health,
     import_profiles,
     imports,
+    inbound,
     products,
+    purchasing_policies,
+    recommendations,
+    replenishment_now,
+    replenishment_review,
     vendor_mail,
     vendors,
     watchlist,
@@ -32,7 +38,13 @@ api_router.include_router(vendors.router)
 api_router.include_router(import_profiles.router)
 api_router.include_router(import_profiles.schemas_router)
 api_router.include_router(imports.router)
+api_router.include_router(financial_imports.router)
 api_router.include_router(products.router)
+api_router.include_router(purchasing_policies.router)
+api_router.include_router(recommendations.router)
+api_router.include_router(replenishment_review.router)
+api_router.include_router(replenishment_now.router)
+api_router.include_router(inbound.router)
 api_router.include_router(exceptions.router)
 api_router.include_router(watchlist.router)
 api_router.include_router(watchlist.availability_router)
