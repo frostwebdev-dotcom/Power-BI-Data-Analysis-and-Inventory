@@ -40,6 +40,7 @@ async function mockApp(page: Page, role = "ADMIN") {
         ],
       } });
     }
+    if (path === "/replenishment-review/summary") return route.fulfill({ json: { generated_at: "2026-11-17T20:00:00Z", latest_saved_total: 0, current_approval_total: 0, approval_changed_total: 0, current_approval_blocked: 0, current_approval_review_required: 0, current_approval_no_reorder: 0, current_approval_positive_shortfall: 0, historical: true } });
     if (path === "/dashboard") return route.fulfill({ json: {
       open_exceptions: 0, watchlist_active: 1, watchlist_in_stock: 1, watchlist_newly_available_7d: 2,
       imports_running: 0, last_imports: [], amazon_syncs: [], nineyard_sync: null,

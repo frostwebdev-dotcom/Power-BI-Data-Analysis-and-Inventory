@@ -218,3 +218,69 @@ def test_staging_evidence_scopes_runs_and_verifies_raw_files(
     assert report(db_session, api_settings, organization.slug)["raw_files"]["failed_ids"] == [
         str(missing.id)
     ]
+
+
+def test_supplier_sku_choices_are_scoped_bounded_and_display_only(
+    client: TestClient, login: Login, db_session: Session, organization: Organization
+) -> None:
+    from app.models.enums import MappingStatus
+
+    headers, _ = login(RoleCode.VIEWER)
+    product = factories.make_product(db_session, organization)
+    vendor = factories.make_vendor(db_session, organization, name="Synthetic supplier")
+    rows = [
+        factories.make_vendor_product(
+            db_session,
+            organization,
+            vendor,
+            product_id=product.id,
+            mapping_status=MappingStatus.PENDING,
+            vendor_sku=sku,
+            is_active=active,
+            vendor_description="Not a matching input",
+            pack_size=99,
+        )
+        for sku, active in [("sku%_", True), ("second", False)]
+    ]
+    other = factories.make_organization(db_session)
+    foreign_vendor = factories.make_vendor(db_session, other)
+    factories.make_vendor_product(
+        db_session,
+        organization,
+        foreign_vendor,
+        product_id=product.id,
+        mapping_status=MappingStatus.PENDING,
+    )
+    path = f"{PRODUCTS}/{product.id}/vendor-products"
+    first = client.get(path, headers=headers, params={"page_size": 1}).json()
+    second = client.get(path, headers=headers, params={"page_size": 1, "page": 2}).json()
+    assert first["total"] == second["total"] == 2
+    assert {first["items"][0]["id"], second["items"][0]["id"]} == {str(row.id) for row in rows}
+    literal = client.get(path, headers=headers, params={"q": "%_"}).json()["items"]
+    assert len(literal) == 1 and literal[0]["vendor_sku"] == "sku%_"
+    assert literal[0]["vendor_name"] == "Synthetic supplier"
+    assert literal[0]["mapping_status"] == "PENDING"
+    assert not {"pack_size", "vendor_description", "raw", "unit_cost"} & literal[0].keys()
+    assert client.get(path, headers=headers, params={"page_size": 201}).status_code == 422
+    assert client.get(path).status_code == 401
+    foreign_product = factories.make_product(db_session, other)
+    for identifier in [foreign_product.id, uuid.uuid4()]:
+        assert (
+            client.get(f"{PRODUCTS}/{identifier}/vendor-products", headers=headers).status_code
+            == 404
+        )
+
+
+def test_listing_choices_filter_marketplace_without_changing_unfiltered_history(
+    client: TestClient, login: Login, db_session: Session, organization: Organization
+) -> None:
+    headers, _ = login(RoleCode.VIEWER)
+    product = factories.make_product(db_session, organization)
+    us = factories.make_marketplace_listing(db_session, organization, product)
+    factories.make_marketplace_listing(db_session, organization, product, marketplace_id="OTHER")
+    path = f"{PRODUCTS}/{product.id}/listings"
+    assert client.get(path, headers=headers).json()["total"] == 2
+    response = client.get(
+        path, headers=headers, params={"marketplace": "AMAZON", "marketplace_id": "ATVPDKIKX0DER"}
+    )
+    assert [item["id"] for item in response.json()["items"]] == [str(us.id)]

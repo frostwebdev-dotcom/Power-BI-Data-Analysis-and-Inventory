@@ -1,0 +1,470 @@
+"""Audited historical evaluations of approved policy and observed source inputs."""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
+
+from pydantic import TypeAdapter
+from sqlalchemy.orm import Session
+
+from app.core.errors import ConflictError, NotFoundError
+from app.core.security import Principal
+from app.db.transaction import transaction
+from app.models import ReplenishmentRecommendation
+from app.repositories.purchasing_policies import PurchasingPolicyRepository
+from app.repositories.recommendations import RecommendationRepository
+from app.schemas.amazon_readiness import AmazonReadinessResponse
+from app.schemas.financial_context import FinancialSelection
+from app.schemas.inbound import InboundAssessment, InboundSelection
+from app.schemas.purchasing_policies import PolicyRevisionResponse
+from app.schemas.recommendations import (
+    CommercialRecommendationSnapshot,
+    EvaluationSnapshot,
+    EvaluationStatus,
+    FinancialRecommendationSnapshot,
+    InboundRecommendationSnapshot,
+    PoolEvaluation,
+    RecommendationPage,
+    RecommendationPreview,
+    RecommendationPreviewRequest,
+    RecommendationRecordRequest,
+    RecommendationResponse,
+    RecommendationSnapshot,
+    SupplierRecommendationSnapshot,
+)
+from app.schemas.replenishment import ReplenishmentPreviewInput
+from app.schemas.supplier_readiness import SupplierReadinessResponse
+from app.services import audit
+from app.services import purchasing_policies as policies
+from app.services.amazon_readiness import check_amazon_readiness
+from app.services.inbound import apply_selected
+from app.services.recommendation_commercials import (
+    allocate_supplier_stock,
+    assess_commercials,
+    current_supplier_price,
+)
+from app.services.recommendation_financials import financial_context
+from app.services.replenishment import calculate_replenishment
+from app.services.supplier_readiness import check_supplier_readiness
+
+READ = policies.READ
+WRITE = policies.WRITE
+
+
+class RecommendationNotFound(NotFoundError):  # noqa: N818
+    code = "replenishment_recommendation_not_found"
+    message = "No such saved evaluation in this organization."
+
+
+class RecommendationConflict(ConflictError):  # noqa: N818
+    code = "replenishment_recommendation_conflict"
+
+
+def build_snapshot(
+    approved: PolicyRevisionResponse,
+    identity: dict[str, Any],
+    policy_blocks: tuple[str, ...],
+    readiness: AmazonReadinessResponse,
+) -> RecommendationSnapshot:
+    """Pure integration: no caller-supplied readiness flags or quantity guesses."""
+    pools: list[PoolEvaluation] = []
+    for pool in readiness.pools:
+        inputs = ReplenishmentPreviewInput(
+            policy=approved.definition.quantity,
+            sales_units=pool.sales_base_units,
+            on_hand_units=pool.on_hand_base_units,
+            inbound_units=pool.usable_inbound_base_units,
+            vendor_availability="UNKNOWN",
+            vendor_stock_units=None,
+            mapping_approved=not policy_blocks,
+            units_confirmed=not policy_blocks,
+            source_data_current=readiness.status == "DATA_AVAILABLE" and pool.quantity_input_ready,
+        )
+        result = calculate_replenishment(inputs)
+        # Conservatively block every pool if any product-level readiness issue
+        # remains. No partial configuration becomes a complete recommendation.
+        blocks = {
+            *policy_blocks,
+            *(issue.code for issue in readiness.issues),
+            *(result.reasons if result.status != "NO_REORDER" else ()),
+        }
+        if result.calculation.net_shortfall_units:
+            blocks.add("SUPPLIER_INPUTS_NOT_VERIFIED")
+        pools.append(
+            PoolEvaluation(
+                pool_id=pool.pool_id,
+                inputs=inputs,
+                result=result,
+                blocking_reasons=tuple(sorted(blocks)),
+            )
+        )
+    return RecommendationSnapshot(
+        policy_id=approved.policy_id,
+        product_id=approved.product_id,
+        vendor_product_id=approved.vendor_product_id,
+        marketplace_id=approved.marketplace_id,
+        evaluated_at=readiness.evaluated_at,
+        approved_policy=approved,
+        current_identity_evidence=identity,
+        policy_blocking_reasons=policy_blocks,
+        readiness=readiness,
+        pools=tuple(pools),
+        status="NO_REORDER"
+        if pools and all(pool.result.status == "NO_REORDER" for pool in pools)
+        else "BLOCKED",
+    )
+
+
+def build_supplier_snapshot(
+    approved: PolicyRevisionResponse,
+    identity: dict[str, Any],
+    policy_blocks: tuple[str, ...],
+    readiness: AmazonReadinessResponse,
+    supplier: SupplierReadinessResponse,
+) -> SupplierRecommendationSnapshot:
+    legacy = build_snapshot(approved, identity, policy_blocks, readiness)
+    pools: list[PoolEvaluation] = []
+    for pool in legacy.pools:
+        inputs = pool.inputs.model_copy(
+            update={
+                "vendor_availability": supplier.availability,
+                "vendor_stock_units": supplier.stock_base_units,
+                "source_data_current": pool.inputs.source_data_current
+                and supplier.status == "VERIFIED",
+            }
+        )
+        result = calculate_replenishment(inputs)
+        pools.append(
+            PoolEvaluation(
+                pool_id=pool.pool_id,
+                inputs=inputs,
+                result=result,
+                blocking_reasons=tuple(
+                    sorted(
+                        {
+                            *policy_blocks,
+                            *supplier.issues,
+                            *(issue.code for issue in readiness.issues),
+                            *(result.reasons if result.status != "NO_REORDER" else ()),
+                        }
+                    )
+                ),
+            )
+        )
+    positive = [pool for pool in pools if pool.result.calculation.net_shortfall_units]
+    review = set(supplier.review_reasons)
+    if positive:
+        review.add("PROFITABILITY_NOT_INTEGRATED")
+    if len(positive) > 1:
+        review.add("SUPPLIER_STOCK_SHARED_ACROSS_POOLS")
+    status: EvaluationStatus = "BLOCKED"
+    if pools and all(pool.result.status == "NO_REORDER" for pool in pools):
+        status = "NO_REORDER"
+    elif pools and all(pool.result.status != "BLOCKED" for pool in pools):
+        status = "REVIEW_REQUIRED"
+    data = legacy.model_dump(mode="json")
+    data.update(
+        rule_version="replenishment-evaluation-v2",
+        supplier=supplier.model_dump(mode="json"),
+        supplier_inputs=supplier.status,
+        pools=[pool.model_dump(mode="json") for pool in pools],
+        status=status,
+        review_reasons=sorted(review),
+    )
+    return SupplierRecommendationSnapshot.model_validate(data)
+
+
+def evidence_digest(snapshot: EvaluationSnapshot) -> str:
+    data = snapshot.model_dump(mode="json")
+    data.pop("evaluated_at")
+    data["readiness"].pop("evaluated_at")
+    if (
+        isinstance(
+            snapshot,
+            (
+                SupplierRecommendationSnapshot,
+                FinancialRecommendationSnapshot,
+                CommercialRecommendationSnapshot,
+                InboundRecommendationSnapshot,
+            ),
+        )
+        and snapshot.supplier is not None
+    ):
+        data["supplier"].pop("evaluated_at")
+    if not snapshot.readiness.order_coverage_run_ids:
+        # With no baseline the readiness adapter reports a clock-derived window.
+        # Its quantities stay unknown; that display clock is not source evidence.
+        data["readiness"].pop("demand_window_start")
+        data["readiness"].pop("demand_window_end")
+    return policies.digest(data)
+
+
+def _evaluate(
+    session: Session,
+    actor: Principal,
+    identifier: uuid.UUID,
+    approval: uuid.UUID,
+    now: Callable[[], datetime],
+    financial: FinancialSelection | None = None,
+    inbound: InboundSelection | None = None,
+) -> RecommendationPreview:
+    approved, identity, blocks = policies.calculation_policy(session, actor, identifier, approval)
+    readiness = check_amazon_readiness(
+        session, actor, approved.definition.amazon, now=now, lock_sources=True
+    )
+    reviewed_readiness = None
+    inbound_assessments: tuple[InboundAssessment, ...] = ()
+    if inbound is not None:
+        reviewed_readiness, inbound_assessments = apply_selected(
+            session, actor, approved, readiness, inbound, readiness.evaluated_at, identity, blocks
+        )
+        effective = reviewed_readiness.model_dump(
+            mode="json", exclude={"original_inbound_issues", "inbound_revision_ids"}
+        )
+        effective.update(rule_version="amazon-readiness-v1", confirmations_persisted=False)
+        readiness = AmazonReadinessResponse.model_validate(effective)
+    snapshot: EvaluationSnapshot = build_snapshot(approved, identity, blocks, readiness)
+    if approved.definition.supplier is not None:
+        supplier = check_supplier_readiness(
+            session,
+            actor.organization_id,
+            approved.product_id,
+            approved.vendor_product_id,
+            approved.definition.supplier,
+            at=readiness.evaluated_at,
+        )
+        snapshot = build_supplier_snapshot(approved, identity, blocks, readiness, supplier)
+    if financial is not None:
+        context = financial_context(session, actor, financial, readiness)
+        data = snapshot.model_dump(mode="json")
+        review = set(data.get("review_reasons", [])) - {"PROFITABILITY_NOT_INTEGRATED"}
+        review.update(context.review_reasons)
+        review.add("HISTORICAL_FINANCIAL_CONTEXT_ONLY")
+        data.update(
+            rule_version="replenishment-evaluation-v3",
+            financial=context.model_dump(mode="json"),
+            supplier=data.get("supplier"),
+            profitability="HISTORICAL_CONTEXT",
+            review_reasons=sorted(review),
+        )
+        snapshot = FinancialRecommendationSnapshot.model_validate(data)
+    if approved.definition.commercial is not None:
+        assert isinstance(
+            snapshot, (SupplierRecommendationSnapshot, FinancialRecommendationSnapshot)
+        )
+        assert snapshot.supplier is not None
+        commercial_policy = approved.definition.commercial
+        allocation = allocate_supplier_stock(
+            snapshot.pools,
+            commercial_policy,
+            approved.definition.quantity,
+            snapshot.supplier,
+            tuple(sorted({*blocks, *(issue.code for issue in readiness.issues)})),
+        )
+        price = current_supplier_price(
+            session,
+            actor.organization_id,
+            approved.vendor_product_id,
+            snapshot.supplier,
+            commercial_policy,
+        )
+        commercial = assess_commercials(
+            commercial_policy,
+            allocation,
+            price,
+            snapshot.supplier,
+            approved.definition.vendor_base_units_per_order_unit,
+        )
+        data = snapshot.model_dump(mode="json")
+        review = set(data.get("review_reasons", [])) - {
+            "SUPPLIER_STOCK_SHARED_ACROSS_POOLS",
+            "SUPPLIER_MINIMUM_VALUE_NOT_EVALUATED",
+            "SUPPLIER_COMMERCIAL_TERMS_REQUIRE_REVIEW",
+        }
+        review.update(commercial.review_reasons)
+        status: EvaluationStatus = "NO_REORDER" if snapshot.status == "NO_REORDER" else "BLOCKED"
+        if (
+            snapshot.status != "BLOCKED"
+            and allocation.total_allocated_units
+            and commercial.status != "CONSTRAINT_NOT_MET"
+        ):
+            status = "REVIEW_REQUIRED"
+        data.update(
+            rule_version="replenishment-evaluation-v4",
+            allocation=allocation.model_dump(mode="json"),
+            commercial=commercial.model_dump(mode="json"),
+            financial=data.get("financial"),
+            review_reasons=sorted(review),
+            status=status,
+        )
+        snapshot = CommercialRecommendationSnapshot.model_validate(data)
+    if reviewed_readiness is not None:
+        data = snapshot.model_dump(mode="json")
+        data.update(
+            rule_version="replenishment-evaluation-v5",
+            readiness=reviewed_readiness.model_dump(mode="json"),
+            inbound_assessments=[a.model_dump(mode="json") for a in inbound_assessments],
+            supplier=data.get("supplier"),
+            financial=data.get("financial"),
+            allocation=data.get("allocation"),
+            commercial=data.get("commercial"),
+            review_reasons=data.get("review_reasons", []),
+        )
+        snapshot = InboundRecommendationSnapshot.model_validate(data)
+    return RecommendationPreview(snapshot=snapshot, evidence_sha256=evidence_digest(snapshot))
+
+
+def preview_recommendation(
+    session: Session,
+    actor: Principal,
+    identifier: uuid.UUID,
+    payload: RecommendationPreviewRequest,
+    *,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> RecommendationPreview:
+    actor.require_roles(READ)
+    return _evaluate(
+        session,
+        actor,
+        identifier,
+        payload.expected_approved_revision_id,
+        now,
+        payload.financial,
+        payload.inbound,
+    )
+
+
+def _response(row: ReplenishmentRecommendation) -> RecommendationResponse:
+    return RecommendationResponse(
+        id=row.id,
+        request_id=row.request_id,
+        policy_id=row.policy_id,
+        approved_revision_id=row.approved_revision_id,
+        product_id=row.product_id,
+        vendor_product_id=row.vendor_product_id,
+        marketplace_id=row.marketplace_id,
+        status=row.status,
+        snapshot=TypeAdapter(EvaluationSnapshot).validate_python(row.snapshot),
+        evidence_sha256=row.evidence_sha256,
+        snapshot_sha256=row.snapshot_sha256,
+        recorded_by_user_id=row.recorded_by_user_id,
+        recorded_at=row.recorded_at,
+        reason=row.reason,
+    )
+
+
+def record_recommendation(
+    session: Session,
+    actor: Principal,
+    identifier: uuid.UUID,
+    payload: RecommendationRecordRequest,
+    *,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> RecommendationResponse:
+    actor.require_roles(WRITE)
+    repository = RecommendationRepository(session, actor.organization_id)
+    request_data = payload.model_dump(mode="json")
+    if payload.financial is None:
+        request_data.pop("financial")  # Preserve exact legacy retry fingerprints.
+    if payload.inbound is None:
+        request_data.pop("inbound")  # Preserve legacy successful retry fingerprints.
+    fingerprint = policies.digest({"policy_id": str(identifier), **request_data})
+    with transaction(session):
+        repository.lock_request(payload.request_id)
+        policies.validate_actor(PurchasingPolicyRepository(session, actor.organization_id), actor)
+        existing = repository.by_request(payload.request_id)
+        if existing:
+            if (
+                existing.request_sha256 != fingerprint
+                or existing.recorded_by_user_id != actor.user_id
+            ):
+                raise RecommendationConflict(details={"code": "REQUEST_ID_REUSED"})
+            return _response(existing)
+        preview = _evaluate(
+            session,
+            actor,
+            identifier,
+            payload.expected_approved_revision_id,
+            now,
+            payload.financial,
+            payload.inbound,
+        )
+        if preview.evidence_sha256 != payload.expected_evidence_sha256:
+            raise RecommendationConflict(details={"code": "RECOMMENDATION_EVIDENCE_CHANGED"})
+        snapshot = preview.snapshot.model_dump(mode="json")
+        row = ReplenishmentRecommendation(
+            id=uuid.uuid4(),
+            organization_id=actor.organization_id,
+            request_id=payload.request_id,
+            request_sha256=fingerprint,
+            policy_id=identifier,
+            approved_revision_id=payload.expected_approved_revision_id,
+            product_id=preview.snapshot.product_id,
+            vendor_product_id=preview.snapshot.vendor_product_id,
+            marketplace_id=preview.snapshot.marketplace_id,
+            financial_import_id=payload.financial.import_id if payload.financial else None,
+            financial_binding_revision_id=payload.financial.expected_binding_revision_id
+            if payload.financial
+            else None,
+            status=preview.snapshot.status,
+            snapshot=snapshot,
+            evidence_sha256=preview.evidence_sha256,
+            snapshot_sha256=policies.digest(snapshot),
+            recorded_by_user_id=actor.user_id,
+            recorded_at=datetime.now(UTC),
+            reason=payload.reason,
+            purchasing_eligible=False,
+        )
+        session.add(row)
+        session.flush()
+        audit.record(
+            session,
+            organization_id=actor.organization_id,
+            actor=actor,
+            action="replenishment_recommendation.recorded",
+            entity_type="replenishment_recommendation",
+            entity_id=row.id,
+            after={
+                "policy_id": str(identifier),
+                "approved_revision_id": str(row.approved_revision_id),
+                "request_id": str(payload.request_id),
+                "status": row.status,
+                "evidence_sha256": row.evidence_sha256,
+                "snapshot_sha256": row.snapshot_sha256,
+                "reason": row.reason,
+            },
+        )
+        result = _response(row)
+    return result
+
+
+def get_recommendation(
+    session: Session, actor: Principal, identifier: uuid.UUID
+) -> RecommendationResponse:
+    actor.require_roles(READ)
+    row = RecommendationRepository(session, actor.organization_id).get(identifier)
+    if row is None:
+        raise RecommendationNotFound()
+    return _response(row)
+
+
+def recommendation_page(
+    session: Session,
+    actor: Principal,
+    page: int,
+    size: int,
+    *,
+    policy_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
+    status: EvaluationStatus | None = None,
+) -> RecommendationPage:
+    actor.require_roles(READ)
+    rows, total = RecommendationRepository(session, actor.organization_id).page(
+        page, size, policy_id=policy_id, product_id=product_id, status=status
+    )
+    return RecommendationPage(
+        items=tuple(_response(row) for row in rows), page=page, page_size=size, total=total
+    )

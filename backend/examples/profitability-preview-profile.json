@@ -1,0 +1,30 @@
+{
+  "name": "Synthetic profitability example — not a verified ConnectBooks layout",
+  "version": 1,
+  "source_name": "Synthetic fixture",
+  "marketplace_id": "ATVPDKIKX0DER",
+  "currency": "USD",
+  "period_start": "2026-10-01T00:00:00Z",
+  "period_end": "2026-11-01T00:00:00Z",
+  "values_basis": "period_totals",
+  "revenue_basis": "net_after_refunds_excluding_tax",
+  "expense_basis": "positive_expense_totals",
+  "quantity_basis": "seller_sku_units",
+  "columns": {
+    "seller_sku": "Seller SKU",
+    "units_sold": "Units",
+    "net_revenue": "Net Revenue",
+    "cost_of_goods": "COGS",
+    "amazon_fees": "Amazon Fees",
+    "shipping": "Shipping",
+    "advertising": "Advertising",
+    "other_costs": "Other Costs",
+    "currency": "Currency"
+  },
+  "confirmed_zero_costs": [],
+  "encoding": "utf-8-sig",
+  "delimiter": ",",
+  "decimal_separator": ".",
+  "thousands_separator": ",",
+  "header_row_index": 0
+}

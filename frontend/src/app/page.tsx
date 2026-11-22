@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { ReplenishmentOverview } from "@/components/ReplenishmentOverview";
 import { SystemStatusCard } from "@/components/ApiStatus";
 import { ErrorNote, Loading, StatusBadge, fmtDate, fmtDuration, fmtNumber, fmtWhen } from "@/components/ui";
 import { useDashboard } from "@/lib/queries";
@@ -121,6 +122,7 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
+      <ReplenishmentOverview />
       <div className="grid dashboard-grid" style={{ marginTop: 26 }}>
         <section className="card dashboard-imports">
           <div className="card__header">

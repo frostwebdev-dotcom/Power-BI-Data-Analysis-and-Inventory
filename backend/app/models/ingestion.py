@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
@@ -215,7 +216,7 @@ class ImportJobRow(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMixin,
     description: Mapped[str | None] = mapped_column(nullable=True)
 
     quantity: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    unit_cost: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     availability_status: Mapped[AvailabilityStatus | None] = mapped_column(
         pg_enum(AvailabilityStatus, "availability_status"), nullable=True

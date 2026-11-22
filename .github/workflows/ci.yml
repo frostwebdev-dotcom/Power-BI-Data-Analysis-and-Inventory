@@ -225,6 +225,79 @@ jobs:
           E2E_ADMIN_EMAIL: admin@example.test
         run: npx playwright test
 
+      - name: Financial import layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-import-layouts
+          path: |
+            frontend/test-results/**/financial-desktop.png
+            frontend/test-results/**/financial-mobile.png
+            frontend/test-results/**/financial-binding-desktop.png
+            frontend/test-results/**/financial-binding-mobile.png
+            frontend/test-results/**/financial-replacement-desktop.png
+            frontend/test-results/**/financial-replacement-mobile.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Purchasing policy layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: purchasing-policy-layouts
+          path: |
+            frontend/test-results/**/policy-editor-desktop.png
+            frontend/test-results/**/policy-editor-mobile.png
+            frontend/test-results/**/policy-review-desktop.png
+            frontend/test-results/**/policy-review-mobile.png
+            frontend/test-results/**/policy-supplier-editor-desktop.png
+            frontend/test-results/**/policy-supplier-editor-mobile.png
+            frontend/test-results/**/policy-supplier-review-desktop.png
+            frontend/test-results/**/policy-supplier-review-mobile.png
+            frontend/test-results/**/policy-commercial-editor-desktop.png
+            frontend/test-results/**/policy-commercial-editor-mobile.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Recommendation review layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recommendation-layouts
+          path: frontend/test-results/**/recommendation-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Comparison and saved review layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparison-review-layouts
+          path: |
+            frontend/test-results/**/vendor-comparison-*.png
+            frontend/test-results/**/saved-review-*.png
+            frontend/test-results/**/replenishment-dashboard-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Current replenishment layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-replenishment-layouts
+          path: frontend/test-results/**/current-replenishment-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Reviewed inbound layouts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-inbound-layouts
+          path: frontend/test-results/**/inbound-*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

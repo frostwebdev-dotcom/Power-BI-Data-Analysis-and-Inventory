@@ -10,6 +10,8 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 90_000,
   expect: { timeout: 15_000 },
+  // Stop repeated setup failures promptly; a green run still exercises every case.
+  maxFailures: process.env.CI ? 1 : 0,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

@@ -16,14 +16,29 @@ from app.api.v1.routes.vendors import READ_ROLES
 from app.core.security import Principal
 from app.db.session import get_db
 from app.schemas.amazon import AmazonVelocityResponse, AmazonVelocityRowResponse
+from app.schemas.amazon_readiness import AmazonReadinessRequest, AmazonReadinessResponse
+from app.services.amazon_readiness import check_amazon_readiness
 from app.services.amazon_velocity import VelocityRow, velocity_report
 
 router = APIRouter(prefix="/amazon", tags=["amazon"])
 
 _read = Depends(require_roles(*READ_ROLES))
-
 Responses = dict[int | str, dict[str, Any]]
 _FORBIDDEN: Responses = {403: {"description": "The caller lacks the required role."}}
+
+
+@router.post(
+    "/replenishment-readiness",
+    response_model=AmazonReadinessResponse,
+    summary="Check ingested Amazon input readiness without buying or writing data",
+    responses=_FORBIDDEN,
+)
+def replenishment_readiness(
+    payload: AmazonReadinessRequest,
+    principal: Principal = _read,
+    session: Session = Depends(get_db),
+) -> AmazonReadinessResponse:
+    return check_amazon_readiness(session, principal, payload)
 
 
 def _response(row: VelocityRow) -> AmazonVelocityRowResponse:

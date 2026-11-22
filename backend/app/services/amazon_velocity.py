@@ -12,7 +12,9 @@ Read-only. Combines three sources already in PostgreSQL:
 Days of supply is the one derived number: on-hand (fulfillable + FBM) over
 the 14-day average daily rate. It is ``None`` when nothing sold — a SKU that
 sells zero has no meaningful runway, and a fake infinity is worse than a
-blank. No replenishment quantity is computed here or anywhere (ADR 0011).
+blank. This read-only report never computes replenishment quantities (ADR 0011).
+Milestone 2's explicit-input preview is separate and not wired to these rows
+(ADR 0022).
 """
 
 from __future__ import annotations

@@ -290,3 +290,13 @@ class TestMerge:
 
         assert merged.rows == []
         assert merged.errors[0]["reason"] == "FBA summary has no ASIN"
+
+
+def test_merged_fba_fbm_snapshot_retains_merchant_quantity_evidence() -> None:
+    listings = parse_listings_report(FIXTURE_UTF8).listings
+    merged = merge_snapshot_rows([summary("GADGET-1", asin="B000TEST02")], listings)
+    result = next(value for value in merged.rows if value.seller_sku == "GADGET-1")
+    assert result.raw["source"] == "fba_inventory"
+    assert result.raw["listing"]["fulfillment-channel"] == "DEFAULT"
+    assert result.raw["listing"]["quantity"] == "17"
+    assert result.fbm_quantity == 17

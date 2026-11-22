@@ -511,3 +511,18 @@ step runs it against the real account, these remain assumptions:
 Each is recorded when observed, in the same way
 [nineyard-field-mapping.md](nineyard-field-mapping.md) records Nineyard
 findings.
+
+## Milestone 2 input-readiness check
+
+ADR 0029 adds a separate authenticated, tenant-scoped read-only
+POST /api/v1/amazon/replenishment-readiness. See
+[the readiness guide](amazon-data-readiness.md) for explicit US sales-window,
+freshness, pack conversion and distinct-stock-pool assumptions. It never calls
+Amazon, saves purchasing policy or computes a recommendation. Unknown quantities,
+unproven order-date coverage and inbound without arrival evidence remain blocked.
+
+The existing scheduler, default orders report and velocity report are unchanged.
+An opt-in sync-orders --order-date-baseline flag requests the order-date report
+and records safe run/line evidence for future readiness checks. It has not been
+run against the client account as part of this increment. No new migration or
+deployment is required to add this read-only code; rollout is still pending.

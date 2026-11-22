@@ -1,0 +1,18 @@
+{
+  "policy": {
+    "velocity_window_days": 14,
+    "target_days": 14,
+    "lead_time_days": 0,
+    "safety_days": 0,
+    "minimum_order_units": 0,
+    "order_multiple_units": 1
+  },
+  "sales_units": 280,
+  "on_hand_units": 50,
+  "inbound_units": 20,
+  "vendor_availability": "IN_STOCK",
+  "vendor_stock_units": 1000,
+  "mapping_approved": true,
+  "units_confirmed": true,
+  "source_data_current": true
+}

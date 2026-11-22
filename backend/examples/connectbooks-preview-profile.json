@@ -1,0 +1,12 @@
+{
+  "layout_version": "connectbooks-signed-pnl-xlsx-v1",
+  "sheet_name": "Main sheet",
+  "store_name": "Synthetic Store-Amazon",
+  "source_store_name": "Synthetic Store",
+  "marketplace_id": "ATVPDKIKX0DER",
+  "currency": "USD",
+  "reporting_month": 10,
+  "reporting_year": null,
+  "reporting_timezone": null,
+  "advertising_coverage_confirmed": false
+}
