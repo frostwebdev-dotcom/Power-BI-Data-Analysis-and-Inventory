@@ -1,6 +1,9 @@
 # Milestone 2 client confirmations
 
-Status: **partially answered — reporting year/timezone confirmed**. On 18 November 2026,
+Status: **partially answered — reporting year/timezone and three SKU selections received**.
+The three selections and their mapping review are retained in the private intake
+record outside git. Their business inputs and real-case acceptance remain open.
+On 18 November 2026,
 the owner relayed the client's reply: year 2026 and EST, explicitly UTC−05:00.
 The follow-up message below is prepared only; it has not been sent. No policy
 approval, real-file import or operational sign-off is implied. The supplied
@@ -39,9 +42,10 @@ No client workbook was uploaded or financial record created by verifying dates.
 
 ## Follow-up message to Pinchas — not sent
 
-Thanks for confirming October 2026 and EST (UTC−05:00). Could you confirm whether
-product costs and advertising are complete or anything is missing, and choose
-three exact Amazon SKUs to validate first? For those items, we can review your
+Thanks for confirming October 2026, EST (UTC−05:00), and the three Amazon SKUs.
+Could you confirm whether product costs and advertising are complete or anything
+is missing? One selected item currently has inactive catalogue/listing status;
+please confirm whether it is still intended for replenishment. We can review your
 demand window, target coverage, lead/safety days, pack/order units and supplier
 minimums/terms together. Please confirm whether target coverage already includes
 lead and safety. If there are outstanding shipments, please include complete
@@ -64,7 +68,8 @@ unresolved decisions. A confirmed zero needs a source/reference.
 | Reviewer / purchasing manager | Unconfirmed | |
 
 The confirmed local/UTC bounds above close the missing year/timezone input.
-Remaining source, coverage, SKU and purchasing fields still need their own
+The three SKU selections have also been supplied separately. Remaining source,
+coverage, per-SKU status/unit decisions and purchasing fields still need their own
 evidence. The client does not need to provide internal UUIDs or database fields.
 
 | Per-item decision | Case A | Case B | Case C |

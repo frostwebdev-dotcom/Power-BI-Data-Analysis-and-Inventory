@@ -1,10 +1,32 @@
 # Milestone 2 status
 
-Started 11 November 2026 by explicit owner instruction. Milestone 2 work remains
-isolated from the deployed Milestone 1 system. In Milestone 1 staging, Gmail and
+Started 11 November 2026 by explicit owner instruction. The owner requested
+publishing the implemented source to `main` on 22 November; it remains a
+development baseline, separate from the deployed Milestone 1 system. Gmail and
 the HAZ v2 source were enabled on 18 November after successful authorization;
-both a manual and a later scheduled mailbox check succeeded. The first new
-matching HAZ delivery and real-file acceptance remain pending.
+both a manual and a later scheduled mailbox check succeeded. Owner-provided
+screenshots on 21 November show a completed automatic HAZ delivery and import.
+Product-matching review, replay acceptance and milestone sign-off remain open.
+
+## Source publication checkpoint — 22 November 2026
+
+- Incorporated the current `main` Nineyard mapping-envelope fix before publishing
+  Milestone 2 source, retaining the HAZ reader compatibility already verified.
+- Three exact seller SKUs were supplied on 20 November and checked against the
+  supplied reports and live approved mappings. Their private intake record stays
+  outside git. One case has inactive catalogue/listing status; pack conversions,
+  purchasing inputs, cost/advertising coverage and real-case acceptance are open.
+- Publishing source does not deploy the new schema or change live client policies,
+  financial imports, product approvals or scheduled jobs. Staging deployment of
+  the Nineyard fix remains a separate action awaiting explicit authorization.
+- Full Milestone 2 completion remains open. In addition to the acceptance items
+  below, implementation/coverage checks remain for sales-trend views, projected
+  landed cost/revenue/profit/ROI, the full three dashboard sections and filters,
+  and dedicated-worker/failure-alert operation. Existing financial context is
+  historical and must not be described as a future profit forecast.
+
+The dated deliverable entries below describe their state at that time; statements
+that an increment was unmerged are historical, not the publication status above.
 
 ## First deliverable
 
@@ -372,7 +394,7 @@ matching HAZ delivery and real-file acceptance remain pending.
   reviewed FBA/FBM positions and real supplier-aware recommendations.
 - Actual original-file reconciliation, coverage assertions and cost review before
   real-file operational acceptance. Year 2026 / fixed UTC−05:00 are confirmed.
-  The database/API and staff interface are implemented on the draft branch.
+  The database/API and staff interface are implemented in the source snapshot.
 - Client confirmation and operational acceptance of SKU commercial scopes,
   pool priority, price conversions, landed-cost inputs and historical financial context.
 - Operational acceptance of the implemented scoped APIs, dashboard, search,

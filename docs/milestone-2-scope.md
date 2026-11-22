@@ -3,10 +3,15 @@
 Owner instruction, 11 November 2026: "I would like to start Milestone 2 first."
 Milestone 1 acceptance remains open. Its Gmail connection and HAZ v2 source were
 enabled on 18 November after successful live authorization and mailbox checks;
-the first new matching email/file acceptance is still pending.
+the owner-provided report on 21 November shows a completed automatic HAZ file
+import. Product-matching review and replay acceptance remain open.
 This authorizes development, not a revised client price, deadline or acceptance.
 The September proposal contains superseded dates and proposed prices; none is
 silently carried into a new commitment here.
+
+On 22 November the owner requested publishing all implemented work to `main`.
+This source snapshot remains work in progress. Publishing it does not deploy
+Milestone 2 migrations, certify the unfinished scope, or record client sign-off.
 
 ## Deliverables
 

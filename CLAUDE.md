@@ -10,9 +10,12 @@ before writing code.
 
 A production Purchasing and Replenishment Management System. Work is delivered in
 milestones. **Milestone 1 operational acceptance remains open; Milestone 2
-development was authorized by the owner on 11 November 2026.** Milestone 2 work
-starts on an isolated branch under [docs/milestone-2-scope.md](docs/milestone-2-scope.md)
-and ADR 0022. Starting it does not accept Milestone 1 or enable Gmail ingestion.
+development was authorized by the owner on 11 November 2026.** Milestone 2 started
+on an isolated branch under [docs/milestone-2-scope.md](docs/milestone-2-scope.md)
+and ADR 0022. The owner requested publishing the implemented work to `main` on
+22 November 2026. This is a development baseline, not milestone acceptance or
+authorization to deploy its migrations. Milestone 1 Gmail ingestion was enabled
+separately; see the current status documents for operational evidence.
 
 Authoritative scope documents:
 

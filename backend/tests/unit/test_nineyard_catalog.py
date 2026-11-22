@@ -154,6 +154,91 @@ def test_a_stale_mapping_id_does_not_discard_valid_ids() -> None:
     assert list(reader.iter_sku_mappings()) == [SkuProductMapping("SKU-A", (101,))]
 
 
+@pytest.mark.parametrize("empty_pages", [0, 1])
+def test_mapping_envelope_accepts_complete_and_empty_batches(empty_pages: int) -> None:
+    client = FakeClient(
+        [
+            [{"accountSkuId": 11, "sku": "SKU-A"}],
+            [{"accountSkuId": 12, "sku": "SKU-B"}],
+            {
+                "totalRecords": 1,
+                "totalPages": 1,
+                "mappings": [{"accountSkuId": 11, "mappedItems": [{"itemId": 101}]}],
+            },
+            {"totalRecords": 0, "totalPages": empty_pages, "mappings": []},
+        ]
+    )
+    reader = NineyardCatalogReader(
+        client,
+        sku_account="Seller Account",
+        seller_skus=["SKU-A", "SKU-B"],
+        mapping_batch_size=1,
+        sku_request_interval_seconds=0,
+    )
+
+    assert list(reader.iter_sku_mappings()) == [SkuProductMapping("SKU-A", (101,))]
+
+
+@pytest.mark.parametrize("total_pages", [1, 2])
+def test_incomplete_mapping_batch_is_split_and_read_completely(total_pages: int) -> None:
+    first = {"accountSkuId": 11, "mappedItems": [{"itemId": 101}]}
+    second = {"accountSkuId": 12, "mappedItems": [{"itemId": 102}, {"itemId": 103}]}
+    client = FakeClient(
+        [
+            [{"accountSkuId": 11, "sku": "SKU-A"}],
+            [{"accountSkuId": 12, "sku": "SKU-B"}],
+            {"totalRecords": 2, "totalPages": total_pages, "mappings": [first]},
+            {"totalRecords": 1, "totalPages": 1, "mappings": [first]},
+            {"totalRecords": 1, "totalPages": 1, "mappings": [second]},
+        ]
+    )
+    reader = NineyardCatalogReader(
+        client,
+        sku_account="Seller Account",
+        seller_skus=["SKU-A", "SKU-B"],
+        sku_request_interval_seconds=0,
+    )
+
+    assert list(reader.iter_sku_mappings()) == [
+        SkuProductMapping("SKU-A", (101,)),
+        SkuProductMapping("SKU-B", (102, 103)),
+    ]
+    assert client.calls[-3:] == [
+        ("/api/Skus/GetSkuMappings", {"AccountSkuIds": [11, 12]}),
+        ("/api/Skus/GetSkuMappings", {"AccountSkuIds": [11]}),
+        ("/api/Skus/GetSkuMappings", {"AccountSkuIds": [12]}),
+    ]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"message": "Upstream error"},
+        {"totalRecords": 1, "totalPages": 1, "mappings": {}},
+        {"mappings": []},
+        {"totalRecords": True, "totalPages": 1, "mappings": []},
+        {"totalRecords": 0, "totalPages": True, "mappings": []},
+        {"totalRecords": -1, "totalPages": 1, "mappings": []},
+        {"totalRecords": 0, "totalPages": -1, "mappings": []},
+        {"totalRecords": 0, "totalPages": 1, "mappings": [{}]},
+        {"totalRecords": 1, "totalPages": 0, "mappings": [{}]},
+        {"totalRecords": 2, "totalPages": 2, "mappings": []},
+    ],
+)
+def test_invalid_mapping_objects_never_become_successful_empty_results(body: Any) -> None:
+    client = FakeClient([[{"accountSkuId": 11, "sku": "SKU-A"}], body])
+    reader = NineyardCatalogReader(
+        client,
+        sku_account="Seller Account",
+        seller_skus=["SKU-A"],
+        sku_request_interval_seconds=0,
+    )
+
+    with pytest.raises(NineyardProtocolError):
+        list(reader.iter_sku_mappings())
+    assert len(client.calls) == 2
+
+
 def test_repeated_page_is_rejected() -> None:
     client = FakeClient(
         [
