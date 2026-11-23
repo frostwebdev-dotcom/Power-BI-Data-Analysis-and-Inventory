@@ -1,12 +1,46 @@
 # Milestone 2 status
 
 Started 11 November 2026 by explicit owner instruction. The owner requested
-publishing the implemented source to `main` on 22 November; it remains a
-development baseline, separate from the deployed Milestone 1 system. Gmail and
+publishing the implemented source to `main` on 22 November and authorized its
+staging deployment on 23 November. The deployed source remains a development
+baseline; unfinished scope and real-case acceptance remain open. Gmail and
 the HAZ v2 source were enabled on 18 November after successful authorization;
 both a manual and a later scheduled mailbox check succeeded. Owner-provided
 screenshots on 21 November show a completed automatic HAZ delivery and import.
 Product-matching review, replay acceptance and milestone sign-off remain open.
+
+## Staging release and live verification — 23 November 2026
+
+- Deployed source `9e5f89b088a8ee1d092034eeba7c85a9ab412b57` in
+  [release CI #238](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/runs/45179279949).
+  All checks passed: 2,329 backend tests, 92 browser tests, migrations/schema,
+  types/lint/builds, Compose and Windows storage/Gmail-launcher checks.
+- Applied the nine checksum-verified migrations from that pinned source before
+  deploying the images, advancing `a61106202601` to `a61118202601`. The deployed
+  image passed `alembic check` with no pending model changes. The Azure workflow
+  does not apply migrations itself; see [deployment instructions](deployment.md).
+- API revision `ca-prms-api-staging--gh-45179279949-1` and web revision
+  `ca-prms-web-staging--gh-45179279949-1` became healthy. Live source checksums
+  matched the release. Liveness and database health returned 200; the financial
+  route returned 401 without authentication, and Microsoft sign-in stayed active.
+- A real Microsoft sign-in succeeded. Financial imports, purchasing policies,
+  inbound arrivals and current replenishment pages loaded with their expected
+  empty states. No financial report or purchasing policy was created for this
+  verification; the live financial import count remained zero.
+- A full manual Nineyard run completed at **08:23:48 EST**, taking 17m 23s:
+  **7,301 items seen, 31 created, 2,017 updated, 5,253 unchanged and zero failed**.
+  The feed flagged 231 source-deleted items. All 766 targeted SKU mapping
+  responses were read; 77 SKU identifiers were created, while 87 mapping
+  records were skipped by the existing mapping rules. This does not certify
+  every mapping or approve pending vendor suggestions.
+- The live dashboard showed Nineyard **completed** and **All systems operational**.
+  Gmail remained enabled and completed a scheduled mailbox check at **08:24 EST**
+  with no mailbox error. The existing HAZ source and successful delivery remained
+  visible. No credentials, private mailbox cursor or client financial values
+  were recorded here.
+
+This release makes the implemented features available for staging validation;
+it does not complete the remaining Milestone 2 work listed below.
 
 ## Source publication checkpoint — 22 November 2026
 
@@ -18,7 +52,8 @@ Product-matching review, replay acceptance and milestone sign-off remain open.
   purchasing inputs, cost/advertising coverage and real-case acceptance are open.
 - Publishing source does not deploy the new schema or change live client policies,
   financial imports, product approvals or scheduled jobs. Staging deployment of
-  the Nineyard fix remains a separate action awaiting explicit authorization.
+  the Nineyard fix was still awaiting separate authorization at this checkpoint;
+  that authorization and deployment occurred on 23 November as recorded above.
 - Full Milestone 2 completion remains open. In addition to the acceptance items
   below, implementation/coverage checks remain for sales-trend views, projected
   landed cost/revenue/profit/ROI, the full three dashboard sections and filters,

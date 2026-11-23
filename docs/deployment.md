@@ -215,6 +215,21 @@ The schema is not created by the application. Set `alembic upgrade head` as the
 takes traffic. Running it as part of the start command instead means every
 replica races to migrate.
 
+The current Azure staging workflow in `.github/workflows/ci.yml` deploys and
+checks the images but **does not execute the database migrations**. A successful
+workflow result alone is therefore insufficient evidence that the schema was
+upgraded. Apply the pending migrations separately before starting an authorized
+release, then run `alembic check` from the deployed image.
+
+For the owner-authorized 23 November 2026 release, the nine migration files were
+loaded from pinned commit `9e5f89b088a8ee1d092034eeba7c85a9ab412b57`, individually
+verified against their source SHA-256 hashes, and applied through an isolated
+Alembic script directory using the existing staging database configuration.
+The schema advanced from `a61106202601` to `a61118202601` before release #238
+deployed either image. Post-release `alembic check` reported no new upgrade
+operations. Do not assume a future release performs this separate step until
+an explicit migration gate is added to the workflow.
+
 ---
 
 ## Verifying a deployment
