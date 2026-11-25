@@ -1,5 +1,22 @@
 # Automatic vendor inventory imports
 
+## Exact download-link selection — 24 November 2026
+
+ADR 0028 adds optional `download_link_text` and `download_link_image` to link sources.
+The text selector selects an exact
+HTML-anchor label after whitespace collapse and case folding, so an inventory
+button can be distinguished from an ordering link on the same tracking host.
+Image-only buttons may instead be selected by their exact HTTPS image host/path,
+without loading images or storing query strings. Both selectors, when present,
+must match the same anchor. Blank selectors retain existing behavior. Missing or ambiguous matches require
+review; host/path and every redirect check still apply. Existing attachment
+sources and mailbox permissions are unchanged. Apply additive migration
+`a61125202601` before deploying this code. Implementation is under validation;
+this note does not claim live MTZ/French automation or a successful email delivery.
+French's reviewed profile also uses ADR 0029's opt-in valid-price requirement for
+derived offer identities, preserving distinct conditions and rejecting unpriced
+metadata rows. Existing profiles retain their prior behavior.
+
 Implementation, 2026-11-06. Live mailbox connection and acceptance remain pending.
 
 ## Gmail adaptation — 2026-11-09

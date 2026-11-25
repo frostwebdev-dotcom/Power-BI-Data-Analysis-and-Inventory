@@ -95,6 +95,109 @@ def test_extracts_anchors_and_plain_links_without_loading_email_resources() -> N
     ]
 
 
+def test_download_label_selects_only_inventory_among_tracking_links() -> None:
+    body = (
+        '<a href="https://tracker.example/tn.jsp?f=inventory&amp;c=private">'
+        " Download <b>Excel</b><br>PriceList </a>"
+        '<a href="https://tracker.example/tn.jsp?f=order">Order Online</a>'
+        '<img src="https://tracker.example/pixel">'
+    )
+    assert email_links(body, link_text="download excel pricelist") == [
+        "https://tracker.example/tn.jsp?f=inventory&c=private"
+    ]
+    assert len(email_links(body)) == 2
+    assert email_links(body, link_text="Changed Download Label") == []
+
+
+def test_label_does_not_fall_back_to_plain_urls_or_choose_first_ambiguous_link() -> None:
+    body = (
+        '<a href="https://files.example/one">Download</a>'
+        '<a href="https://files.example/two">Download</a>'
+        '<a href="https://files.example/one">Download</a>'
+        " Download https://files.example/unlabelled.xlsx"
+    )
+    assert email_links(body, link_text="Download") == [
+        "https://files.example/one",
+        "https://files.example/two",
+    ]
+    assert email_links("Download https://files.example/stock.xlsx", link_text="Download") == []
+
+
+def test_link_text_is_optional_bounded_and_only_applies_to_links() -> None:
+    values = source_payload(
+        mode="LINK",
+        download_hosts=["files.example.com"],
+        download_path_prefix="/files/",
+        download_filename="inventory.xlsx",
+    )
+    assert MailSourceWrite.model_validate(values).download_link_text is None
+    assert (
+        MailSourceWrite.model_validate(
+            {**values, "download_link_text": "  Download \n Excel PriceList  "}
+        ).download_link_text
+        == "Download Excel PriceList"
+    )
+    assert (
+        MailSourceWrite.model_validate({**values, "download_link_text": "  "}).download_link_text
+        is None
+    )
+    for text in ("x" * 201, "Download\x00Excel"):
+        with pytest.raises(ValidationError):
+            MailSourceWrite.model_validate({**values, "download_link_text": text})
+    with pytest.raises(ValidationError, match="only to link sources"):
+        MailSourceWrite.model_validate(source_payload(download_link_text="Download"))
+
+
+def test_image_only_download_button_selects_excel_without_loading_image_or_pdf() -> None:
+    excel = "https://assets.example/buttons/excel.jpg"
+    body = (
+        '<a href="https://tracker.example/tn.jsp?f=excel">'
+        f'<img src="{excel}?rdr=true" alt=""></a>'
+        '<a href="https://tracker.example/tn.jsp?f=pdf">'
+        '<img src="https://assets.example/buttons/pdf.jpg" alt=""></a>'
+    )
+    assert email_links(body, link_image=excel) == ["https://tracker.example/tn.jsp?f=excel"]
+    assert email_links(body, link_image="https://assets.example/changed.jpg") == []
+    assert email_links(body, link_text="Download", link_image=excel) == []
+    assert email_links(body + body.replace("f=excel", "f=second"), link_image=excel) == [
+        "https://tracker.example/tn.jsp?f=excel",
+        "https://tracker.example/tn.jsp?f=second",
+    ]
+
+
+@pytest.mark.parametrize(
+    "image",
+    [
+        "http://assets.example/excel.jpg",
+        "https://user:pass@assets.example/excel.jpg",
+        "https://assets.example/excel.jpg?sig=private",
+        "https://assets.example/excel.jpg#fragment",
+        "https://assets.example:444/excel.jpg",
+        "javascript:alert(1)",
+    ],
+)
+def test_button_image_configuration_rejects_secrets_and_non_https_addresses(image: str) -> None:
+    with pytest.raises(ValidationError):
+        MailSourceWrite.model_validate(
+            source_payload(
+                mode="LINK",
+                download_hosts=["files.example.com"],
+                download_path_prefix="/",
+                download_filename="inventory.xlsx",
+                download_link_image=image,
+            )
+        )
+
+
+def test_button_image_only_applies_to_links() -> None:
+    with pytest.raises(ValidationError, match="only to link sources"):
+        MailSourceWrite.model_validate(
+            source_payload(
+                download_link_image="https://assets.example/excel.jpg",
+            )
+        )
+
+
 @pytest.mark.parametrize(
     "url",
     [

@@ -14,6 +14,7 @@ interface SourceInput {
   name: string; vendor_id: string; profile_id: string; sender_addresses: string[];
   subject_contains: string | null; filename_pattern: string; mode: "ATTACHMENT" | "LINK";
   download_hosts: string[]; download_path_prefix: string | null; download_filename: string | null;
+  download_link_text: string | null; download_link_image: string | null;
   stale_after_hours: number | null; is_active: boolean;
 }
 interface Source extends SourceInput {
@@ -35,7 +36,7 @@ interface Connection {
 
 const EMPTY: SourceInput = { name: "", vendor_id: "", profile_id: "", sender_addresses: [],
   subject_contains: null, filename_pattern: "*.xlsx", mode: "ATTACHMENT", download_hosts: [],
-  download_path_prefix: null, download_filename: null, stale_after_hours: null, is_active: false };
+  download_path_prefix: null, download_filename: null, download_link_text: null, download_link_image: null, stale_after_hours: null, is_active: false };
 const FRESHNESS: Record<string, string> = { paused: "Paused", never_received: "Waiting for first file",
   awaiting_import: "File received; import needs attention", current: "Up to date",
   stale: "Update overdue", irregular: "Updates as received" };
@@ -128,12 +129,14 @@ function SourceEditor({ source, onClose, onSaved }: { source: Source | null; onC
       <label className="field"><span className="field__label">Import profile</span><select aria-label="Import profile" required value={form.profile_id} onChange={(e) => set("profile_id", e.target.value)}><option value="">Select profile</option>{source && !profiles.data?.items.some((p) => p.id === source.profile_id) ? <option value={source.profile_id}>{source.profile_name} v{source.profile_version} — check active version</option> : null}{profiles.data?.items.map((p) => <option key={p.id} value={p.id}>{p.name} v{p.version}</option>)}</select></label>
       <label className="field"><span className="field__label">Approved sender addresses</span><textarea required value={senders} onChange={(e) => setSenders(e.target.value)} placeholder="Exact addresses, separated by commas" /><small>Use the actual vendor sender. Forwarded emails need a rule for the forwarding sender.</small></label>
       <label className="field"><span className="field__label">Subject contains (optional)</span><input maxLength={200} value={form.subject_contains ?? ""} onChange={(e) => set("subject_contains", e.target.value || null)} /></label>
-      <label className="field"><span className="field__label">File delivery</span><select value={form.mode} onChange={(e) => set("mode", e.target.value as SourceInput["mode"])}><option value="ATTACHMENT">Email attachment</option><option value="LINK">Approved direct download link</option></select></label>
+      <label className="field"><span className="field__label">File delivery</span><select aria-label="File delivery" value={form.mode} onChange={(e) => setForm((old) => ({ ...old, mode: e.target.value as SourceInput["mode"], download_link_text: e.target.value === "ATTACHMENT" ? null : old.download_link_text, download_link_image: e.target.value === "ATTACHMENT" ? null : old.download_link_image }))}><option value="ATTACHMENT">Email attachment</option><option value="LINK">Approved direct download link</option></select></label>
       {form.mode === "ATTACHMENT" ? <label className="field"><span className="field__label">Attachment filename pattern</span><input required maxLength={200} value={form.filename_pattern} onChange={(e) => set("filename_pattern", e.target.value)} /><small>For example, *.xlsx or Inventory*.csv. Multiple matching files require review.</small></label> : <>
         <Note>Direct file links only. Vendor login pages and unapproved redirects require review. Do not paste signed download URLs or passwords here.</Note>
         <label className="field"><span className="field__label">Approved download hostnames</span><input required value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="Exact hostnames, separated by commas" /></label>
         <label className="field"><span className="field__label">Download URL path starts with</span><input required value={form.download_path_prefix ?? ""} onChange={(e) => set("download_path_prefix", e.target.value)} placeholder="/inventory/" /></label>
         <label className="field"><span className="field__label">Downloaded filename</span><input required maxLength={200} value={form.download_filename ?? ""} onChange={(e) => set("download_filename", e.target.value)} placeholder="inventory.xlsx" /></label>
+        <label className="field"><span className="field__label">Download link text (optional)</span><input maxLength={200} value={form.download_link_text ?? ""} onChange={(e) => set("download_link_text", e.target.value || null)} placeholder="Download Excel PriceList" /><small>Use the exact download button text when the email also links to ordering or other pages. Capitalization and extra spaces are ignored. A missing or ambiguous match requires review.</small></label>
+        <label className="field"><span className="field__label">Download button image URL (optional)</span><input maxLength={2000} value={form.download_link_image ?? ""} onChange={(e) => set("download_link_image", e.target.value || null)} placeholder="https://files.example.com/excel-button.png" /><small>For image-only buttons. Use the image address without a query string. Changed or duplicate buttons require review.</small></label>
       </>}
       <label className="field"><span className="field__label">Mark overdue after hours (optional)</span><input type="number" min={1} max={87600} value={form.stale_after_hours ?? ""} onChange={(e) => set("stale_after_hours", e.target.value ? Number(e.target.value) : null)} /><small>Leave blank for irregular updates. An overdue source keeps its previous inventory.</small></label>
       <label className="check"><input type="checkbox" checked={form.is_active} onChange={(e) => set("is_active", e.target.checked)} />Enable this source for new emails</label>

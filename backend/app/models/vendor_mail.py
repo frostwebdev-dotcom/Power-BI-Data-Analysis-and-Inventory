@@ -28,6 +28,8 @@ class VendorMailSource(UUIDPrimaryKeyMixin, OrganizationScopedMixin, TimestampMi
     download_hosts: Mapped[list[str]] = mapped_column(default=list)
     download_path_prefix: Mapped[str | None] = mapped_column(String(500))
     download_filename: Mapped[str | None] = mapped_column(String(200))
+    download_link_text: Mapped[str | None] = mapped_column(String(200))
+    download_link_image: Mapped[str | None] = mapped_column(String(2000))
     stale_after_hours: Mapped[int | None] = mapped_column(Integer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     starts_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

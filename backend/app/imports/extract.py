@@ -320,7 +320,11 @@ def extract_row(
         description = " ".join([p for p in prefixes if p] + [description])
     row.description = description or None
     row.offer_variant = raw(ColumnTarget.OFFER_VARIANT) or None
-    if not sku and norm.vendor_sku_from_offer and description:
+    can_derive_offer = True
+    if norm.offer_key_requires_price:
+        offer_price = _parse_decimal(raw(ColumnTarget.UNIT_COST) or "", norm)
+        can_derive_offer = offer_price is not None and offer_price >= 0
+    if not sku and norm.vendor_sku_from_offer and description and can_derive_offer:
         identity = [
             (row.normalized_upc or "") if row.has_valid_checksum else upc or "",
             description,
@@ -334,12 +338,16 @@ def extract_row(
         ).hexdigest()
         row.vendor_sku = row.normalized_vendor_sku = f"OFFER:{digest.upper()}"
         row.vendor_sku_from_offer = True
-    if not row.vendor_sku and not upc:
+    if not row.vendor_sku and (not upc or norm.offer_key_requires_price):
         row.issues.append(
             Issue(
                 IssueCode.IDENTIFIER_MISSING,
                 "vendor_sku",
-                "the row has neither a vendor SKU nor a UPC; nothing could ever match it",
+                (
+                    "cannot derive a supplier offer key without a valid price"
+                    if norm.offer_key_requires_price
+                    else "the row has neither a vendor SKU nor a UPC; nothing could ever match it"
+                ),
             )
         )
 

@@ -22,24 +22,84 @@ class _Links(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.links: list[str] = []
         self.text: list[str] = []
+        self.anchors: list[tuple[str, str, list[str]]] = []
+        self.anchor_url: str | None = None
+        self.anchor_text: list[str] = []
+        self.anchor_images: list[str] = []
 
     def handle_data(self, data: str) -> None:
         self.text.append(data)
+        if self.anchor_url is not None:
+            self.anchor_text.append(data)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() == "br" and self.anchor_url is not None:
+            self.anchor_text.append(" ")
+        if tag.lower() == "img" and self.anchor_url is not None:
+            self.anchor_images.extend(
+                value for key, value in attrs if key.lower() == "src" and value
+            )
         if tag.lower() == "a":
             self.links.extend(value for key, value in attrs if key.lower() == "href" and value)
+            self.anchor_url = next(
+                (value for key, value in attrs if key.lower() == "href" and value), None
+            )
+            self.anchor_text = []
+            self.anchor_images = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "a" and self.anchor_url is not None:
+            self.anchors.append((self.anchor_url, "".join(self.anchor_text), self.anchor_images))
+            self.anchor_url = None
+            self.anchor_text = []
+            self.anchor_images = []
 
 
-def email_links(body: str) -> list[str]:
+def email_links(
+    body: str, *, link_text: str | None = None, link_image: str | None = None
+) -> list[str]:
     parser = _Links()
     parser.feed(body[:512000])
+    if link_text is not None or link_image is not None:
+        expected = " ".join((link_text or "").split()).casefold()
+        expected_image = image_address(link_image) if link_image else None
+        return sorted(
+            {
+                unescape(url)
+                for url, text, images in parser.anchors
+                if (link_text is None or " ".join(text.split()).casefold() == expected)
+                and (
+                    link_image is None
+                    or (expected_image is not None and expected_image in map(image_address, images))
+                )
+            }
+        )
     plain = re.findall(r"https://[^\s<>\"']+", " ".join(parser.text))
     # Query strings stay private and intact. HTML entities are decoded once.
     return sorted(
         {unescape(link) for link in parser.links}
         | {unescape(link).rstrip(".,);") for link in plain}
     )
+
+
+def image_address(url: str) -> tuple[str, str] | None:
+    """Identify a button asset without loading it or retaining its query string."""
+    try:
+        value = urlsplit(url)
+        if (
+            value.scheme != "https"
+            or not value.hostname
+            or value.port not in (None, 443)
+            or value.username is not None
+            or value.password is not None
+            or value.fragment
+            or "\\" in url
+            or any(ord(c) < 32 for c in url)
+        ):
+            return None
+        return value.hostname.lower().rstrip("."), value.path
+    except ValueError:
+        return None
 
 
 def approved_initial_link(url: str, hosts: list[str], prefix: str) -> bool:
