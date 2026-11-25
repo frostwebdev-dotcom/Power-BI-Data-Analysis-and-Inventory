@@ -22,18 +22,44 @@ class _Links(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.links: list[str] = []
         self.text: list[str] = []
+        self.anchors: list[tuple[str, str]] = []
+        self.anchor_url: str | None = None
+        self.anchor_text: list[str] = []
 
     def handle_data(self, data: str) -> None:
         self.text.append(data)
+        if self.anchor_url is not None:
+            self.anchor_text.append(data)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() == "br" and self.anchor_url is not None:
+            self.anchor_text.append(" ")
         if tag.lower() == "a":
             self.links.extend(value for key, value in attrs if key.lower() == "href" and value)
+            self.anchor_url = next(
+                (value for key, value in attrs if key.lower() == "href" and value), None
+            )
+            self.anchor_text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "a" and self.anchor_url is not None:
+            self.anchors.append((self.anchor_url, "".join(self.anchor_text)))
+            self.anchor_url = None
+            self.anchor_text = []
 
 
-def email_links(body: str) -> list[str]:
+def email_links(body: str, *, link_text: str | None = None) -> list[str]:
     parser = _Links()
     parser.feed(body[:512000])
+    if link_text is not None:
+        expected = " ".join(link_text.split()).casefold()
+        return sorted(
+            {
+                unescape(url)
+                for url, text in parser.anchors
+                if " ".join(text.split()).casefold() == expected
+            }
+        )
     plain = re.findall(r"https://[^\s<>\"']+", " ".join(parser.text))
     # Query strings stay private and intact. HTML entities are decoded once.
     return sorted(

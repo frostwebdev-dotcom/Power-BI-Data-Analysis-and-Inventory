@@ -292,7 +292,7 @@ def _candidates(
             source.download_filename or "inventory.xlsx",
             None,
         )
-        for url in email_links(message.body)
+        for url in email_links(message.body, link_text=source.download_link_text)
         if approved_initial_link(url, source.download_hosts, source.download_path_prefix or "")
     ]
 

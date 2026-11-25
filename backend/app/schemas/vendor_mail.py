@@ -21,6 +21,7 @@ class MailSourceWrite(BaseModel):
     download_hosts: list[str] = Field(default_factory=list, max_length=10)
     download_path_prefix: str | None = Field(default=None, max_length=500)
     download_filename: str | None = Field(default=None, max_length=200)
+    download_link_text: str | None = Field(default=None, max_length=200)
     stale_after_hours: int | None = Field(default=None, ge=1, le=87600)
     is_active: bool = False
 
@@ -54,6 +55,12 @@ class MailSourceWrite(BaseModel):
 
     @model_validator(mode="after")
     def link_rules(self) -> MailSourceWrite:
+        if self.download_link_text is not None:
+            self.download_link_text = " ".join(self.download_link_text.split()) or None
+            if self.download_link_text and any(ord(c) < 32 for c in self.download_link_text):
+                raise ValueError("download link text must not contain control characters")
+            if self.download_link_text and self.mode != "LINK":
+                raise ValueError("download link text applies only to link sources")
         if self.mode == "LINK":
             if not self.download_hosts or not self.download_filename:
                 raise ValueError("a link source needs approved hosts and a download filename")

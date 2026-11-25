@@ -5,7 +5,7 @@ const source = {
   id: "source", name: "Universal inventory", vendor_id: "vendor", vendor_code: "UNIVERSAL",
   profile_id: "profile", profile_name: "Universal stock", profile_version: 2,
   sender_addresses: ["stock@vendor.example"], subject_contains: null, filename_pattern: "*.xlsx",
-  mode: "ATTACHMENT", download_hosts: [], download_path_prefix: null, download_filename: null,
+  mode: "ATTACHMENT", download_hosts: [], download_path_prefix: null, download_filename: null, download_link_text: null,
   stale_after_hours: null, is_active: true, starts_at: "2026-11-06T10:00:00Z",
   last_received_at: "2026-11-06T11:00:00Z", last_success_at: null, freshness: "awaiting_import",
 };
@@ -68,6 +68,38 @@ test("viewer sees source, failure reason and report without modification control
   await expect(page.getByRole("button", { name: "Add email source" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Edit Universal inventory" })).toHaveCount(0);
+});
+
+test("link source saves an exact download label and clears it for attachments", async ({ page }) => {
+  const calls = await mockApp(page);
+  await page.goto("/automatic-imports");
+  await page.getByRole("button", { name: "Add email source" }).click();
+  await page.getByLabel("Source name", { exact: true }).fill("Stock download");
+  await page.getByLabel("Vendor", { exact: true }).selectOption("vendor");
+  await page.getByLabel("Import profile", { exact: true }).selectOption("profile");
+  await page.getByLabel("Approved sender addresses").fill("stock@vendor.example");
+  await page.getByLabel("File delivery", { exact: true }).selectOption("LINK");
+  await page.getByLabel("Approved download hostnames").fill("tracker.example, files.example");
+  await page.getByLabel("Download URL path starts with").fill("/tn.jsp");
+  await page.getByLabel("Downloaded filename").fill("inventory.xlsx");
+  await page.getByLabel("Download link text (optional)").fill("Download Excel PriceList");
+  await page.getByRole("button", { name: "Save source", exact: true }).click();
+  await expect.poll(() => calls.find((c) => c.method === "POST")?.body).toMatchObject({
+    mode: "LINK", download_link_text: "Download Excel PriceList", download_path_prefix: "/tn.jsp",
+    download_hosts: ["tracker.example", "files.example"], is_active: false,
+  });
+  await page.getByRole("button", { name: "Add email source" }).click();
+  await page.getByLabel("Source name", { exact: true }).fill("Attachments");
+  await page.getByLabel("Vendor", { exact: true }).selectOption("vendor");
+  await page.getByLabel("Import profile", { exact: true }).selectOption("profile");
+  await page.getByLabel("Approved sender addresses").fill("stock@vendor.example");
+  await page.getByLabel("File delivery", { exact: true }).selectOption("LINK");
+  await page.getByLabel("Download link text (optional)").fill("Download Excel PriceList");
+  await page.getByLabel("File delivery", { exact: true }).selectOption("ATTACHMENT");
+  await page.getByRole("button", { name: "Save source", exact: true }).click();
+  await expect.poll(() => calls.filter((c) => c.method === "POST").at(-1)?.body).toMatchObject({
+    mode: "ATTACHMENT", download_link_text: null,
+  });
 });
 
 test("retry keeps pinned profile unless operator explicitly chooses current profile", async ({ page }) => {

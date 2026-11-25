@@ -1,5 +1,16 @@
 # Automatic vendor inventory imports
 
+## Exact download-link selection — 24 November 2026
+
+ADR 0028 adds optional `download_link_text` to link sources. It selects an exact
+HTML-anchor label after whitespace collapse and case folding, so an inventory
+button can be distinguished from an ordering link on the same tracking host.
+Blank labels retain existing behavior. Missing or ambiguous labels require
+review; host/path and every redirect check still apply. Existing attachment
+sources and mailbox permissions are unchanged. Apply additive migration
+`a61125202601` before deploying this code. Implementation is under validation;
+this note does not claim live MTZ automation or a successful email delivery.
+
 Implementation, 2026-11-06. Live mailbox connection and acceptance remain pending.
 
 ## Gmail adaptation — 2026-11-09
