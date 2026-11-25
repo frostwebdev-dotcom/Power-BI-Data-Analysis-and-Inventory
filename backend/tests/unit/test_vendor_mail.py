@@ -148,6 +148,56 @@ def test_link_text_is_optional_bounded_and_only_applies_to_links() -> None:
         MailSourceWrite.model_validate(source_payload(download_link_text="Download"))
 
 
+def test_image_only_download_button_selects_excel_without_loading_image_or_pdf() -> None:
+    excel = "https://assets.example/buttons/excel.jpg"
+    body = (
+        '<a href="https://tracker.example/tn.jsp?f=excel">'
+        f'<img src="{excel}?rdr=true" alt=""></a>'
+        '<a href="https://tracker.example/tn.jsp?f=pdf">'
+        '<img src="https://assets.example/buttons/pdf.jpg" alt=""></a>'
+    )
+    assert email_links(body, link_image=excel) == ["https://tracker.example/tn.jsp?f=excel"]
+    assert email_links(body, link_image="https://assets.example/changed.jpg") == []
+    assert email_links(body, link_text="Download", link_image=excel) == []
+    assert email_links(body + body.replace("f=excel", "f=second"), link_image=excel) == [
+        "https://tracker.example/tn.jsp?f=excel",
+        "https://tracker.example/tn.jsp?f=second",
+    ]
+
+
+@pytest.mark.parametrize(
+    "image",
+    [
+        "http://assets.example/excel.jpg",
+        "https://user:pass@assets.example/excel.jpg",
+        "https://assets.example/excel.jpg?sig=private",
+        "https://assets.example/excel.jpg#fragment",
+        "https://assets.example:444/excel.jpg",
+        "javascript:alert(1)",
+    ],
+)
+def test_button_image_configuration_rejects_secrets_and_non_https_addresses(image: str) -> None:
+    with pytest.raises(ValidationError):
+        MailSourceWrite.model_validate(
+            source_payload(
+                mode="LINK",
+                download_hosts=["files.example.com"],
+                download_path_prefix="/",
+                download_filename="inventory.xlsx",
+                download_link_image=image,
+            )
+        )
+
+
+def test_button_image_only_applies_to_links() -> None:
+    with pytest.raises(ValidationError, match="only to link sources"):
+        MailSourceWrite.model_validate(
+            source_payload(
+                download_link_image="https://assets.example/excel.jpg",
+            )
+        )
+
+
 @pytest.mark.parametrize(
     "url",
     [

@@ -5,7 +5,7 @@ const source = {
   id: "source", name: "Universal inventory", vendor_id: "vendor", vendor_code: "UNIVERSAL",
   profile_id: "profile", profile_name: "Universal stock", profile_version: 2,
   sender_addresses: ["stock@vendor.example"], subject_contains: null, filename_pattern: "*.xlsx",
-  mode: "ATTACHMENT", download_hosts: [], download_path_prefix: null, download_filename: null, download_link_text: null,
+  mode: "ATTACHMENT", download_hosts: [], download_path_prefix: null, download_filename: null, download_link_text: null, download_link_image: null,
   stale_after_hours: null, is_active: true, starts_at: "2026-11-06T10:00:00Z",
   last_received_at: "2026-11-06T11:00:00Z", last_success_at: null, freshness: "awaiting_import",
 };
@@ -83,9 +83,10 @@ test("link source saves an exact download label and clears it for attachments", 
   await page.getByLabel("Download URL path starts with").fill("/tn.jsp");
   await page.getByLabel("Downloaded filename").fill("inventory.xlsx");
   await page.getByLabel("Download link text (optional)").fill("Download Excel PriceList");
+  await page.getByLabel("Download button image URL (optional)").fill("https://assets.example/excel.jpg");
   await page.getByRole("button", { name: "Save source", exact: true }).click();
   await expect.poll(() => calls.find((c) => c.method === "POST")?.body).toMatchObject({
-    mode: "LINK", download_link_text: "Download Excel PriceList", download_path_prefix: "/tn.jsp",
+    mode: "LINK", download_link_text: "Download Excel PriceList", download_link_image: "https://assets.example/excel.jpg", download_path_prefix: "/tn.jsp",
     download_hosts: ["tracker.example", "files.example"], is_active: false,
   });
   await page.getByRole("button", { name: "Add email source" }).click();
@@ -95,10 +96,11 @@ test("link source saves an exact download label and clears it for attachments", 
   await page.getByLabel("Approved sender addresses").fill("stock@vendor.example");
   await page.getByLabel("File delivery", { exact: true }).selectOption("LINK");
   await page.getByLabel("Download link text (optional)").fill("Download Excel PriceList");
+  await page.getByLabel("Download button image URL (optional)").fill("https://assets.example/excel.jpg");
   await page.getByLabel("File delivery", { exact: true }).selectOption("ATTACHMENT");
   await page.getByRole("button", { name: "Save source", exact: true }).click();
   await expect.poll(() => calls.filter((c) => c.method === "POST").at(-1)?.body).toMatchObject({
-    mode: "ATTACHMENT", download_link_text: null,
+    mode: "ATTACHMENT", download_link_text: null, download_link_image: null,
   });
 });
 

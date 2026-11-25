@@ -95,6 +95,42 @@ def test_existing_supplier_sku_is_authoritative() -> None:
     assert row.vendor_sku == "SUP-1" and not row.vendor_sku_from_offer
 
 
+@pytest.mark.parametrize("price", ["", "PRICE", "-1", "not a price"])
+def test_priced_offer_rule_rejects_unpriced_metadata_without_deriving_identity(price: str) -> None:
+    rules = offer_rules(offer_key_requires_price=True)
+    row = extract_row(
+        rules, plan_columns(rules, HEADERS), 2, ["UPC", "ITEM DESCRIPTION", "", price, "", ""]
+    )
+    assert not row.vendor_sku_from_offer and row.vendor_sku is None
+    assert row.status is ImportRowStatus.ERROR
+    assert IssueCode.IDENTIFIER_MISSING in {i.code for i in row.issues}
+
+
+def test_priced_offer_keys_keep_missing_barcodes_and_remain_stable_when_price_changes() -> None:
+    rules = offer_rules(offer_key_requires_price=True)
+    plan = plan_columns(rules, HEADERS)
+    first = extract_row(rules, plan, 2, ["", "Widget", "", "0", "CLEAN", ""])
+    later = extract_row(rules, plan, 3, ["", "Widget", "", "12.50", "CLEAN", ""])
+    assert first.vendor_sku_from_offer and first.vendor_sku == later.vendor_sku
+    assert first.unit_cost == Decimal("0") and later.unit_cost == Decimal("12.50")
+    assert first.status is not ImportRowStatus.ERROR
+    assert first.quantity is None
+
+
+def test_priced_offer_requirement_is_opt_in_and_needs_derivation_and_price_mapping() -> None:
+    legacy = offer_rules()
+    row = extract_row(legacy, plan_columns(legacy, HEADERS), 2, ["", "Widget", "", "", "", ""])
+    assert row.vendor_sku_from_offer
+    with pytest.raises(ValidationError, match="derived offer keys"):
+        offer_rules(vendor_sku_from_offer=False, offer_key_requires_price=True)
+    values = offer_rules(offer_key_requires_price=True).model_dump(mode="json")
+    values["column_map"]["columns"] = [
+        c for c in values["column_map"]["columns"] if c["target"] != "unit_cost"
+    ]
+    with pytest.raises(ValidationError, match="unit_cost column"):
+        ProfileRules.model_validate(values)
+
+
 def test_declared_brand_prefix_is_preserved_in_description() -> None:
     rules = offer_rules(description_prefix_columns=["Brand"])
     headers = [*HEADERS, "Brand"]

@@ -136,6 +136,14 @@ class NormalizationRules(BaseModel):
             "Keep distinct offers separate and require review before matching their shared UPC."
         ),
     )
+    offer_key_requires_price: bool = Field(
+        default=False,
+        title="Require a valid price for derived offers",
+        description=(
+            "Derive supplier offer keys only for rows with a numeric, non-negative price. "
+            "Unpriced headings and repeated headers remain rejected."
+        ),
+    )
     skip_non_product_rows: bool = Field(
         default=False,
         title="Skip section headings",
@@ -157,6 +165,8 @@ class NormalizationRules(BaseModel):
             raise ValueError("choose only one derived vendor key strategy")
         if self.review_shared_upc_offers and not self.vendor_sku_from_offer:
             raise ValueError("shared offer review requires derived offer keys")
+        if self.offer_key_requires_price and not self.vendor_sku_from_offer:
+            raise ValueError("priced offer keys require derived offer keys")
         return self
 
     @field_validator("currency_symbols_to_strip")
@@ -303,6 +313,8 @@ class ProfileRules(BaseModel):
     def _cross_rules(self) -> ProfileRules:
         targets = self.column_map.targets()
         norm = self.normalization_rules
+        if norm.offer_key_requires_price and ColumnTarget.UNIT_COST not in targets:
+            raise ValueError("priced offer keys require a unit_cost column")
         if (
             norm.vendor_sku_from_offer
             or norm.skip_non_product_rows

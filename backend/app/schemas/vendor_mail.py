@@ -6,6 +6,7 @@ import re
 import uuid
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -22,6 +23,7 @@ class MailSourceWrite(BaseModel):
     download_path_prefix: str | None = Field(default=None, max_length=500)
     download_filename: str | None = Field(default=None, max_length=200)
     download_link_text: str | None = Field(default=None, max_length=200)
+    download_link_image: str | None = Field(default=None, max_length=2000)
     stale_after_hours: int | None = Field(default=None, ge=1, le=87600)
     is_active: bool = False
 
@@ -55,6 +57,26 @@ class MailSourceWrite(BaseModel):
 
     @model_validator(mode="after")
     def link_rules(self) -> MailSourceWrite:
+        if self.download_link_image is not None:
+            self.download_link_image = self.download_link_image.strip() or None
+        if self.download_link_image:
+            image = urlsplit(self.download_link_image)
+            if (
+                image.scheme != "https"
+                or not image.hostname
+                or image.port not in (None, 443)
+                or image.username
+                or image.password
+                or image.query
+                or image.fragment
+                or "\\" in self.download_link_image
+                or any(ord(c) < 32 for c in self.download_link_image)
+            ):
+                raise ValueError(
+                    "button image must be an HTTPS address without credentials or query"
+                )
+            if self.mode != "LINK":
+                raise ValueError("download button image applies only to link sources")
         if self.download_link_text is not None:
             self.download_link_text = " ".join(self.download_link_text.split()) or None
             if self.download_link_text and any(ord(c) < 32 for c in self.download_link_text):

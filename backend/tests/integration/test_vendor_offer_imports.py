@@ -228,6 +228,72 @@ def test_historical_file_level_job_blocks_new_worksheet_attempt(
     assert outcome.duplicate and outcome.job.id == historical.id
 
 
+def test_priced_offer_profile_rejects_metadata_and_preserves_distinct_conditions(
+    db_session: Session, context: tuple[Organization, Vendor, User, Principal], tmp_path: Path
+) -> None:
+    org, vendor, _, actor = context
+    selected = create_profile(
+        db_session,
+        actor,
+        vendor.id,
+        ImportProfileCreate.model_validate(
+            {
+                "name": "Priced supplier offers",
+                "file_format": "CSV",
+                "column_map": {
+                    "columns": [
+                        {"target": "upc", "source": 0},
+                        {"target": "description", "source": 1},
+                        {"target": "unit_cost", "source": 2},
+                        {"target": "offer_variant", "source": 3},
+                    ]
+                },
+                "normalization_rules": {
+                    "vendor_sku_from_offer": True,
+                    "review_shared_upc_offers": True,
+                    "offer_key_requires_price": True,
+                },
+                "availability_rules": {"available_when": "listed"},
+            }
+        ),
+    )
+    raw = (
+        b"UPC,Description,Price,Condition\n"
+        b"012345678905,Widget,10,CLEAN\n"
+        b"012345678905,Widget,8,DAMAGED BOX\n"
+        b",SECTION TITLE,,\n"
+        b"UPC,Description,Price,Condition\n"
+    )
+    storage = LocalStorageBackend(tmp_path)
+    outcome = receive_upload(
+        db_session,
+        storage,
+        principal=actor,
+        vendor_id=vendor.id,
+        profile_id=selected.id,
+        filename="offers.csv",
+        content=raw,
+        declared_mime=None,
+        max_bytes=100000,
+    )
+    process_import_job(
+        db_session, storage, organization_id=org.id, job_id=outcome.job.id, actor=actor
+    )
+    match_import_job(db_session, organization_id=org.id, job_id=outcome.job.id, actor=actor)
+    result = snapshot_import_job(
+        db_session, organization_id=org.id, job_id=outcome.job.id, actor=actor
+    )
+    assert result.status is ImportJobStatus.COMPLETED_WITH_ERRORS
+    assert result.total_rows == 4 and result.error_rows == 2
+    assert result.matched_rows == 0 and result.exception_rows == 2
+    snapshots = db_session.scalars(
+        select(VendorInventorySnapshot).where(VendorInventorySnapshot.organization_id == org.id)
+    ).all()
+    assert len(snapshots) == 2
+    assert len({s.vendor_product_id for s in snapshots}) == 2
+    assert storage.open(outcome.job.import_file.storage_uri) == raw
+
+
 def test_shared_offers_require_review_and_each_keep_a_snapshot(
     db_session: Session, context: tuple[Organization, Vendor, User, Principal], tmp_path: Path
 ) -> None:

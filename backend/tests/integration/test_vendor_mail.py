@@ -355,28 +355,36 @@ def test_blocked_download_keeps_previous_inventory(
     assert any(row.error_code == "DOWNLOAD_LOGIN_REQUIRED" for row in rows)
 
 
+@pytest.mark.parametrize("selector", ["text", "image"])
 def test_exact_link_label_persists_and_imports_only_selected_tracking_link(
     db_session: Session,
     context: Context,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    selector: str,
 ) -> None:
     payload = MailSourceWrite.model_validate(context.source, from_attributes=True)
     payload.mode = "LINK"
     payload.download_hosts = ["tracker.example", "files.example"]
     payload.download_path_prefix = "/tn.jsp"
     payload.download_filename = "inventory.csv"
-    payload.download_link_text = "Download Excel PriceList"
+    payload.download_link_text = "Download Excel PriceList" if selector == "text" else None
+    payload.download_link_image = (
+        "https://assets.example/excel.jpg" if selector == "image" else None
+    )
     save_source(db_session, context.actor, payload, context.source.id)
     db_session.refresh(context.source)
-    assert source_response(context.source, NOW).download_link_text == payload.download_link_text
+    saved = source_response(context.source, NOW)
+    assert saved.download_link_text == payload.download_link_text
+    assert saved.download_link_image == payload.download_link_image
     selected = "https://tracker.example/tn.jsp?f=stock-private"
     reader = FakeMail()
     reader.add(
         "labelled",
         csv(),
         body=(
-            f'<a href="{selected}">Download <b>Excel</b> PriceList</a>'
+            f'<a href="{selected}"><img src="https://assets.example/excel.jpg?rdr=true">'
+            "Download <b>Excel</b> PriceList</a>"
             '<a href="https://tracker.example/tn.jsp?f=order">Order Online</a>'
         ),
     )
@@ -406,8 +414,10 @@ def test_exact_link_label_persists_and_imports_only_selected_tracking_link(
         csv(),
         received=NOW + timedelta(hours=2),
         body=(
-            f'<a href="{selected}">Download Excel PriceList</a>'
-            '<a href="https://tracker.example/tn.jsp?f=other">Download Excel PriceList</a>'
+            f'<a href="{selected}"><img src="https://assets.example/excel.jpg">'
+            "Download Excel PriceList</a>"
+            '<a href="https://tracker.example/tn.jsp?f=other">'
+            '<img src="https://assets.example/excel.jpg">Download Excel PriceList</a>'
         ),
     )
     run(db_session, context, reader, tmp_path, at=NOW + timedelta(hours=2))
