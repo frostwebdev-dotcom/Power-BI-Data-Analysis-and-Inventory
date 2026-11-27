@@ -169,6 +169,7 @@ class APSchedulerRunner:
             name=job_id,
             replace_existing=True,
             max_instances=MAX_INSTANCES,
+            coalesce=COALESCE,
             misfire_grace_time=MISFIRE_GRACE_SECONDS,
         )
         self._once.append(OneOffJob(job_id, func, delay_seconds))
