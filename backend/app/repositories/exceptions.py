@@ -95,8 +95,15 @@ class ExceptionRepository(ScopedRepository):
         )
         return ExceptionPage(items=items, page=page, page_size=page_size, total=total)
 
-    def get(self, exception_id: uuid.UUID) -> ProductMappingException | None:
-        return self.session.execute(
+    def get(
+        self, exception_id: uuid.UUID, *, for_update: bool = False
+    ) -> ProductMappingException | None:
+        """One item. ``for_update`` takes a row lock for the rest of the
+        transaction and re-reads the row even if this session already holds
+        it, so a decision is always made against the committed status: two
+        concurrent approvals of one item serialise, and the second sees it is
+        no longer PENDING."""
+        statement = (
             self.select(ProductMappingException)
             .options(
                 selectinload(ProductMappingException.vendor_product),
@@ -107,7 +114,12 @@ class ExceptionRepository(ScopedRepository):
                 selectinload(ProductMappingException.resolved_product),
             )
             .where(ProductMappingException.id == exception_id)
-        ).scalar_one_or_none()
+        )
+        if for_update:
+            statement = statement.with_for_update(of=ProductMappingException).execution_options(
+                populate_existing=True
+            )
+        return self.session.execute(statement).scalar_one_or_none()
 
     def products_by_ids(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Product]:
         if not ids:

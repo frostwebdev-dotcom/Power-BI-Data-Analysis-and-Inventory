@@ -1,6 +1,8 @@
-# ADR 0028: Select an inventory email link by text or button image
+# ADR 0039: Select an inventory email link by text or button image
 
 Status: Accepted for implementation; live rollout and vendor acceptance pending.
+
+Renumbered from 0028 on 26 November 2026: that number was already taken by an earlier ADR.
 
 ## Problem
 

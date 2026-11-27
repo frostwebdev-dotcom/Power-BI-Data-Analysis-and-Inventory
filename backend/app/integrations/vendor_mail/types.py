@@ -24,6 +24,9 @@ class MailMessage:
     has_attachments: bool = False
     body: str = ""
     body_loaded: bool = True
+    #: Whether the receiving server verified the ``From`` domain (DMARC, or an
+    #: aligned DKIM signature). ``None`` when the provider supplies no evidence.
+    sender_authenticated: bool | None = None
 
 
 @dataclass(frozen=True)

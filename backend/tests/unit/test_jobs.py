@@ -19,12 +19,15 @@ from app.jobs.amazon import (
 )
 from app.jobs.nineyard import JOB_NINEYARD_CATALOG, register_nineyard_jobs
 from app.jobs.runner import (
+    CATCH_UP_SUFFIX,
     COALESCE,
     MAX_INSTANCES,
     MISFIRE_GRACE_SECONDS,
     APSchedulerRunner,
     JobRunner,
+    OneOffJob,
     ScheduledJob,
+    is_overdue,
     validate_schedule,
 )
 
@@ -36,6 +39,7 @@ class FakeRunner:
 
     def __init__(self) -> None:
         self.jobs: list[ScheduledJob] = []
+        self.once: list[OneOffJob] = []
         self.started = False
         self.stopped = False
 
@@ -49,6 +53,9 @@ class FakeRunner:
     ) -> None:
         validate_schedule(interval_minutes, cron)
         self.jobs.append(ScheduledJob(job_id, func, interval_minutes, cron))
+
+    def schedule_once(self, job_id: str, func: Callable[[], None], *, delay_seconds: int) -> None:
+        self.once.append(OneOffJob(job_id, func, delay_seconds))
 
     def start(self) -> None:
         self.started = True
@@ -154,8 +161,25 @@ class TestAPSchedulerRunner:
         runner = build_amazon_runner(Settings())
 
         assert isinstance(runner, APSchedulerRunner)
-        assert set(runner.job_ids()) == {JOB_ORDERS, JOB_INVENTORY, JOB_LISTINGS}
+        periodic = {JOB_ORDERS, JOB_INVENTORY, JOB_LISTINGS}
+        assert {job.job_id for job in runner.jobs} == periodic
+        assert set(runner.job_ids()) == periodic | {j + CATCH_UP_SUFFIX for j in periodic}
         assert not runner.running
+
+    def test_a_one_off_job_uses_a_date_trigger_with_the_safety_options(self) -> None:
+        runner = APSchedulerRunner()
+
+        runner.schedule_once("once", lambda: None, delay_seconds=90)
+
+        options = runner.job_options("once")
+        assert "date" in options["trigger"]
+        assert options["max_instances"] == 1
+        assert options["misfire_grace_time"] == MISFIRE_GRACE_SECONDS
+        assert [(j.job_id, j.delay_seconds) for j in runner.one_off_jobs] == [("once", 90)]
+
+    def test_a_negative_delay_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="negative"):
+            APSchedulerRunner().schedule_once("once", lambda: None, delay_seconds=-1)
 
     def test_shutdown_before_start_is_harmless(self) -> None:
         runner = APSchedulerRunner()
@@ -220,3 +244,126 @@ class TestLifespanGuard:
         app = create_app(settings)
         with TestClient(app):
             assert not hasattr(app.state, "job_runner")
+
+
+# --- catch-up after a restart ---------------------------------------------------------------
+
+
+class TestCatchUp:
+    """A periodic job first fires one interval after start-up, so every restart
+    would postpone a daily job by a day. A one-off catch-up runs it shortly
+    after start-up — but only when it is actually overdue."""
+
+    def test_overdue_means_never_succeeded_or_at_least_one_interval_ago(self) -> None:
+        assert is_overdue(None, 60, NOW)
+        assert is_overdue(NOW - timedelta(minutes=60), 60, NOW)
+        assert not is_overdue(NOW - timedelta(minutes=59), 60, NOW)
+
+    def test_amazon_registers_one_staggered_catch_up_per_job(self) -> None:
+        runner = FakeRunner()
+
+        register_amazon_jobs(runner, Settings())
+
+        delays = {job.job_id: job.delay_seconds for job in runner.once}
+        assert set(delays) == {
+            JOB_INVENTORY + CATCH_UP_SUFFIX,
+            JOB_ORDERS + CATCH_UP_SUFFIX,
+            JOB_LISTINGS + CATCH_UP_SUFFIX,
+        }
+        # Inventory before listings, as on a shared periodic tick.
+        assert delays[JOB_INVENTORY + CATCH_UP_SUFFIX] < delays[JOB_LISTINGS + CATCH_UP_SUFFIX]
+        assert all(job.func.__code__.co_argcount == 0 for job in runner.once)
+
+    def test_nineyard_catch_up_follows_the_amazon_listings_catch_up(self) -> None:
+        runner = FakeRunner()
+
+        register_nineyard_jobs(runner, Settings())
+        register_amazon_jobs(runner, Settings())
+
+        delays = {job.job_id: job.delay_seconds for job in runner.once}
+        assert (
+            delays[JOB_NINEYARD_CATALOG + CATCH_UP_SUFFIX] > delays[JOB_LISTINGS + CATCH_UP_SUFFIX]
+        )
+
+    @pytest.mark.parametrize(
+        ("last_success", "expected"),
+        [(None, True), (NOW - timedelta(days=2), True), (NOW - timedelta(hours=1), False)],
+    )
+    def test_the_amazon_catch_up_runs_only_when_overdue(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        last_success: datetime | None,
+        expected: bool,
+    ) -> None:
+        import contextlib
+        import uuid
+
+        from app.jobs import amazon
+        from app.models.enums import AmazonSyncJobType
+
+        monkeypatch.setattr(amazon, "session_lifecycle", lambda: contextlib.nullcontext(object()))
+        monkeypatch.setattr(amazon, "resolve_amazon_organization", lambda *_: uuid.uuid4())
+        monkeypatch.setattr(amazon, "last_successful_start", lambda *_: last_success)
+        calls: list[str] = []
+
+        ran = amazon.run_if_overdue(
+            JOB_ORDERS,
+            lambda: calls.append("ran"),
+            AmazonSyncJobType.ORDERS_REPORT,
+            1440,
+            Settings(),
+            now=lambda: NOW,
+        )
+
+        assert ran is expected
+        assert calls == (["ran"] if expected else [])
+
+    def test_a_failed_overdue_check_does_not_run_the_job(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.jobs import amazon
+        from app.models.enums import AmazonSyncJobType
+
+        def unavailable() -> None:
+            raise RuntimeError("database unavailable")
+
+        monkeypatch.setattr(amazon, "session_lifecycle", unavailable)
+        calls: list[str] = []
+
+        assert not amazon.run_if_overdue(
+            JOB_ORDERS,
+            lambda: calls.append("ran"),
+            AmazonSyncJobType.ORDERS_REPORT,
+            1440,
+            Settings(),
+            now=lambda: NOW,
+        )
+        assert calls == []
+
+    @pytest.mark.parametrize(
+        ("last_success", "expected"),
+        [(None, True), (NOW - timedelta(days=1), True), (NOW - timedelta(hours=2), False)],
+    )
+    def test_the_nineyard_catch_up_runs_only_when_overdue(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        last_success: datetime | None,
+        expected: bool,
+    ) -> None:
+        import contextlib
+        import uuid
+
+        from app.jobs import nineyard
+
+        monkeypatch.setattr(nineyard, "session_lifecycle", lambda: contextlib.nullcontext(object()))
+        monkeypatch.setattr(nineyard, "resolve_amazon_organization", lambda *_: uuid.uuid4())
+        monkeypatch.setattr(nineyard, "last_successful_start", lambda *_: last_success)
+        calls: list[Settings] = []
+        monkeypatch.setattr(
+            nineyard, "run_nineyard_job", lambda settings, **_: calls.append(settings)
+        )
+
+        ran = nineyard.run_nineyard_job_if_overdue(Settings(), now=lambda: NOW)
+
+        assert ran is expected
+        assert len(calls) == (1 if expected else 0)

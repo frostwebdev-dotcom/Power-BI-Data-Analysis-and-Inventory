@@ -123,6 +123,23 @@ class TestUpcE:
         assert result.canonical == "00042100005264"
         assert result.usable
 
+    @pytest.mark.parametrize("raw", ["425261", "0425261"])
+    def test_a_upc_e_without_its_check_digit_is_not_usable(self, raw: str) -> None:
+        """Expansion has to compute the check digit, so it verifies by
+        construction and proves nothing: such a value must not auto-match."""
+        result = normalize_gtin(raw)
+
+        assert result.kind == "UPC-E"
+        assert result.canonical == "00042100005264"  # kept for display and search
+        assert result.valid_checksum is True
+        assert result.check_digit_supplied is False
+        assert result.problem is not None and "no check digit" in result.problem
+        assert not result.usable
+
+    def test_an_arbitrary_six_digit_code_cannot_become_a_usable_upc(self) -> None:
+        # A vendor item number in a UPC column used to normalise to a "valid" GTIN.
+        assert not normalize_gtin("123456").usable
+
     def test_a_wrong_upc_e_check_digit_is_reported_not_corrected(self) -> None:
         result = normalize_gtin("04252615")
 

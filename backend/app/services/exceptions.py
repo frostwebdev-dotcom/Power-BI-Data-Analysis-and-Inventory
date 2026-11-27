@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError
@@ -140,18 +141,19 @@ def candidate_products(
 def approve(
     session: Session, principal: Principal, exception_id: uuid.UUID, payload: ApproveRequest
 ) -> Resolution:
-    item = _pending(session, principal, exception_id)
     repository = ExceptionRepository(session, principal.organization_id)
-    product = repository.active_product(payload.product_id)
-    if product is None:
-        raise ProductNotFound()
-
-    line = item.vendor_product
-    listing = item.marketplace_listing
     superseded: uuid.UUID | None = None
     now = datetime.now(UTC)
 
     with transaction(session):
+        # Locked first: a concurrent decision on the same item waits here and
+        # then finds it no longer PENDING, instead of overwriting this one.
+        item = _pending(session, principal, exception_id)
+        product = repository.active_product(payload.product_id)
+        if product is None:
+            raise ProductNotFound()
+        line = item.vendor_product
+        listing = item.marketplace_listing
         if line is not None:
             superseded = _approve_line(session, principal, item, line, product, payload, now)
         elif listing is not None:
@@ -193,9 +195,9 @@ def approve(
 def reject(
     session: Session, principal: Principal, exception_id: uuid.UUID, payload: RejectRequest
 ) -> Resolution:
-    item = _pending(session, principal, exception_id)
     now = datetime.now(UTC)
     with transaction(session):
+        item = _pending(session, principal, exception_id)
         line = item.vendor_product
         if line is not None and line.mapping_status is MappingStatus.PENDING:
             # The matcher's suggestion was declined: the line is unmapped again.
@@ -235,8 +237,8 @@ def reject(
 def defer(
     session: Session, principal: Principal, exception_id: uuid.UUID, payload: DeferRequest
 ) -> Resolution:
-    item = _pending(session, principal, exception_id)
     with transaction(session):
+        item = _pending(session, principal, exception_id)
         before = audit.snapshot(item)
         item.deferred_until = payload.until
         if payload.note:
@@ -260,7 +262,12 @@ def defer(
 def _pending(
     session: Session, principal: Principal, exception_id: uuid.UUID
 ) -> ProductMappingException:
-    item = get_exception(session, principal, exception_id)
+    """The item, row-locked for the caller's transaction, if still PENDING."""
+    item = ExceptionRepository(session, principal.organization_id).get(
+        exception_id, for_update=True
+    )
+    if item is None:
+        raise ExceptionNotFound()
     if item.status is not ExceptionStatus.PENDING:
         raise ExceptionNotPending(details={"status": item.status.value})
     return item
@@ -416,7 +423,16 @@ def _resolve_row(
         actor=principal,
         summary=f"Row {row.row_number} matched by manual approval.",
     )
-    job = session.get(ImportJob, row.import_job_id)
-    if job is not None and was_exception:
-        job.matched_rows += 1
-        job.exception_rows = max(0, job.exception_rows - 1)
+    if was_exception:
+        # One atomic UPDATE rather than read-modify-write in Python, so two
+        # decisions on different rows of one job cannot lose an increment.
+        session.execute(
+            ExceptionRepository(session, principal.organization_id)
+            .update(ImportJob)
+            .where(ImportJob.id == row.import_job_id)
+            .values(
+                matched_rows=ImportJob.matched_rows + 1,
+                exception_rows=func.greatest(ImportJob.exception_rows - 1, 0),
+            )
+            .execution_options(synchronize_session="fetch")
+        )

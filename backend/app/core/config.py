@@ -147,6 +147,11 @@ class Settings(BaseSettings):
     vendor_mail_lookback_hours: int = Field(default=24, ge=1, le=168)
     vendor_mail_max_pages: int = Field(default=10, ge=1, le=100)
     vendor_mail_max_deliveries: int = Field(default=25, ge=1, le=500)
+    #: Hold for staff review any email whose provider reports that the ``From``
+    #: domain failed authentication (no DMARC pass, no aligned DKIM signature),
+    #: instead of importing it automatically (ADR 0041). Gmail supplies this
+    #: evidence; Microsoft 365 does not yet, and is unaffected.
+    vendor_mail_require_sender_authentication: bool = True
 
     @field_validator(
         "vendor_mail_tenant_id",

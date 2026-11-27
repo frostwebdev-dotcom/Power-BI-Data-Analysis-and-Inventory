@@ -12,12 +12,13 @@ import json
 import uuid
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final, Protocol
 
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
+from app.db.locks import try_run_lock
 from app.db.transaction import transaction
 from app.integrations.nineyard.catalog import SkuProductMapping
 from app.matching.normalize import normalize_gtin
@@ -41,7 +42,13 @@ _logger = get_logger(__name__)
 
 AUDIT_ACTION_COMPLETED: Final = "nineyard.sync.completed"
 AUDIT_ACTION_FAILED: Final = "nineyard.sync.failed"
+AUDIT_ACTION_INTERRUPTED: Final = "nineyard.sync.interrupted"
 AUDIT_ACTOR_LABEL: Final = "nineyard-catalog-sync"
+RUN_LOCK_KEY: Final = "nineyard.catalog"
+#: A full run takes about 20 minutes. A RUNNING row older than this belongs to
+#: a process that died (a deploy, a container restart) and is closed as FAILED.
+INTERRUPTED_AFTER: Final = timedelta(hours=3)
+INTERRUPTED_MESSAGE: Final = "Interrupted: the process ended before the run finished."
 
 
 class CatalogSource(Protocol):
@@ -71,6 +78,10 @@ def amazon_listing_skus(session: Session, organization_id: uuid.UUID) -> tuple[s
     return tuple(session.scalars(statement).all())
 
 
+class NineyardSyncAlreadyRunning(RuntimeError):  # noqa: N818 — an outcome, not a category
+    """Another process holds this organization's Nineyard run lock."""
+
+
 def run_nineyard_sync(
     session: Session,
     organization_id: uuid.UUID,
@@ -79,8 +90,82 @@ def run_nineyard_sync(
     *,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> NineyardSyncRun:
-    """Pull a complete snapshot and atomically apply it to one organization."""
+    """Pull a complete snapshot and atomically apply it to one organization.
+
+    Only one run per organization at a time: a scheduled tick, a manual CLI
+    run and a second API revision during a deploy share one advisory lock, and
+    the loser raises :class:`NineyardSyncAlreadyRunning` without recording a
+    run. The winner first closes runs a dead process left ``RUNNING``.
+    """
+    with try_run_lock(session, organization_id, RUN_LOCK_KEY) as acquired:
+        if not acquired:
+            raise NineyardSyncAlreadyRunning(
+                f"a Nineyard sync is already running for organization {organization_id}"
+            )
+        return _run_nineyard_sync(session, organization_id, source, trigger_type, now=now)
+
+
+def close_interrupted_runs(
+    session: Session,
+    organization_id: uuid.UUID,
+    *,
+    now: datetime,
+    older_than: timedelta = INTERRUPTED_AFTER,
+) -> int:
+    """Mark ``RUNNING`` runs older than ``older_than`` as FAILED, with audit.
+
+    Called while holding the run lock, so no live run of this code can be one
+    of them. The age threshold also spares a run started moments ago by a
+    previous release that predates the lock. Returns how many were closed.
+    """
+    cutoff = now - older_than
+    with transaction(session):
+        stale = session.scalars(
+            TenantScope(organization_id)
+            .select(NineyardSyncRun)
+            .where(
+                NineyardSyncRun.status == SyncStatus.RUNNING,
+                NineyardSyncRun.started_at < cutoff,
+            )
+            .with_for_update()
+        ).all()
+        for run in stale:
+            before = audit.snapshot(run)
+            run.status = SyncStatus.FAILED
+            run.completed_at = now
+            run.error_message = INTERRUPTED_MESSAGE
+            run.error_details = {"reason": "interrupted", "closed_at": now.isoformat()}
+            session.flush()
+            audit.record(
+                session,
+                organization_id=organization_id,
+                action=AUDIT_ACTION_INTERRUPTED,
+                entity_type=NineyardSyncRun.__tablename__,
+                entity_id=run.id,
+                actor_type=ActorType.SYSTEM,
+                actor_label=AUDIT_ACTOR_LABEL,
+                before=before,
+                after=audit.snapshot(run),
+                summary=(
+                    f"Nineyard sync started {run.started_at.isoformat()} closed as interrupted."
+                ),
+            )
+    if stale:
+        _logger.warning("nineyard.sync.interrupted_runs_closed", count=len(stale))
+    return len(stale)
+
+
+def _run_nineyard_sync(
+    session: Session,
+    organization_id: uuid.UUID,
+    source: CatalogSource,
+    trigger_type: TriggerType,
+    *,
+    now: Callable[[], datetime],
+) -> NineyardSyncRun:
     started_at = now()
+    # The clock is read once for both, so callers' clocks see the same calls.
+    close_interrupted_runs(session, organization_id, now=started_at)
     run = NineyardSyncRun(
         organization_id=organization_id,
         status=SyncStatus.RUNNING,

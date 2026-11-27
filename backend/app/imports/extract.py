@@ -141,6 +141,10 @@ class ExtractedRow:
     raw_upc: str | None = None
     normalized_upc: str | None = None
     has_valid_checksum: bool | None = None
+    #: False for a 6/7-digit UPC-E whose check digit had to be computed. Such a
+    #: value keeps its canonical form (and any identity derived from it) but is
+    #: never used for a priority-1 automatic match.
+    upc_check_digit_supplied: bool = True
     description: str | None = None
     quantity: int | None = None
     unit_cost: Decimal | None = None
@@ -193,6 +197,9 @@ class ExtractedRow:
             values["vendor_sku_from_offer"] = True
         if self.upc_shared_by_offers:
             values["upc_shared_by_offers"] = True
+        if not self.upc_check_digit_supplied:
+            # Only written when False, so every other row's JSON is unchanged.
+            values["upc_check_digit_supplied"] = False
         if self.offer_variant:
             values["offer_variant"] = self.offer_variant
         return values
@@ -306,9 +313,10 @@ def extract_row(
     upc = raw(ColumnTarget.UPC)
     if upc:
         row.raw_upc = upc
-        canonical, valid, problem = _normalize_upc(upc, norm)
+        canonical, valid, problem, check_digit_supplied = _normalize_upc(upc, norm)
         row.normalized_upc = canonical
         row.has_valid_checksum = valid
+        row.upc_check_digit_supplied = check_digit_supplied
         if problem is not None:
             row.issues.append(Issue(IssueCode.UPC_INVALID, "upc", f"{upc!r}: {problem}"))
     if not sku and norm.vendor_sku_from_upc and row.normalized_upc and row.has_valid_checksum:
@@ -491,8 +499,11 @@ _EXCEL_TEXT_UPC: Final = re.compile(r'="([0-9]+)"')
 
 def _normalize_upc(
     text: str, norm: NormalizationRules
-) -> tuple[str | None, bool | None, str | None]:
+) -> tuple[str | None, bool | None, str | None, bool]:
     """Apply the profile's UPC flags on top of the shared normaliser.
+
+    Returns the canonical value, whether its check digit verifies, the problem
+    to report (if any) and whether the check digit was in the value at all.
 
     ``upc_strip_non_digits`` off: a value with anything but digits is
     refused as-is instead of cleaned. When enabled, an exact digit-only Excel
@@ -502,16 +513,17 @@ def _normalize_upc(
     """
     candidate = text.strip()
     if not norm.upc_strip_non_digits and not candidate.isdigit():
-        return None, None, "contains non-digit characters (stripping is disabled)"
+        return None, None, "contains non-digit characters (stripping is disabled)", True
     if norm.upc_strip_non_digits and (wrapped := _EXCEL_TEXT_UPC.fullmatch(candidate)):
         candidate = wrapped.group(1)
     if not norm.upc_pad_to_12 and len(candidate) == 11 and candidate.isdigit():
-        return None, None, "11 digits and leading-zero padding is disabled"
+        return None, None, "11 digits and leading-zero padding is disabled", True
     normalized = normalize_gtin(candidate)
     return (
         normalized.canonical,
         normalized.valid_checksum,
         None if normalized.usable else normalized.problem,
+        normalized.check_digit_supplied,
     )
 
 

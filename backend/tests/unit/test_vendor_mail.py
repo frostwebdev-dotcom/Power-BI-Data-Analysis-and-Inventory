@@ -95,6 +95,24 @@ def test_extracts_anchors_and_plain_links_without_loading_email_resources() -> N
     ]
 
 
+@pytest.mark.parametrize("link_text", [None, "Download"])
+def test_query_strings_are_decoded_once_not_twice(link_text: str | None) -> None:
+    """``&amp;region`` → ``&region``; a second decode would yield ``®ion``."""
+    body = (
+        '<a href="https://files.example.com/stock?id=1&amp;region=us&amp;copy=2&amp;not=3">'
+        "Download</a>"
+    )
+    assert email_links(body, link_text=link_text) == [
+        "https://files.example.com/stock?id=1&region=us&copy=2&not=3"
+    ]
+
+
+def test_an_escaped_entity_inside_a_query_value_stays_escaped_once() -> None:
+    # The sender meant the literal text "&amp;" in the value.
+    body = '<a href="https://files.example.com/stock?q=a&amp;amp;b">Download</a>'
+    assert email_links(body) == ["https://files.example.com/stock?q=a&amp;b"]
+
+
 def test_download_label_selects_only_inventory_among_tracking_links() -> None:
     body = (
         '<a href="https://tracker.example/tn.jsp?f=inventory&amp;c=private">'

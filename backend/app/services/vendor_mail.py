@@ -6,17 +6,18 @@ import fnmatch
 import hashlib
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
 
-from sqlalchemy import Connection, Engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.security import Principal
+from app.db.locks import try_run_lock
 from app.db.transaction import transaction
 from app.imports.storage import StorageBackend
 from app.integrations.vendor_mail.downloads import approved_initial_link, download_file, email_links
@@ -238,25 +239,8 @@ def _record_delivery(
 def mailbox_lock(session: Session, organization_id: uuid.UUID, key: str) -> Iterator[bool]:
     # Hold a dedicated connection: committing an import must not return a
     # session-level advisory lock to the pool while the run is still active.
-    bind = session.get_bind()
-    context = (
-        bind.connect().execution_options(isolation_level="AUTOCOMMIT")
-        if isinstance(bind, Engine)
-        else nullcontext(bind)
-    )
-    lock_id = int.from_bytes(
-        hashlib.sha256(f"{organization_id}:{key}".encode()).digest()[:8], signed=True
-    )
-    with context as connection:
-        assert isinstance(connection, Connection)
-        acquired = bool(
-            connection.scalar(text("select pg_try_advisory_lock(:key)"), {"key": lock_id})
-        )
-        try:
-            yield acquired
-        finally:
-            if acquired:
-                connection.execute(text("select pg_advisory_unlock(:key)"), {"key": lock_id})
+    with try_run_lock(session, organization_id, key) as acquired:
+        yield acquired
 
 
 def matching_sources(
@@ -306,26 +290,36 @@ def discover_message(
     sources: list[VendorMailSource],
     message: MailMessage,
     reader: MailReader,
+    *,
+    require_sender_authentication: bool = True,
 ) -> None:
     matched = matching_sources(sources, message)
     if not matched:
         return
     discovery_error: str | None = None
-    try:
-        if not message.body_loaded and any(s.mode == "LINK" for s in matched):
-            message = reader.message(message.id)
-        attachments = (
-            reader.attachments(message.id)
-            if message.has_attachments and any(s.mode == "ATTACHMENT" for s in matched)
-            else []
-        )
-        selected = [(source, _candidates(source, message, attachments)) for source in matched]
-    except IntakeError as intake_error:
-        if not intake_error.review:
-            raise
-        # Bad/oversized vendor mail must not block all subsequent mailbox pages.
-        discovery_error = intake_error.code
+    selected: list[tuple[VendorMailSource, list[tuple[str, str, str | None]]]]
+    if require_sender_authentication and message.sender_authenticated is False:
+        # The From address routed this email, but the receiving server could
+        # not verify it. Nothing is downloaded or imported: a person reviews
+        # the email, and an explicit retry is the audited override.
+        discovery_error = "SENDER_NOT_AUTHENTICATED"
         selected = [(source, []) for source in matched]
+    else:
+        try:
+            if not message.body_loaded and any(s.mode == "LINK" for s in matched):
+                message = reader.message(message.id)
+            attachments = (
+                reader.attachments(message.id)
+                if message.has_attachments and any(s.mode == "ATTACHMENT" for s in matched)
+                else []
+            )
+            selected = [(source, _candidates(source, message, attachments)) for source in matched]
+        except IntakeError as intake_error:
+            if not intake_error.review:
+                raise
+            # Bad/oversized vendor mail must not block all subsequent mailbox pages.
+            discovery_error = intake_error.code
+            selected = [(source, []) for source in matched]
     vendors = {source.vendor_id for source, candidates in selected if candidates}
     any_candidates = any(candidates for _, candidates in selected)
     for source, candidates in selected:
@@ -639,7 +633,17 @@ def run_intake(
             for _ in range(settings.vendor_mail_max_pages):
                 page = reader.page(state.checkpoint_url, state.initial_since)
                 for message in page.messages:
-                    discover_message(session, repo, state, sources, message, reader)
+                    discover_message(
+                        session,
+                        repo,
+                        state,
+                        sources,
+                        message,
+                        reader,
+                        require_sender_authentication=(
+                            settings.vendor_mail_require_sender_authentication
+                        ),
+                    )
                 with transaction(session):
                     state.checkpoint_url = page.checkpoint
                 if not page.more:
