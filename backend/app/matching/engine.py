@@ -234,7 +234,11 @@ def rule_upc(candidate: MatchInput, lookups: GtinLookup) -> RuleEvaluation:
         return RuleEvaluation(rule, priority, None, "skipped", note="no UPC")
     if candidate.upc_valid_checksum is not True:
         return RuleEvaluation(
-            rule, priority, upc, "skipped", note="check digit does not verify; not an identifier"
+            rule,
+            priority,
+            upc,
+            "skipped",
+            note="check digit missing or does not verify; not an identifier",
         )
     hits = _distinct(lookups.products_by_gtin(upc))
     return RuleEvaluation(rule, priority, upc, _outcome(hits), hits)

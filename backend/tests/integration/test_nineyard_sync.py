@@ -8,14 +8,21 @@ from typing import Any
 
 import httpx2 as httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
+from app.db.locks import advisory_lock_id
 from app.integrations.nineyard.catalog import NineyardCatalogReader, SkuProductMapping
 from app.integrations.nineyard.errors import NineyardProtocolError
-from app.models import NineyardSyncRun, Product, ProductIdentifier, SourceRecord
+from app.models import AuditEvent, NineyardSyncRun, Product, ProductIdentifier, SourceRecord
 from app.models.enums import IdentifierType, ListingStatus, SourceSystem, SyncStatus, TriggerType
-from app.services.nineyard_sync import amazon_listing_skus, run_nineyard_sync
+from app.services.nineyard_sync import (
+    AUDIT_ACTION_INTERRUPTED,
+    RUN_LOCK_KEY,
+    NineyardSyncAlreadyRunning,
+    amazon_listing_skus,
+    run_nineyard_sync,
+)
 from tests.integration import factories
 
 NOW = datetime(2026, 9, 26, 20, 0, tzinfo=UTC)
@@ -241,3 +248,84 @@ def test_mapping_envelope_is_applied_only_when_complete(db_session: Session, val
         )
     ).all()
     assert len(sku_identifiers) == (1 if valid else 0)
+
+
+# --- one run at a time (review 2026-11-26) ----------------------------------------------
+
+
+def _running_run(db_session: Session, organization_id: Any, started_at: datetime) -> Any:
+    run = NineyardSyncRun(
+        organization_id=organization_id,
+        status=SyncStatus.RUNNING,
+        trigger_type=TriggerType.SCHEDULED,
+        started_at=started_at,
+    )
+    db_session.add(run)
+    db_session.flush()
+    return run
+
+
+def test_a_run_a_dead_process_left_running_is_closed_before_the_next(
+    db_session: Session,
+) -> None:
+    organization = factories.make_organization(db_session)
+    orphan = _running_run(db_session, organization.id, NOW - timedelta(hours=4))
+    recent = _running_run(db_session, organization.id, NOW - timedelta(minutes=10))
+
+    run = run_nineyard_sync(
+        db_session,
+        organization.id,
+        FakeSource([ITEM], []),
+        TriggerType.MANUAL,
+        now=lambda: NOW,
+    )
+
+    assert run.status is SyncStatus.COMPLETED
+    db_session.expire_all()
+    closed = db_session.get(NineyardSyncRun, orphan.id)
+    assert closed is not None and closed.status is SyncStatus.FAILED
+    assert closed.completed_at == NOW
+    assert closed.error_message is not None and "Interrupted" in closed.error_message
+    # Too young to be declared dead: possibly a live run from a release without the lock.
+    still = db_session.get(NineyardSyncRun, recent.id)
+    assert still is not None and still.status is SyncStatus.RUNNING
+    audit = db_session.execute(
+        select(AuditEvent).where(
+            AuditEvent.entity_id == orphan.id, AuditEvent.action == AUDIT_ACTION_INTERRUPTED
+        )
+    ).scalar_one()
+    assert audit.before is not None and audit.before["status"] == "RUNNING"
+    assert audit.after is not None and audit.after["status"] == "FAILED"
+
+
+def test_a_second_concurrent_run_is_refused_without_recording_a_run(
+    db_session: Session, migrated_engine: Engine
+) -> None:
+    organization = factories.make_organization(db_session)
+    lock_id = advisory_lock_id(organization.id, RUN_LOCK_KEY)
+
+    with migrated_engine.connect() as other:
+        other.execute(text("select pg_advisory_lock(:key)"), {"key": lock_id})
+        try:
+            with pytest.raises(NineyardSyncAlreadyRunning):
+                run_nineyard_sync(
+                    db_session,
+                    organization.id,
+                    FakeSource([ITEM], []),
+                    TriggerType.MANUAL,
+                    now=lambda: NOW,
+                )
+        finally:
+            other.execute(text("select pg_advisory_unlock(:key)"), {"key": lock_id})
+            other.commit()
+
+    runs = db_session.execute(
+        select(NineyardSyncRun).where(NineyardSyncRun.organization_id == organization.id)
+    ).all()
+    assert runs == []
+
+    # Once released, the next run proceeds normally.
+    run = run_nineyard_sync(
+        db_session, organization.id, FakeSource([ITEM], []), TriggerType.MANUAL, now=lambda: NOW
+    )
+    assert run.status is SyncStatus.COMPLETED

@@ -45,11 +45,18 @@ class NormalizedGtin:
     valid_checksum: bool | None
     #: Why the value is unusable, when it is.
     problem: str | None = None
+    #: ``False`` for a six- or seven-digit UPC-E, whose check digit is
+    #: *computed* during expansion rather than read from the value. Such a
+    #: checksum verifies by construction, so it proves nothing about the
+    #: value and cannot support an automatic match.
+    check_digit_supplied: bool = True
 
     @property
     def usable(self) -> bool:
         """Safe to use for an automatic match."""
-        return self.canonical is not None and self.valid_checksum is True
+        return (
+            self.canonical is not None and self.valid_checksum is True and self.check_digit_supplied
+        )
 
 
 def gtin_check_digit(digits_without_check: str) -> int:
@@ -113,6 +120,12 @@ def normalize_gtin(raw: str | None) -> NormalizedGtin:
        expand are treated as EAN-8;
     5. the check digit is verified on the resulting 8/12/13/14-digit value;
     6. the canonical form is the value left-padded with zeros to 14 digits.
+
+    A 6- or 7-digit UPC-E carries no check digit, so expansion has to compute
+    one. The canonical form is still returned (it identifies the value for
+    display, search and derived vendor identities) but the result is not
+    :attr:`~NormalizedGtin.usable`: a check digit we computed ourselves cannot
+    show that the value was recorded correctly.
     """
     if raw is None:
         return NormalizedGtin("", "", None, None, None, "empty")
@@ -124,6 +137,7 @@ def normalize_gtin(raw: str | None) -> NormalizedGtin:
 
     digits = stripped
     kind: str | None = None
+    check_digit_supplied = len(digits) not in (6, 7)
 
     if len(digits) == 11:
         digits = "0" + digits
@@ -136,7 +150,15 @@ def normalize_gtin(raw: str | None) -> NormalizedGtin:
         elif len(digits) == 8:
             kind = "EAN-8"
         else:
-            return NormalizedGtin(raw, digits, None, None, None, "not a UPC-E value")
+            return NormalizedGtin(
+                raw,
+                digits,
+                None,
+                None,
+                None,
+                "not a UPC-E value",
+                check_digit_supplied=check_digit_supplied,
+            )
 
     if len(digits) not in GTIN_LENGTHS:
         return NormalizedGtin(raw, digits, None, None, None, f"unsupported length {len(digits)}")
@@ -146,11 +168,18 @@ def normalize_gtin(raw: str | None) -> NormalizedGtin:
 
     valid = gtin_check_digit(digits[:-1]) == int(digits[-1])
     canonical = digits.zfill(14)
+    if not valid:
+        problem: str | None = "check digit does not verify"
+    elif not check_digit_supplied:
+        problem = "no check digit supplied; not usable for automatic matching"
+    else:
+        problem = None
     return NormalizedGtin(
         raw,
         digits,
         kind,
         canonical,
         valid,
-        None if valid else "check digit does not verify",
+        problem,
+        check_digit_supplied=check_digit_supplied,
     )

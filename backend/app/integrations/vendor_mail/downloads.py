@@ -10,7 +10,6 @@ import ssl
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -60,12 +59,16 @@ def email_links(
 ) -> list[str]:
     parser = _Links()
     parser.feed(body[:512000])
+    # HTMLParser has already decoded character references exactly once: in
+    # attribute values always, and in text because convert_charrefs=True.
+    # Decoding again would corrupt query strings — "&amp;region=us" arrives as
+    # "&region=us", and a second pass turns that into "®ion=us".
     if link_text is not None or link_image is not None:
         expected = " ".join((link_text or "").split()).casefold()
         expected_image = image_address(link_image) if link_image else None
         return sorted(
             {
-                unescape(url)
+                url
                 for url, text, images in parser.anchors
                 if (link_text is None or " ".join(text.split()).casefold() == expected)
                 and (
@@ -75,11 +78,8 @@ def email_links(
             }
         )
     plain = re.findall(r"https://[^\s<>\"']+", " ".join(parser.text))
-    # Query strings stay private and intact. HTML entities are decoded once.
-    return sorted(
-        {unescape(link) for link in parser.links}
-        | {unescape(link).rstrip(".,);") for link in plain}
-    )
+    # Query strings stay private and intact.
+    return sorted(set(parser.links) | {link.rstrip(".,);") for link in plain})
 
 
 def image_address(url: str) -> tuple[str, str] | None:

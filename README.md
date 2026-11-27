@@ -3,10 +3,14 @@
 [![CI](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/workflows/ci.yml/badge.svg)](https://github.com/frostwebdev-dotcom/Power-BI-Data-Analysis-and-Inventory/actions/workflows/ci.yml)
 
 Milestone 1 — data foundation, Nineyard catalog synchronisation, vendor
-inventory ingestion, and deterministic product matching.
+inventory ingestion, and deterministic product matching — plus Milestone 2
+(Amazon analytics, profitability and replenishment), which is in development.
 
-**Current state:** Milestone 1 is complete and validated in the local Docker
-environment. Live Amazon authentication, orders, listings, FBA/FBM/inbound
+**Current state:** Milestone 1 is built and was validated in the local Docker
+environment; the client's operational acceptance (product-matching review and
+replay acceptance) remains open. Milestone 2 was authorized on 11 November 2026
+and its implemented work is on `main` as a development baseline — see
+[Milestone 2 status](docs/phase2-status.md). Live Amazon authentication, orders, listings, FBA/FBM/inbound
 inventory, Nineyard catalog synchronization, deterministic SKU mapping,
 scheduling, persistence, and failure recovery have all run against the client
 account. The final manual inventory run completed with 8,656 rows seen, 730
@@ -183,12 +187,18 @@ make check            # make available
 
 ## Database migrations
 
-One migration exists, `506fd0ecc33a` (the initial 21-table schema, see
-[docs/database-schema.md](docs/database-schema.md)). It is reversible:
-`alembic downgrade base` drops every table and enum type it created, and
-`alembic check` confirms the models and the migration agree. `alembic/env.py`
-reads `DATABASE_URL` from the environment, so no connection string is ever
-committed.
+The schema is a single linear chain of Alembic revisions in
+`backend/alembic/versions`, from the initial `506fd0ecc33a` (the 21-table
+Milestone 1 schema) to the latest, `a61125202601`; see
+[docs/database-schema.md](docs/database-schema.md). `alembic check` confirms the
+models and the migrations agree. Downgrades exist, but later revisions refuse to
+discard recorded data (financial imports, policies, configured link selectors).
+`alembic/env.py` reads `DATABASE_URL` from the environment, so no connection
+string is ever committed.
+
+The Azure staging workflow does **not** apply migrations. Apply pending
+revisions before deploying code that needs them — see
+[docs/deployment.md](docs/deployment.md#5-migrations-must-run-before-the-app-serves).
 
 ```bash
 # Inside the running stack
@@ -277,6 +287,13 @@ exactly one process. A run left `RUNNING` by a crashed process is closed as
 `FAILED` ("timed out") after `AMAZON_RUN_TIMEOUT_MINUTES` before the next
 one starts. With more than one organization in the database, set
 `AMAZON_ORGANIZATION_SLUG` to say which one the Amazon account belongs to.
+
+A periodic job first fires one full interval after the process starts, so on
+its own every restart or deploy would postpone a daily sync by a day. Shortly
+after start-up a one-off **catch-up** therefore runs each Amazon job, and then
+the Nineyard sync, but only if its last successful run is at least one interval
+old. Only one Nineyard sync runs per organization at a time; a run a dead
+process left `RUNNING` for more than three hours is closed as `FAILED`.
 
 Exit codes: `0` ok · `1` a run FAILED · `2` configuration or credentials ·
 `3` unexpected error.

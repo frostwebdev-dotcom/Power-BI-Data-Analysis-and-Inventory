@@ -18,13 +18,15 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Final
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.db.transaction import session_lifecycle
-from app.jobs.runner import JobRunner
-from app.models.enums import AmazonSyncJobType, TriggerType
+from app.jobs.runner import CATCH_UP_SUFFIX, JobRunner, is_overdue
+from app.models.amazon import AmazonSyncRun
+from app.models.enums import AmazonSyncJobType, SyncStatus, TriggerType
 from app.services.amazon_inventory import run_inventory_sync
 from app.services.amazon_listings import run_listings_sync
 from app.services.amazon_orders import MAX_WINDOW_DAYS, run_orders_sync
@@ -35,6 +37,11 @@ _logger = get_logger(__name__)
 JOB_ORDERS: Final = "amazon.orders"
 JOB_INVENTORY: Final = "amazon.inventory"
 JOB_LISTINGS: Final = "amazon.listings"
+
+#: Seconds after start-up at which each catch-up checks whether its job is
+#: overdue. Staggered so inventory runs before listings, as on a shared tick.
+CATCH_UP_DELAYS: Final = {JOB_INVENTORY: 120, JOB_ORDERS: 180, JOB_LISTINGS: 300}
+SUCCESSFUL: Final = (SyncStatus.COMPLETED, SyncStatus.COMPLETED_WITH_ERRORS)
 
 Clock = Callable[[], datetime]
 
@@ -141,6 +148,48 @@ def run_listings_job(settings: Settings | None = None, *, now: Clock = _utc_now)
         _logger.exception("amazon.job.failed", job=JOB_LISTINGS)
 
 
+def last_successful_start(
+    session: Session, organization_id: uuid.UUID, job_type: AmazonSyncJobType
+) -> datetime | None:
+    """When the latest completed run of ``job_type`` started, if there is one."""
+    started: datetime | None = session.scalar(
+        select(func.max(AmazonSyncRun.started_at)).where(
+            AmazonSyncRun.organization_id == organization_id,
+            AmazonSyncRun.job_type == job_type,
+            AmazonSyncRun.status.in_(SUCCESSFUL),
+        )
+    )
+    return started
+
+
+def run_if_overdue(
+    job_id: str,
+    job: Callable[[], None],
+    job_type: AmazonSyncJobType,
+    interval_minutes: int,
+    settings: Settings,
+    *,
+    now: Clock = _utc_now,
+) -> bool:
+    """The catch-up after a restart: run ``job`` only if its last success is
+    at least one interval old. Returns whether it ran."""
+    try:
+        with session_lifecycle() as session:
+            organization_id = resolve_amazon_organization(
+                session, settings.amazon_organization_slug
+            )
+            last = last_successful_start(session, organization_id, job_type)
+    except Exception:
+        _logger.exception("amazon.job.catch_up_check_failed", job=job_id)
+        return False
+    if not is_overdue(last, interval_minutes, now()):
+        _logger.info("jobs.catch_up_not_needed", job=job_id, last_success=last)
+        return False
+    _logger.info("jobs.catch_up_running", job=job_id, last_success=last)
+    job()
+    return True
+
+
 def register_amazon_jobs(runner: JobRunner, settings: Settings) -> None:
     """Put the three jobs on a runner with the intervals from settings.
 
@@ -163,6 +212,47 @@ def register_amazon_jobs(runner: JobRunner, settings: Settings) -> None:
         lambda: run_listings_job(settings),
         interval_minutes=settings.amazon_listings_interval_minutes,
     )
+    # One-off catch-ups: without them a restart postpones each job by a full
+    # interval, and a daily job in a process restarted daily never runs.
+    catch_ups: tuple[tuple[str, Callable[[], None], AmazonSyncJobType, int], ...] = (
+        (
+            JOB_INVENTORY,
+            lambda: run_inventory_job(settings),
+            AmazonSyncJobType.FBA_INVENTORY,
+            settings.amazon_inventory_interval_minutes,
+        ),
+        (
+            JOB_ORDERS,
+            lambda: run_orders_job(settings),
+            AmazonSyncJobType.ORDERS_REPORT,
+            settings.amazon_orders_interval_minutes,
+        ),
+        (
+            JOB_LISTINGS,
+            lambda: run_listings_job(settings),
+            AmazonSyncJobType.LISTINGS_REPORT,
+            settings.amazon_listings_interval_minutes,
+        ),
+    )
+    for job_id, job, job_type, interval in catch_ups:
+        runner.schedule_once(
+            job_id + CATCH_UP_SUFFIX,
+            _catch_up(job_id, job, job_type, interval, settings),
+            delay_seconds=CATCH_UP_DELAYS[job_id],
+        )
+
+
+def _catch_up(
+    job_id: str,
+    job: Callable[[], None],
+    job_type: AmazonSyncJobType,
+    interval_minutes: int,
+    settings: Settings,
+) -> Callable[[], None]:
+    def catch_up() -> None:
+        run_if_overdue(job_id, job, job_type, interval_minutes, settings)
+
+    return catch_up
 
 
 def build_amazon_runner(settings: Settings) -> JobRunner:

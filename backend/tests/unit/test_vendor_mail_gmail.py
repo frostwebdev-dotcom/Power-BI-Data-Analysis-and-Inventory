@@ -39,6 +39,14 @@ def settings(**overrides: Any) -> Settings:
     )
 
 
+AUTHENTICATED = (
+    "mx.google.com; dkim=pass header.i=@vendor.example header.s=s1 header.b=abc; "
+    "spf=pass (google.com: domain of stock@vendor.example designates 192.0.2.1 as "
+    "permitted sender) smtp.mailfrom=stock@vendor.example; "
+    "dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=vendor.example"
+)
+
+
 def encoded(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
@@ -56,6 +64,8 @@ def message(identifier: str = "abc1", *, external: bool = False, **extra: Any) -
                 {"name": "From", "value": "Vendor Stock <Stock@Vendor.Example>"},
                 {"name": "Subject", "value": "Inventory update"},
                 {"name": "Date", "value": "Fri, 1 Jan 1999 00:00:00 +0000"},
+                # What Gmail prepends for a message whose From domain verified.
+                {"name": "Authentication-Results", "value": AUTHENTICATED},
             ],
             "parts": [
                 {
@@ -206,7 +216,7 @@ def test_revoked_or_overbroad_grant_does_not_read_mail(status: int, scope: str, 
     gmail = Gmail()
     gmail.token_status, gmail.scope = status, scope
     with pytest.raises(IntakeError, match=code) as error:
-        gmail.reader().page(None, NOW)
+        gmail.reader().page(None, NOW - timedelta(hours=1))
     assert len(gmail.calls) == 1
     assert "private" not in str(error.value)
 
@@ -308,7 +318,7 @@ def test_history_pages_do_not_advance_anchor_early_or_duplicate_generic_changes(
 def test_sent_draft_spam_trash_and_wrong_label_do_not_route(labels: list[str]) -> None:
     gmail = Gmail()
     gmail.messages["abc1"]["labelIds"] = labels
-    assert gmail.reader().page(None, NOW).messages == ()
+    assert gmail.reader().page(None, NOW - timedelta(hours=1)).messages == ()
 
 
 def test_label_free_mode_and_lookback_do_not_import_old_or_deleted_mail() -> None:
@@ -321,7 +331,7 @@ def test_label_free_mode_and_lookback_do_not_import_old_or_deleted_mail() -> Non
         .messages
     )
     gmail.list_pages[""] = {"messages": [{"id": "deleted"}]}
-    assert gmail.reader().page(None, NOW).messages == ()
+    assert gmail.reader().page(None, NOW - timedelta(hours=1)).messages == ()
 
 
 def test_expired_history_requires_replay_and_unsafe_cursor_is_never_a_request_url() -> None:
@@ -387,7 +397,7 @@ def test_external_html_body_is_loaded_only_when_a_routed_link_needs_it() -> None
         "attachmentId": "file1",
     }
     reader = gmail.reader()
-    assert not reader.page(None, NOW).messages[0].body_loaded
+    assert not reader.page(None, NOW - timedelta(hours=1)).messages[0].body_loaded
     assert not any("attachments" in r.url.path for r in gmail.calls)
     assert "https://files.vendor.example/list" in reader.message("abc1").body
 
@@ -422,3 +432,50 @@ def test_gmail_quota_403_is_retried_without_treating_it_as_revoked_access() -> N
     )
     assert not reader.page('gmail:v1:{"mode":"history","history":"100"}', NOW).more
     assert attempts == 3 and sleep.call_count == 2
+
+
+def _set_authentication_results(gmail: Gmail, *values: str) -> None:
+    headers = gmail.messages["abc1"]["payload"]["headers"]
+    headers[:] = [h for h in headers if h["name"] != "Authentication-Results"]
+    headers.extend({"name": "Authentication-Results", "value": value} for value in values)
+
+
+def test_a_verified_from_domain_is_reported_authenticated() -> None:
+    reader = Gmail().reader()
+    [found] = reader.page(None, NOW - timedelta(hours=1)).messages
+    assert found.sender == "stock@vendor.example"
+    assert found.sender_authenticated is True
+    assert reader.message("abc1").sender_authenticated is True
+
+
+def test_the_authentication_header_is_requested_with_message_metadata() -> None:
+    gmail = Gmail()
+    gmail.reader().page(None, NOW - timedelta(hours=1))
+    metadata = [r for r in gmail.calls if r.url.params.get("format") == "metadata"]
+    assert metadata
+    assert all(
+        "Authentication-Results" in r.url.params.get_list("metadataHeaders") for r in metadata
+    )
+
+
+@pytest.mark.parametrize(
+    "results",
+    [
+        (),  # no verdict at all
+        ("mx.google.com; spf=pass smtp.mailfrom=vendor.example; dkim=none; dmarc=fail",),
+        # A signature, but by a domain other than the From domain.
+        ("mx.google.com; dkim=pass header.i=@bulk-mailer.example; dmarc=fail",),
+        # Forged by the sender: not Gmail's own verdict.
+        ("attacker.example; dmarc=pass header.from=vendor.example",),
+        # Gmail's verdict is the topmost header; a "pass" lower down was in the message.
+        (
+            "mx.google.com; dmarc=fail header.from=vendor.example",
+            "mx.google.com; dmarc=pass header.from=vendor.example",
+        ),
+    ],
+)
+def test_an_unverified_from_domain_is_reported_unauthenticated(results: tuple[str, ...]) -> None:
+    gmail = Gmail()
+    _set_authentication_results(gmail, *results)
+    [found] = gmail.reader().page(None, NOW - timedelta(hours=1)).messages
+    assert found.sender_authenticated is False

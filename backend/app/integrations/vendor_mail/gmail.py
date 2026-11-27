@@ -18,6 +18,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import Settings
+from app.integrations.vendor_mail.authentication import sender_authenticated
 from app.integrations.vendor_mail.types import IntakeError, MailAttachment, MailMessage, MailPage
 
 GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me"
@@ -81,6 +82,10 @@ def _envelope(value: dict[str, Any], message_id: str) -> MailMessage:
         received,
         has_attachments=True,
         body_loaded=False,
+        # Gmail prepends its own Authentication-Results; only that one counts.
+        sender_authenticated=sender_authenticated(
+            sender, headers.get("authentication-results", [])
+        ),
     )
 
 
@@ -343,6 +348,7 @@ class GmailMailReader:
             envelope.received_at,
             has_attachments,
             "\n".join(body),
+            sender_authenticated=envelope.sender_authenticated,
         )
 
     def _messages(self, items: Any, since: datetime) -> tuple[MailMessage, ...]:
@@ -361,7 +367,7 @@ class GmailMailReader:
                 value = self._get(
                     f"/messages/{identifier}",
                     format="metadata",
-                    metadataHeaders=["From", "Subject"],
+                    metadataHeaders=["From", "Subject", "Authentication-Results"],
                 )
                 labels = value.get("labelIds", [])
                 if not isinstance(labels, list) or any(not isinstance(x, str) for x in labels):

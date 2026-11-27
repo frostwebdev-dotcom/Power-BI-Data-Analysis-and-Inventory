@@ -1,6 +1,8 @@
-# ADR 0029: Require a valid price when deriving selected supplier offers
+# ADR 0040: Require a valid price when deriving selected supplier offers
 
 Status: Accepted for implementation; live rollout pending.
+
+Renumbered from 0029 on 26 November 2026: that number was already taken by an earlier ADR.
 
 French Perfumes has no supplier SKU column. Some valid barcodes are shared by
 different conditions/descriptions, and some priced products have no barcode.

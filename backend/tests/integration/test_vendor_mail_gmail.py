@@ -15,7 +15,7 @@ from app.imports.storage import LocalStorageBackend
 from app.main import create_app
 from app.models import AuditEvent, ImportFile, ImportJob
 from app.models.vendor_mail import VendorMailDelivery, VendorMailState
-from app.services.vendor_mail import run_intake
+from app.services.vendor_mail import retry_delivery, run_intake
 from tests.integration.test_vendor_mail import Context, snapshots
 from tests.integration.test_vendor_mail import context as context
 from tests.unit.test_vendor_mail_gmail import NOW, RAW, Gmail, settings
@@ -135,3 +135,51 @@ def test_gmail_status_shows_provider_but_no_credentials(
         assert response.json()["configured"]
         assert not response.json()["enabled"]
         assert "private" not in response.text
+
+
+UNVERIFIED = (
+    "mx.google.com; spf=pass smtp.mailfrom=vendor.example; dkim=none; "
+    "dmarc=fail (p=NONE sp=NONE dis=NONE) header.from=vendor.example"
+)
+
+
+@pytest.mark.parametrize("required", [True, False])
+def test_an_email_whose_from_domain_did_not_verify_is_held_for_review(
+    db_session: Session, context: Context, tmp_path: Path, required: bool
+) -> None:
+    """A forged From address must not import stock under a vendor's name. The
+    email is held for review; a person's explicit retry is the override."""
+    ctx = context
+    ctx.settings = settings(
+        app_env="test",
+        vendor_mail_organization_slug=ctx.org.slug,
+        vendor_mail_require_sender_authentication=required,
+    )
+    gmail = Gmail()
+    headers = gmail.messages["abc1"]["payload"]["headers"]
+    headers[:] = [h for h in headers if h["name"] != "Authentication-Results"]
+    headers.append({"name": "Authentication-Results", "value": UNVERIFIED})
+    reader = gmail.reader()
+    storage = LocalStorageBackend(tmp_path)
+
+    def poll() -> str:
+        return run_intake(db_session, ctx.org.id, ctx.settings, reader, storage, now=lambda: NOW)
+
+    assert poll() == "COMPLETED"
+    [delivery] = db_session.scalars(select(VendorMailDelivery)).all()
+    if not required:
+        assert delivery.status == "COMPLETED"
+        assert len(snapshots(db_session, ctx)) == 1
+        return
+
+    assert (delivery.status, delivery.error_code) == ("NEEDS_REVIEW", "SENDER_NOT_AUTHENTICATED")
+    assert snapshots(db_session, ctx) == []
+    assert db_session.scalar(select(func.count()).select_from(ImportFile)) == 0
+    # Nothing from the message beyond its metadata was read.
+    assert not any("attachments" in r.url.path for r in gmail.calls)
+    assert not any(r.url.params.get("format") == "full" for r in gmail.calls)
+
+    retry_delivery(db_session, ctx.actor, delivery.id)
+    assert poll() == "COMPLETED"
+    assert delivery.status == "COMPLETED"
+    assert len(snapshots(db_session, ctx)) == 1

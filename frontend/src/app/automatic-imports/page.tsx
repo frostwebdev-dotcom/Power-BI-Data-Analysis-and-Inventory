@@ -51,6 +51,7 @@ const REASONS: Record<string, string> = {
   AMBIGUOUS_VENDOR: "More than one vendor rule matched this file. Correct the source rules.",
   MULTIPLE_MATCHING_FILES: "Several files matched. Narrow the filename or download rule.",
   NO_MATCHING_FILE_OR_LINK: "No approved inventory file or download link matched this email.",
+  SENDER_NOT_AUTHENTICATED: "Gmail could not verify that this email came from the vendor's domain. Check it is genuine before retrying.",
   DOWNLOAD_LOGIN_REQUIRED: "This download requires a vendor login. Review the link setup.",
   DOWNLOAD_PAGE_REQUIRES_REVIEW: "The link returned a web page instead of an inventory file.",
   VENDOR_OR_PROFILE_INACTIVE: "The vendor or saved profile version is inactive.",

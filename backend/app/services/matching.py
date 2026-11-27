@@ -355,9 +355,13 @@ class _Matcher:
 
     def _input_of(self, row: ImportJobRow) -> MatchInput:
         data = row.normalized_data
+        # A 6/7-digit UPC-E has a computed, not a supplied, check digit: it may
+        # never drive a priority-1 match. Rows stored before the flag existed
+        # lack the key and keep their original behaviour.
+        check_digit_supplied = data.get("upc_check_digit_supplied", True) is not False
         return MatchInput(
             normalized_upc=None if data.get("upc_shared_by_offers") else row.normalized_upc,
-            upc_valid_checksum=data.get("upc_valid_checksum"),
+            upc_valid_checksum=(data.get("upc_valid_checksum") if check_digit_supplied else None),
             catalog_item_number=row.catalog_item_number,
             vendor_id=self.job.vendor_id,
             normalized_vendor_sku=row.normalized_vendor_sku,

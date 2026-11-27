@@ -201,7 +201,9 @@ string retained alongside the parsed value.
   validate the check digit, then left-pad to GTIN-14 as the canonical comparison
   form. Store `raw_value` and `normalized_value` separately. A failed check digit
   is a validation warning and disqualifies the value from priority-1 matching; it
-  does not silently pass.
+  does not silently pass. A 6- or 7-digit UPC-E carries no check digit (expansion
+  has to compute one), so it is likewise a warning and never matches at priority
+  1; its canonical form is still stored for display and derived identities.
 - **Catalog Item Number / SKU** — trim, collapse internal whitespace, casefold,
   strip a configured set of separators. Rules are per-profile and versioned so a
   historical import can be replayed identically.

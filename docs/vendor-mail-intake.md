@@ -1,8 +1,24 @@
 # Automatic vendor inventory imports
 
+## Sender authentication and link decoding — 26 November 2026
+
+[ADR 0041](decisions/0041-require-authenticated-vendor-email-senders.md): a Gmail
+email is imported automatically only when Gmail's own `Authentication-Results`
+header shows DMARC pass, or an aligned DKIM pass, for the `From` domain.
+Otherwise the delivery is held as `NEEDS_REVIEW` / `SENDER_NOT_AUTHENTICATED`
+without fetching its file; a staff retry imports it. Set
+`VENDOR_MAIL_REQUIRE_SENDER_AUTHENTICATION=false` only for a mailbox whose genuine
+vendors do not sign their mail. **Before deploying**, check one recent genuine
+email from each active vendor in Gmail's *Show original* view (DKIM or DMARC
+must show `PASS`).
+
+Download links are now decoded once. Previously an `&amp;region=` parameter in an
+email link became `®ion=`, which broke links whose parameters begin with an HTML
+entity name. A delivery recorded from such a corrupted link should be retried.
+
 ## Exact download-link selection — 24 November 2026
 
-ADR 0028 adds optional `download_link_text` and `download_link_image` to link sources.
+[ADR 0039](decisions/0039-select-inventory-email-link-by-label.md) adds optional `download_link_text` and `download_link_image` to link sources.
 The text selector selects an exact
 HTML-anchor label after whitespace collapse and case folding, so an inventory
 button can be distinguished from an ordering link on the same tracking host.
@@ -13,7 +29,7 @@ review; host/path and every redirect check still apply. Existing attachment
 sources and mailbox permissions are unchanged. Apply additive migration
 `a61125202601` before deploying this code. Implementation is under validation;
 this note does not claim live MTZ/French automation or a successful email delivery.
-French's reviewed profile also uses ADR 0029's opt-in valid-price requirement for
+French's reviewed profile also uses [ADR 0040](decisions/0040-require-priced-derived-offers.md)'s opt-in valid-price requirement for
 derived offer identities, preserving distinct conditions and rejecting unpriced
 metadata rows. Existing profiles retain their prior behavior.
 

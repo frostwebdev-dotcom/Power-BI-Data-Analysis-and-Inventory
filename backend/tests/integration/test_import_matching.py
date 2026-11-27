@@ -468,6 +468,53 @@ class TestMatchImportJob:
         assert report["counters"]["matched"] == 3 and report["counters"]["exception"] == 4
         assert report["current_stage"] == "SNAPSHOTTING"
 
+    def test_a_upc_e_without_its_check_digit_never_matches_at_priority_one(
+        self,
+        client: TestClient,
+        operator: Headers,
+        vendor: Vendor,
+        db_session: Session,
+        raw_dir: Path,
+        organization: Organization,
+    ) -> None:
+        product = factories.make_product(db_session, organization, name="Catalog Item")
+        factories.make_identifier(
+            db_session, organization, product, normalized_value="00042100005264"
+        )
+        db_session.flush()
+
+        job = parsed_job(
+            client,
+            operator,
+            vendor,
+            db_session,
+            raw_dir,
+            organization,
+            [
+                # Six digits: the check digit would have to be computed by us.
+                ["SHORT-1", "425261", "Unrelated vendor text", "5"],
+                # Eight digits: the vendor supplied the check digit, and it verifies.
+                ["FULL-1", "04252614", "Other vendor text", "5"],
+            ],
+        )
+
+        match_import_job(db_session, organization_id=organization.id, job_id=job.id)
+        rows = rows_of(db_session, job)
+
+        short = rows["SHORT-1"]
+        assert short.product_id is None and short.matched_by is None
+        assert short.match_result is not MatchResult.MATCHED
+        upc_rule = short.normalized_data["match"]["evaluations"][0]
+        assert (upc_rule["rule"], upc_rule["outcome"]) == ("UPC", "skipped")
+        assert short.normalized_data["upc_check_digit_supplied"] is False
+
+        full = rows["FULL-1"]
+        assert (full.match_result, full.matched_by, full.product_id) == (
+            MatchResult.MATCHED,
+            MatchMethod.UPC,
+            product.id,
+        )
+
     def test_an_approved_mapping_is_never_touched_and_a_disagreement_is_a_conflict(
         self,
         client: TestClient,

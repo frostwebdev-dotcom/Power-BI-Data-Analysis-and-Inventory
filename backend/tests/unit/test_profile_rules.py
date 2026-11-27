@@ -708,6 +708,26 @@ class TestMapper:
         [row] = map_table(rules, ["UPC", "Quantity"], [["012345678905", "4"]]).rows
         assert row.quantity == 4 and row.pack_size == 12  # stored as stated (B3)
 
+    def test_a_six_digit_upc_e_is_kept_but_flagged_as_unverifiable(self) -> None:
+        """A UPC-E with no check digit keeps its canonical value (so derived
+        identities are unchanged) but is marked so matching skips priority 1."""
+        rules = ProfileRules(column_map=MINIMAL)
+        [row] = map_table(rules, ["UPC", "Quantity"], [["425261", "3"]]).rows
+        assert row.normalized_upc == "00042100005264"
+        assert row.has_valid_checksum is True
+        assert row.upc_check_digit_supplied is False
+        assert row.status is ImportRowStatus.WARNING
+        [issue] = row.issues
+        assert issue.code is IssueCode.UPC_INVALID
+        assert "no check digit supplied" in issue.message
+        assert row.normalized_json()["upc_check_digit_supplied"] is False
+
+    def test_a_full_upc_does_not_carry_the_check_digit_flag(self) -> None:
+        rules = ProfileRules(column_map=MINIMAL)
+        [row] = map_table(rules, ["UPC", "Quantity"], [["012345678905", "3"]]).rows
+        assert row.upc_check_digit_supplied is True
+        assert "upc_check_digit_supplied" not in row.normalized_json()
+
     def test_index_sources(self) -> None:
         rules = ProfileRules(column_map=columns(("vendor_sku", 0), ("quantity_available", 1)))
         preview = map_table(rules, ["A", "B"], [["SKU-1", "3"]])

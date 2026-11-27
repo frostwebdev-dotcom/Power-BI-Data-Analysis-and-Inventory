@@ -76,6 +76,7 @@ services:
       VENDOR_MAIL_FOLDER_ID: ${VENDOR_MAIL_FOLDER_ID:-Inbox}
       VENDOR_MAIL_ORGANIZATION_SLUG: ${VENDOR_MAIL_ORGANIZATION_SLUG:-}
       VENDOR_MAIL_POLL_MINUTES: ${VENDOR_MAIL_POLL_MINUTES:-5}
+      VENDOR_MAIL_REQUIRE_SENDER_AUTHENTICATION: ${VENDOR_MAIL_REQUIRE_SENDER_AUTHENTICATION:-true}
       # Nineyard credentials. The read-only client exchanges these for a
       # bearer token; values stay in the root .env and are never baked into
       # an image or committed to this file.
